@@ -452,7 +452,7 @@ export class VillageSim {
     const topic = rumor ? 'gossip' : topic0;
     const seed = this.r.fork();
     const req = {
-      a: this.persona(a.id as VillagerId), b: this.persona(b.id as VillagerId), topic, situation: this.situation(a.id as VillagerId),
+      a: this.persona(a.id as VillagerId), b: this.persona(b.id as VillagerId), topic: topic === 'chickens' ? 'gossip' : topic, situation: this.situation(a.id as VillagerId),
       memoriesA: this.retrieveMemories(a.id as VillagerId, [topic, b.id], 5), memoriesB: this.retrieveMemories(b.id as VillagerId, [topic, a.id], 5),
       relationAB: { ...a.relations[b.id] }, relationBA: { ...b.relations[a.id] }, rumor: rumor?.text, seed,
     };
