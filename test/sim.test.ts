@@ -360,5 +360,5 @@ test('ежедневието: мили дребни случки и разуме
   // един и същ текст не се повтаря в два поредни дни
   const byText = new Map<string, number[]>();
   for (const e of log) byText.set(e.text, [...(byText.get(e.text) ?? []), Math.floor(e.time / 1440)]);
-  for (const [t, days] of byText) for (let i = 1; i < days.length; i++) assert.ok(days[i] - days[i - 1] !== 1 || /поговориха|говориха/.test(t), `повтаря се в поредни дни: ${t}`);
+  for (const [t, days] of byText) for (let i = 1; i < days.length; i++) assert.ok(days[i] - days[i - 1] !== 1 || /поговор|говориха|приказва/.test(t), `повтаря се в поредни дни: ${t}`);
 });

@@ -484,8 +484,16 @@ export class VillageSim {
       memoriesA: this.retrieveMemories(a.id as VillagerId, [topic, b.id], 5), memoriesB: this.retrieveMemories(b.id as VillagerId, [topic, a.id], 5),
       relationAB: { ...a.relations[b.id] }, relationBA: { ...b.relations[a.id] }, rumor: rumor?.text, seed,
     };
-    let reply: ChatReply;
-    try { reply = this.scripted.chatNow(req); } catch { reply = { lines: [], summary: '', ai: false }; }
+    let reply: ChatReply = { lines: [], summary: '', ai: false };
+    // същият диалог да не се чува по два пъти в един ден (броячите се нулират в полунощ)
+    for (let k = 0; k < 4; k++) {
+      try { reply = this.scripted.chatNow(k ? { ...req, seed: (seed + k * 7919) >>> 0 } : req); } catch { reply = { lines: [], summary: '', ai: false }; }
+      // ключ без обръщенията и имената („Помниш ли, дядо Пею, как…“ = „Помниш ли, Петко, как…“)
+      const first = (reply.lines?.[0]?.text ?? '').replace(/^[^—]{0,32}—\s*/, '').replace(/(дядо|бабо|баба)\s+\S+/gi, '')
+        .replace(/(?<=\S\s)[А-Я][а-я]+/g, '').replace(/[^а-я]/gi, '').toLowerCase().slice(0, 32);
+      const ck = 'dlg_' + hash(first);
+      if (!first || !s.counters![ck] || k === 3) { if (first) s.counters![ck] = 1; break; }
+    }
     const lines = (reply.lines ?? []).filter(l => l && typeof l.text === 'string' && l.text.trim()).slice(0, 4)
       .map((l, i) => ({ who: l.who === a.id || l.who === b.id ? l.who : (i % 2 ? b.id : a.id), text: l.text.trim() }));
     if (!lines.length) lines.push({ who: a.id, text: 'Добър ден.' }, { who: b.id, text: 'Добър ден и на теб.' });
@@ -609,6 +617,8 @@ export class VillageSim {
         `${Name(A)} и ${nameOf(B)} си поговориха ${phrase} ${here}.`,
         `${cap(here)} ${nameOf(A)} и ${nameOf(B)} дълго си говориха ${phrase}.`,
         `${Name(A)} се спря при ${nameOf(B)} ${here} да си поговорят ${phrase}.`,
+        `${Name(A)} и ${nameOf(B)} поседяха ${here} и си приказваха ${phrase}.`,
+        `${cap(here)} ${nameOf(A)} срещна ${nameOf(B)} и се заприказваха ${phrase}.`,
       ], s.time, A, B);
       this.chronicle('talk', t, [A, B], 2, 'chat_' + topic);
     }

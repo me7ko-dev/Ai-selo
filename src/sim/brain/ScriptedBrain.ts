@@ -409,7 +409,7 @@ export class ScriptedBrain implements Brain, SyncBrain {
     const ctxA = this.chatCtx(a, b, req.relationAB, req, rng);
     const ctxB = this.chatCtx(b, a, req.relationBA, req, rng);
     const bothF = isFemale(a) && isFemale(b);
-    const names = { A: cap(nameOf(a.id, a.name)), B: nameOf(b.id, b.name), Both: bothF ? 'И двете' : 'И двамата' };
+    const names = { A: nameOf(a.id, a.name), B: nameOf(b.id, b.name), Both: bothF ? 'И двете' : 'И двамата' };
 
     // 1) особени двойки
     const key = `${topic}:${[a.id, b.id].sort().join(':')}`;
