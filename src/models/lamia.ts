@@ -18,6 +18,7 @@ const HEAD_BACK = -0.5, HEAD_STRIKE = -0.55, HEAD_DEAD = -0.45;
 const WINDUP = 0.6, STRIKE = 0.25, HOLD_BITE = 0.4, HOLD_FIRE = 1.3, RECOVER = 0.6;
 
 const s = Math.sin, c = Math.cos;
+const TROT = [0, Math.PI, Math.PI, 0];
 const sm = (x: number) => { x = x < 0 ? 0 : x > 1 ? 1 : x; return x * x * (3 - 2 * x); };
 
 type HeadMode = 'idle' | 'windup' | 'strike' | 'hold' | 'recover';
@@ -287,9 +288,8 @@ export class Lamia extends RigModel implements LamiaModel {
       case 'walk': case 'run': {
         const p = this.phase, run = a === 'run';
         const A = run ? 0.55 : 0.38;
-        const ph = [0, Math.PI, Math.PI, 0];
         for (let i = 0; i < 4; i++) {
-          const q = p + ph[i];
+          const q = p + TROT[i];
           o[(L + i * 2) * 3] = -A * s(q);
           o[(L + i * 2 + 1) * 3] = 0.5 * Math.max(0, c(q));
         }

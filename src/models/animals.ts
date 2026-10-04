@@ -10,6 +10,8 @@ const sm = (x: number) => { x = x < 0 ? 0 : x > 1 ? 1 : x; return x * x * (3 - 2
 // индекси на ставите на четириногите
 const BODY = 0, NECK = 1, HEAD = 2, TAIL = 3, TAIL2 = 4, FLU = 5, FLL = 6, FRU = 7, FRL = 8, BLU = 9, BLL = 10, BRU = 11, BRL = 12;
 const QJ = 13, QP = QJ * 3;
+const GALLOP = [0, 0.35, 2.4, 2.8], TROT = [0, Math.PI, Math.PI, 0];
+const LEG_IDS = [FLU, FLL, FRU, FRL, BLU, BLL, BRU, BRL];
 
 export type QuadKind = AnimalKind | 'fox_talasam';
 
@@ -39,9 +41,9 @@ export class Quadruped extends RigModel {
     const bodyY = this.bodyY = S.leg + S.r * 0.55;
     const body = joint(r, 0, bodyY, 0, 'body');
     const neck = joint(body, 0, S.r * 0.35, S.len * 0.45, 'neck');
-    neck.rotation.x = S.neckTilt;
+    neck.rotation.x = -S.neckTilt;
     const head = joint(neck, 0, S.neck, 0, 'head');
-    head.rotation.x = -S.neckTilt;
+    head.rotation.x = S.neckTilt;
     const tail = joint(body, 0, S.r * 0.4, -S.len * 0.5, 'tail');
     tail.rotation.x = S.tailUp;
     const tail2 = joint(tail, 0, S.tail * 0.5, 0, 'tail2');
@@ -163,12 +165,11 @@ export class Quadruped extends RigModel {
       case 'walk': case 'run': {
         const p = this.phase, run = a === 'run';
         const A = run ? 0.75 : 0.45;
-        const ph = run ? [0, 0.35, 2.4, 2.8] : [0, Math.PI, Math.PI, 0];
-        const ids = [[FLU, FLL], [FRU, FRL], [BLU, BLL], [BRU, BRL]];
+        const ph = run ? GALLOP : TROT;
         for (let i = 0; i < 4; i++) {
           const q = p + ph[i];
-          o[ids[i][0] * 3] = -A * s(q);
-          o[ids[i][1] * 3] = (i < 2 ? 1 : 0.8) * (run ? 0.9 : 0.6) * max(0, c(q));
+          o[LEG_IDS[i * 2] * 3] = -A * s(q);
+          o[LEG_IDS[i * 2 + 1] * 3] = (i < 2 ? 1 : 0.8) * (run ? 0.9 : 0.6) * max(0, c(q));
         }
         o[QP + 1] = (run ? 0.04 : 0.012) * Math.abs(s(p * (run ? 1 : 2)));
         o[BODY * 3] = run ? 0.12 * s(p + 1) : 0;
