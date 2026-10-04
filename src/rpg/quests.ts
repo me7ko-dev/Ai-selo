@@ -269,6 +269,7 @@ export class Quests {
         if (v !== 'peyu' || s.lamia !== 'report') return null;
         const kalpak = id === 'lamia_kalpak';
         c.give(kalpak ? 'kalpak' : 'martenitsa', 1);
+        if (!inv.equipment[kalpak ? 'head' : 'amulet']) c.equip(kalpak ? 'kalpak' : 'martenitsa');
         c.xp(200);
         h.deed({ kind: 'quest_done', villager: 'peyu', text: 'Странникът разказа на кмета, че Ламята е мъртва и реката тече.', importance: 7, affinity: 30, trust: 30, witnesses: 'all' });
         h.chronicle('Дядо Пею награди странника, който уби Ламята. Кметът обяви сбор на мегдана.', ['player', 'peyu'], 7, 'quest');

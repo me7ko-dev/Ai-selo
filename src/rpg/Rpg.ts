@@ -318,8 +318,10 @@ export class Rpg {
     this.quests.onFoxCaught();
     this.bus.emit('killed', { kind: 'fox_talasam' });
     this.addXp(FOX.xp);
-    this.pickups.add('loot', null, e.pos.x, e.pos.z, [{ id: 'fox_tail', count: 1 }], this.world, { auto: true });
     this.notify('Хвана лисицата-таласъм! Тя избяга в мрака — без опашката си.', 'quest');
+    // направо в раницата: на земята в тъмното лесно се изпуска (а задачата чака опашката)
+    this.give('fox_tail', 1);
+    void e;
   }
 
   private onLamiaDefeated(): void {
