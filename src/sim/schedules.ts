@@ -114,8 +114,26 @@ export function scheduleFor(id: VillagerId, mod: number, ctx: SchedCtx): Goal {
 const idx = (id: VillagerId) => VILLAGER_IDS.indexOf(id);
 const front = (pl: PlaceId) => { const f = PLACES[pl].facing ?? 0; return { x: Math.sin(f), z: Math.cos(f) }; };
 
+/**
+ * Места, изчислени от истинския план на света (светът мести сградите встрани от пътищата, затова
+ * PLACES[...].pos не винаги е самата сграда). Играта го попълва при старт; пробите в Node работят без него.
+ * spots: ключ `${place}:${id}:${inside ? 1 : 0}`; centers: къде е самата сграда (накъде гледа жителят на работа).
+ */
+export interface SpotTable { spots: Record<string, Vec2>; centers: Partial<Record<PlaceId, Vec2>> }
+let TABLE: SpotTable | null = null;
+export function setSpotTable(t: SpotTable | null): void { TABLE = t; }
+/** Центърът на сградата/мястото (за посоката на погледа). */
+export function placeCenter(place: PlaceId): Vec2 { return TABLE?.centers[place] ?? PLACES[place].pos; }
+
 /** Точно място за стоене на даден жител (различно за всеки, за да не стоят един в друг). */
 export function spotFor(place: PlaceId, id: VillagerId, inside = false): Vec2 {
+  const o = TABLE?.spots[`${place}:${id}:${inside ? 1 : 0}`];
+  if (o) return { x: o.x, z: o.z };
+  return baseSpotFor(place, id, inside);
+}
+
+/** Мястото само по картата (без плана на света). */
+export function baseSpotFor(place: PlaceId, id: VillagerId, inside = false): Vec2 {
   const pl = PLACES[place];
   const i = idx(id);
   if (inside) return { x: pl.pos.x, z: pl.pos.z };
@@ -135,9 +153,12 @@ export function spotFor(place: PlaceId, id: VillagerId, inside = false): Vec2 {
   return { x: pl.pos.x + Math.sin(a) * r, z: pl.pos.z + Math.cos(a) * r };
 }
 
-/** Позиция в хорото около ореха (въртим се бавно). */
+/** Огънят на сбора — на мегдана, южно от ореха (светът го пали на същото място). */
+export const BONFIRE: Vec2 = { x: PLACES.square.pos.x, z: PLACES.square.pos.z + 10.5 };
+
+/** Позиция в хорото около огъня на сбора (въртим се бавно). */
 export function horoSpot(id: VillagerId, time: number): { pos: Vec2; facing: number } {
-  const c = PLACES.walnut.pos, r = 7;
+  const c = BONFIRE, r = 4.6;
   const a = (idx(id) / VILLAGER_IDS.length) * Math.PI * 2 + time * 0.15;
   const pos = { x: c.x + Math.sin(a) * r, z: c.z + Math.cos(a) * r };
   return { pos, facing: Math.atan2(c.x - pos.x, c.z - pos.z) };

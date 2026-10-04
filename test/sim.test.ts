@@ -6,6 +6,7 @@ import { Timeline, MemorySnapshotStore } from '../src/sim/timeline';
 import { catchUp, pickCards } from '../src/sim/away';
 import { ScriptedBrain } from '../src/sim/brain/ScriptedBrain';
 import { PLACES, dist } from '../src/data/layout';
+import { BONFIRE } from '../src/sim/schedules';
 import { VILLAGERS, VILLAGER_IDS } from '../src/data/villagers';
 import type { ChronicleEntry, SnapshotMeta, WorldState } from '../src/sim/types';
 
@@ -112,7 +113,7 @@ test('машината на времето: клон от минал момен�
   const st = loaded!.state as WorldState;
   st.branchId = br.id;
   sim.load(st);
-  sim.advance(600);
+  sim.advance(1440); // цял ден: нощем може и нищо да не стане
   const forkEntries = tl.entriesFor(br.id);
   const parentBefore = mainEntries.filter(e => e.time <= near.time);
   const parentAfter = mainEntries.filter(e => e.time > near.time);
@@ -219,13 +220,13 @@ test('играчът: разговор, дела, случки отвън', asyn
   assert.ok(!hasNaN(sim.state));
 });
 
-test('сборът: вечерта всички играят хоро около ореха', () => {
+test('сборът: вечерта всички играят хоро около огъня', () => {
   const sim = new VillageSim({ seed: 4 });
   sim.inject({ type: 'sabor' });
   sim.advance(19 * 60 - sim.state.time); // 19:00
   const dancers = sim.state.villagers.filter(v => v.activity === 'dance');
   assert.ok(dancers.length >= 6, `танцуват: ${dancers.length}`);
-  for (const d of dancers) assert.ok(Math.abs(dist(d.pos, PLACES.walnut.pos) - 7) < 0.5);
+  for (const d of dancers) assert.ok(Math.abs(dist(d.pos, BONFIRE) - 4.6) < 0.5);
 });
 
 test('бързина: 2 игрови дни за под 2 секунди', () => {

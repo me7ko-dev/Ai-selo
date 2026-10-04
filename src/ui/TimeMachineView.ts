@@ -150,6 +150,7 @@ export class TimeMachineView extends ModalView {
   /** Показва преиграването: линия на момента + лента с текущата случка. null = спряно. */
   setPlayhead(time: number | null): void {
     this.playhead = time;
+    this.el.classList.toggle('watching', time !== null);
     if (time === null) { this.playEl.classList.add('hidden'); this.ticker.classList.add('hidden'); this.watchBtn.disabled = false; return; }
     this.watchBtn.disabled = true;
     this.playEl.classList.remove('hidden');

@@ -130,23 +130,60 @@ export function nearestPlace(p: Vec2, filter?: (pl: Place) => boolean): Place {
   return best;
 }
 
-/** Път по пътищата от точка a до точка b (Dijkstra по ROAD_NODES). Връща точки, вкл. крайната. */
+/** Път по пътищата от точка a до точка b (Dijkstra по ROAD_NODES). Връща точки, вкл. крайната.
+ *  Пробва няколко близки възела в началото и края (иначе се заобикаля през по-далечен възел),
+ *  и минава около стария орех, вместо през дървото и пейките. */
 export function roadPath(a: Vec2, b: Vec2): Vec2[] {
   const names = Object.keys(ROAD_NODES);
-  const nearest = (p: Vec2) => { let n = names[0], d = Infinity; for (const k of names) { const dd = dist2(p, ROAD_NODES[k]); if (dd < d) { d = dd; n = k; } } return n; };
-  const s = nearest(a), t = nearest(b);
+  const byDist = (p: Vec2) => [...names].sort((x, y) => dist2(p, ROAD_NODES[x]) - dist2(p, ROAD_NODES[y]));
+  const sa = byDist(a), sb = byDist(b);
+  const s0 = sa[0], t0 = sb[0];
   // ако е по-близо направо — направо
-  if (s === t || dist(a, b) < dist(a, ROAD_NODES[s]) + dist(ROAD_NODES[t], b) * 0.5) return [{ ...b }];
+  if (s0 === t0 || dist(a, b) < dist(a, ROAD_NODES[s0]) + dist(ROAD_NODES[t0], b) * 0.5) return aroundWalnut(a, [{ ...b }]);
   const adj = new Map<string, string[]>();
   for (const [u, v] of ROAD_EDGES) { (adj.get(u) ?? adj.set(u, []).get(u)!).push(v); (adj.get(v) ?? adj.set(v, []).get(v)!).push(u); }
-  const D = new Map<string, number>(names.map(n => [n, Infinity])); const prev = new Map<string, string>();
-  D.set(s, 0); const todo = new Set(names);
-  while (todo.size) {
-    let u = '', du = Infinity; for (const n of todo) { const d = D.get(n)!; if (d < du) { du = d; u = n; } }
-    if (!u || u === t) break; todo.delete(u);
-    for (const v of adj.get(u) ?? []) { const nd = du + dist(ROAD_NODES[u], ROAD_NODES[v]); if (nd < D.get(v)!) { D.set(v, nd); prev.set(v, u); } }
+  const dijkstra = (s: string) => {
+    const D = new Map<string, number>(names.map(n => [n, Infinity])); const prev = new Map<string, string>();
+    D.set(s, 0); const todo = new Set(names);
+    while (todo.size) {
+      let u = '', du = Infinity; for (const n of todo) { const d = D.get(n)!; if (d < du) { du = d; u = n; } }
+      if (!u) break; todo.delete(u);
+      for (const v of adj.get(u) ?? []) { const nd = du + dist(ROAD_NODES[u], ROAD_NODES[v]); if (nd < D.get(v)!) { D.set(v, nd); prev.set(v, u); } }
+    }
+    return { D, prev };
+  };
+  // други възли — само ако са почти толкова близо (иначе правата отсечка до тях минава през дворове)
+  const near = (p: Vec2, list: string[]) => list.slice(0, 3).filter(n => dist(p, ROAD_NODES[n]) <= dist(p, ROAD_NODES[list[0]]) + 7);
+  let best: { s: string; t: string; prev: Map<string, string>; cost: number } | null = null;
+  for (const s of near(a, sa)) {
+    const { D, prev } = dijkstra(s);
+    for (const t of near(b, sb)) {
+      const c = dist(a, ROAD_NODES[s]) + D.get(t)! + dist(ROAD_NODES[t], b);
+      if (c < Infinity && (!best || c < best.cost - 1e-9)) best = { s, t, prev, cost: c };
+    }
   }
-  if (!prev.has(t)) return [{ ...b }];
-  const chain: string[] = []; for (let c: string | undefined = t; c; c = prev.get(c)) { chain.unshift(c); if (c === s) break; }
-  return [...chain.map(n => ({ ...ROAD_NODES[n] })), { ...b }];
+  if (!best) return [{ ...b }];
+  const chain: string[] = []; for (let c: string | undefined = best.t; c; c = best.prev.get(c)) { chain.unshift(c); if (c === best.s) break; }
+  return aroundWalnut(a, [...chain.map(n => ({ ...ROAD_NODES[n] })), { ...b }]);
+}
+
+/** Отсечките, които минават през ореха и пейките около него, заобикалят по дъга. */
+function aroundWalnut(a: Vec2, pts: Vec2[]): Vec2[] {
+  const C = PLACES.walnut.pos, R = 3.8, RA = 4.1;
+  const out: Vec2[] = [];
+  let p = a;
+  for (const q of pts) {
+    const abx = q.x - p.x, abz = q.z - p.z, l2 = abx * abx + abz * abz;
+    const u = l2 > 0 ? Math.max(0, Math.min(1, ((C.x - p.x) * abx + (C.z - p.z) * abz) / l2)) : 0;
+    const dc = Math.hypot(p.x + abx * u - C.x, p.z + abz * u - C.z);
+    if (dc < R) {
+      const a0 = Math.atan2(p.x - C.x, p.z - C.z), a1 = Math.atan2(q.x - C.x, q.z - C.z);
+      let d = a1 - a0; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2;
+      const n = Math.max(1, Math.ceil(Math.abs(d) / 0.6));
+      for (let k = 0; k <= n; k++) { const ang = a0 + (d * k) / n; out.push({ x: C.x + Math.sin(ang) * RA, z: C.z + Math.cos(ang) * RA }); }
+    }
+    out.push(q);
+    p = q;
+  }
+  return out;
 }

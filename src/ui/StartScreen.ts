@@ -58,7 +58,7 @@ export class StartScreen {
     if (!this.isOpen) {
       this.isOpen = true;
       this.offKeys = onKeys((e) => {
-        if (e.code === 'Enter') { e.preventDefault(); if (!this.btnCont.disabled) this.onContinue(); else this.onNew(); }
+        if (e.code === 'Enter' && !this.el.parentElement?.querySelector('.cf-back:not(.hidden)')) { e.preventDefault(); if (!this.btnCont.disabled) this.onContinue(); else this.onNew(); }
       });
     }
   }

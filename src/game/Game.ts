@@ -28,6 +28,8 @@ import { heightAt } from '../world/height';
 import type { IconKey } from '../data/icons';
 import type { EquipSlot } from '../ui/InventoryView';
 import { wireUi } from './uiWire';
+import { buildSpotTable } from './spots';
+import { setSpotTable } from '../sim/schedules';
 
 export type Modal = null | 'dialogue' | 'inventory' | 'map' | 'chronicle' | 'time' | 'settings' | 'away' | 'dead' | 'watch';
 
@@ -102,6 +104,8 @@ export class Game {
     this.vote = new LiveVote({ voteSeconds: this.settings.live.voteSeconds, onResult: (type, by) => this.onLiveResult(type, by) });
     progress(0.8, 'Летописецът точи перото…');
     await tick();
+    // жителите стоят пред истинските сгради (светът ги мести встрани от пътищата)
+    setSpotTable(buildSpotTable(this.world.plan));
     // меню: селото живее зад заглавието
     this.sim = new VillageSim({ seed: 7 });
     this.timeline = Timeline.create();
@@ -132,6 +136,7 @@ export class Game {
     this.rpg.setControlsEnabled(false);
     this.ui.hud.hide();
     this.ui.start.show({ hasSave: canContinue, ai: { connected: this.aiStatus.connected, label: this.aiStatus.label } });
+    if (canContinue) void this.save.loadMain().then((m) => { if (m && this.mode === 'menu') this.ui.start.update({ saveLabel: `${formatDayClock((m.game as GameState).sim.time)} — Самодивско` }); }).catch(() => {});
     this.audio.setMusic('village');
   }
 
@@ -186,7 +191,10 @@ export class Game {
     this.startPlaying();
     // „Докато те нямаше…“
     const away = Date.now() - main.savedAt;
+    const dayBefore = dayOf(this.sim.state.time);
     const cards: AwayCard[] = catchUp(this.sim, away);
+    // превъртяно през полунощ — запис за новия ден (машината на времето да има откъде да гледа)
+    if (dayOf(this.sim.state.time) > dayBefore) void this.makeSnapshot('day');
     this.villagers.update(0.016, this.sim.state, true);
     if (cards.length) this.openAway(cards);
     if (live) this.startLive();
@@ -282,12 +290,18 @@ export class Game {
   }
 
   private lateUpdate(dt: number): void {
-    if (this.mode !== 'play') { this.ui.tags.update([]); return; }
+    // имената над главите — само в света (не върху летописа, картата, раницата…)
+    if (this.mode !== 'play' || (this.modal !== null && this.modal !== 'dialogue' && this.modal !== 'watch')) { this.ui.tags.update([]); return; }
     const state = this.modal === 'watch' ? this.timeMachine.viewState() : this.sim.state;
-    // камерата на разговора първо — иначе етикетите над главите се смятат със старата камера и са встрани
+    // камерата за разговора — преди етикетите, за да са над главите в същия кадър
     if (this.modal === 'dialogue' && this.dialogue.active) this.dialogueCamera(dt, this.dialogue.active);
     this.updateTags(state.villagers, state.time);
-    if (this.modal === 'watch') return;
+    if (this.modal === 'watch') {
+      // часовникът долу вляво показва момента, който се гледа
+      this.hudAcc += dt;
+      if (this.hudAcc > 0.1) { this.hudAcc = 0; this.updateHud(state.time); }
+      return;
+    }
     this.ui.hud.minimap(this.rpg.heroPos.x, this.rpg.heroPos.z, this.rpg.heroYaw, this.mapMarkers(), this.villagerDots());
     this.hudAcc += dt;
     if (this.hudAcc > 0.1) { this.hudAcc = 0; this.updateHud(); }
@@ -385,7 +399,9 @@ export class Game {
       const head = this.villagers.head(v.id, this.projV);
       const dist = head.distanceTo(cam.position);
       head.project(cam);
-      const onScreen = visible3d && head.z < 1 && head.z > -1 && Math.abs(head.x) < 1.1 && Math.abs(head.y) < 1.1 && dist < 45;
+      // събеседникът в разговора: името и думите му са в прозореца долу
+      const talking = this.modal === 'dialogue' && this.dialogue.active === v.id;
+      const onScreen = !talking && visible3d && head.z < 1 && head.z > -1 && Math.abs(head.x) < 1.1 && Math.abs(head.y) < 1.1 && dist < 45;
       const bubble = v.speech && v.speech.until > time ? { text: v.speech.text, ai: v.speech.ai } : null;
       tags.push({
         id: v.id, name: prof.name, job: v.id === this.sim.state.mayor && v.id !== 'peyu' ? `${prof.job} · кмет` : prof.job,
@@ -399,9 +415,9 @@ export class Game {
     return this.sim.state.villagers.filter((v) => this.villagers.isVisible(v.id)).map((v) => ({ x: v.pos.x, z: v.pos.z }));
   }
 
-  private updateHud(): void {
+  private updateHud(timeShown?: number): void {
     const h = this.rpg.hud();
-    const t = this.sim.state.time;
+    const t = timeShown ?? this.sim.state.time;
     this.ui.hud.update({
       name: 'Стоян', level: h.level, title: h.title,
       hp: h.hp, hpMax: h.maxHp, stamina: h.stamina, staminaMax: h.maxStamina, xp: h.xp, xpMax: h.xpNext,

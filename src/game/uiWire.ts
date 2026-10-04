@@ -5,7 +5,14 @@ import type { Settings } from '../save/settings';
 export function wireUi(g: Game): void {
   const ui = g.ui;
   // начален екран
-  ui.start.onNew = () => { g.audio.unlock(); void g.newGame(false); };
+  ui.start.onNew = () => {
+    g.audio.unlock();
+    void g.save.hasSave().then(async (has) => {
+      // „Нова игра“ трие записа — питай, ако има какво да се загуби
+      if (has && !(await ui.confirm.ask({ title: 'Нова игра?', text: 'Записаната игра ще бъде изтрита — и селото, и героят, и машината на времето. Ако искаш да я пазиш, първо я свали от менюто (Esc → „Свали записа“).', ok: 'Започни отначало', cancel: 'Откажи', danger: true }))) return;
+      await g.newGame(false);
+    });
+  };
   ui.start.onContinue = () => { g.audio.unlock(); void g.continueGame(false); };
   ui.start.onLive = () => {
     g.audio.unlock();
@@ -33,7 +40,8 @@ export function wireUi(g: Game): void {
   ui.chronicle.onClose = () => g.onModalClosed('chronicle');
 
   // машина на времето
-  ui.time.onClose = () => g.onModalClosed('time');
+  // при гледане назад Esc / × връщат в настоящето (прозорецът се отваря отново)
+  ui.time.onClose = () => { if (g.modal === 'watch') g.timeMachine.stopWatching(); else g.onModalClosed('time'); };
   ui.time.onWatch = (time, speed) => { void g.timeMachine.watch(time, speed); };
   ui.time.onStopWatch = () => g.timeMachine.stopWatching();
   ui.time.onLoadFrom = (time) => { void g.timeMachine.loadFrom(time); };
@@ -47,7 +55,7 @@ export function wireUi(g: Game): void {
   ui.settings.onExport = () => { void g.saveMain().then(() => g.save.downloadExport()); };
   ui.settings.onImport = (file) => {
     void g.save.importFile(file)
-      .then(() => { g.toast('Записът е зареден от файла.', 'info'); ui.settings.hide(); g.modal = null; return g.continueGame(false); })
+      .then(() => { g.toast('Записът е зареден от файла.', 'info'); ui.settings.hide(); g.modal = null; g.engine.input.enabled = true; return g.continueGame(false); })
       .catch((e: Error) => g.toast(e.message || 'Файлът не е запис на играта.', 'warn'));
   };
   ui.settings.onMainMenu = () => {
