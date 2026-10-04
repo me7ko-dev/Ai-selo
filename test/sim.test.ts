@@ -3,7 +3,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { VillageSim } from '../src/sim/VillageSim';
 import { Timeline, MemorySnapshotStore } from '../src/sim/timeline';
-import { catchUp, pickCards } from '../src/sim/away';
+import { catchUp, catchUpAsync, pickCards, AWAY_AI_CARDS } from '../src/sim/away';
+import type { Brain, RetellRequest } from '../src/sim/brain/Brain';
 import { ScriptedBrain } from '../src/sim/brain/ScriptedBrain';
 import { PLACES, dist } from '../src/data/layout';
 import { BONFIRE } from '../src/sim/schedules';
@@ -280,4 +281,84 @@ test('ИИ мозък: допълнителни реплики, без да сп
   const r = await sim.playerSay('radka', { text: 'Как си?' });
   assert.equal(r.ai, true); assert.equal(talks, 1);
   assert.ok(sim.villager('radka').memories.some(m => m.text === 'Странникът ме заговори.'));
+});
+
+test('„Докато те нямаше…“ с ИИ: светът е същият, ИИ преразказва до 3 картички, таван на чакането', async () => {
+  const sb = new ScriptedBrain();
+  let asked: RetellRequest | null = null;
+  const fake = (mode: 'ok' | 'hang' | 'off'): Brain => ({
+    status: () => ({ ...sb.status(), connected: mode !== 'off' }),
+    talk: r => sb.talk(r), chat: r => sb.chat(r), react: r => sb.react(r), plan: r => sb.plan(r), reflect: r => sb.reflect(r),
+    retell: (req) => { asked = req; return mode === 'hang' ? new Promise(() => {}) : Promise.resolve({ texts: req.events.map((e, i) => `Разказвачът казва (${i + 1}): ${e.title}.`), ai: true }); },
+  });
+  const ref = new VillageSim({ seed: 77 });
+  const refCards = catchUp(ref, 3 * 3600 * 1000);
+  const sim = new VillageSim({ seed: 77 });
+  const cards = await catchUpAsync(sim, 3 * 3600 * 1000, fake('ok'));
+  assert.deepEqual(sim.snapshot(), ref.snapshot(), 'превъртането е детерминирано, както без ИИ');
+  assert.equal(cards.length, refCards.length);
+  const ai = cards.filter(c => c.ai);
+  assert.equal(ai.length, Math.min(AWAY_AI_CARDS, cards.length));
+  assert.equal(asked!.events.length, ai.length);
+  for (const c of ai) assert.match(c.text, /^Разказвачът казва/);
+  // избрани са най-важните
+  const minAi = Math.min(...ai.map(c => c.score ?? 0)), maxRest = Math.max(-99, ...cards.filter(c => !c.ai).map(c => c.score ?? 0));
+  assert.ok(minAi >= maxRest, 'ИИ преразказва най-важните картички');
+  for (let i = 1; i < cards.length; i++) assert.ok(cards[i - 1].time <= cards[i].time, 'редът по време се пази');
+  // ИИ мълчи → след тавана остават картичките по сценарий
+  const sim2 = new VillageSim({ seed: 77 });
+  const t0 = Date.now();
+  const c2 = await catchUpAsync(sim2, 3 * 3600 * 1000, fake('hang'), { timeoutMs: 60 });
+  assert.ok(Date.now() - t0 < 3000);
+  assert.deepEqual(c2.map(c => c.text), refCards.map(c => c.text));
+  assert.ok(c2.every(c => !c.ai));
+  // няма връзка → без ИИ
+  const c3 = await catchUpAsync(new VillageSim({ seed: 77 }), 3 * 3600 * 1000, fake('off'));
+  assert.ok(c3.every(c => !c.ai));
+  // по подразбиране — мозъкът на симулацията; кратко отсъствие → нищо
+  assert.deepEqual(await catchUpAsync(new VillageSim({ seed: 1, brain: fake('ok') }), 1000), []);
+});
+
+test('Караконджул и буря: който е навън, веднага тича към къщи; нощта има свои истории и утрото говори за нея', () => {
+  for (const kind of ['karakondzhul', 'storm'] as const) {
+    const sim = new VillageSim({ seed: 2024 });
+    const log: ChronicleEntry[] = [];
+    sim.bus.on('chronicle', e => log.push(e));
+    sim.advance(1440 + 10 * 60 + 45); // Ден 2, следобед — хората са навън, някои вървят
+    sim.inject({ type: kind });
+    const out = sim.state.villagers.filter(v => !v.indoors && v.activity !== 'sleep');
+    assert.ok(out.length > 0);
+    for (const v of out) {
+      assert.equal(v.talkingWith, null, `${kind}: ${v.id} още си говори`);
+      if (v.path.length) assert.equal(v.activity, 'flee', `${kind}: ${v.id} върви, вместо да тича`);
+    }
+    // по пътя си всички тичат (не вървят), докато не се приберат
+    for (let i = 0; i < 20; i++) {
+      sim.advance(0.5);
+      for (const v of sim.state.villagers) if (v.path.length && !v.talkingWith) assert.notEqual(v.activity, 'walk', `${kind}: ${v.id} ходи бавно`);
+    }
+    if (kind === 'karakondzhul') {
+      const tags = log.map(e => e.tag);
+      assert.ok(tags.includes('karakondzhul') && tags.includes('karakondzhul_brave') && tags.includes('karakondzhul_hide'), tags.join(','));
+      for (const v of sim.state.villagers) assert.ok(v.memories.some(m => m.about.includes('karakondzhul') && m.about.includes('fear')) || v.memories.some(m => m.about.includes('brave')), `${v.id} не помни страха`);
+      sim.advance(1440);
+      assert.ok(log.some(e => e.tag === 'karakondzhul_morning'), 'на сутринта селото говори за Караконджула');
+    }
+  }
+});
+
+test('ежедневието: мили дребни случки и разумен брой записи на ден', () => {
+  const sim = new VillageSim({ seed: 2024 });
+  const log: ChronicleEntry[] = [];
+  sim.bus.on('chronicle', e => log.push(e));
+  for (let d = 0; d < 6; d++) sim.advance(1440);
+  const tags = new Set(log.map(e => e.tag));
+  for (const t of ['kalin_toy', 'gena_tale', 'petko_kaval', 'radka_recipe', 'peyu_river']) assert.ok(tags.has(t), `няма „${t}“`);
+  const perDay = new Map<number, number>();
+  for (const e of log) { const d = Math.floor(e.time / 1440); perDay.set(d, (perDay.get(d) ?? 0) + 1); }
+  for (const [d, n] of perDay) if (d < 6) assert.ok(n >= 8 && n <= 25, `ден ${d + 1}: ${n} записа`);
+  // един и същ текст не се повтаря в два поредни дни
+  const byText = new Map<string, number[]>();
+  for (const e of log) byText.set(e.text, [...(byText.get(e.text) ?? []), Math.floor(e.time / 1440)]);
+  for (const [t, days] of byText) for (let i = 1; i < days.length; i++) assert.ok(days[i] - days[i - 1] !== 1 || /поговор|говориха|приказва/.test(t), `повтаря се в поредни дни: ${t}`);
 });

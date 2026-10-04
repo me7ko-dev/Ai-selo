@@ -80,6 +80,15 @@ export interface PlanReply { plan: string; ai: boolean }
 export interface ReflectRequest { speaker: Persona; memories: Memory[]; beliefs: string[]; seed: number }
 export interface ReflectReply { beliefs: string[]; ai: boolean }
 
+/** „Докато те нямаше…“: ИИ преразказва най-важните случки като в книжка с приказки (приоритет 0 — играчът чака). */
+export interface RetellRequest {
+  events: { title: string; text: string; time: number; participants: string[] }[];
+  situation: string;     // „Сега е Ден 4, 08:10. Ясно време. Реката Бистрица е пресъхнала.“
+  seed: number;
+}
+/** texts[i] е новият разказ за events[i] или null (тогава остава текстът по сценарий). */
+export interface RetellReply { texts: (string | null)[]; ai: boolean }
+
 export interface Brain {
   status(): BrainStatus;
   talk(req: TalkRequest): Promise<BrainReply>;
@@ -87,6 +96,8 @@ export interface Brain {
   react(req: ReactRequest): Promise<BrainReply>;
   plan(req: PlanRequest): Promise<PlanReply>;
   reflect(req: ReflectRequest): Promise<ReflectReply>;
+  /** По желание (старите мозъци го нямат): преразказ на случки за „Докато те нямаше…“. */
+  retell?(req: RetellRequest): Promise<RetellReply>;
 }
 
 /** Синхронни (детерминирани) версии — има ги само ScriptedBrain. Симулацията ги ползва, за да е повторима. */

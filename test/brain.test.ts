@@ -386,3 +386,64 @@ test('Ollama: чат, план, размисъл с валиден ИИ', async 
   assert.equal(re.ai, true); assert.equal(re.mood, 'уплашен');
   ob.dispose(); await srv.close();
 });
+
+test('Ollama: преразказ за „Докато те нямаше…“ — добрите текстове с ИИ, лошите остават по сценарий', async () => {
+  let asked = '';
+  const srv = await fakeOllama((req, body, res) => {
+    if (req.url === '/api/tags') return json(res, tags(['qwen3.5:4b']));
+    const b = JSON.parse(body) as { messages: { content: string }[]; format: { properties: Record<string, unknown> } };
+    asked = b.messages.map((m) => m.content).join('\n');
+    assert.ok(Object.keys(b.format.properties).includes('texts'));
+    json(res, chatContent(JSON.stringify({ texts: [
+      'Под стария орех Иван събра смелост и каза на Мария, че я обича — а тя се усмихна и не си тръгна.',
+      'As an AI I cannot do this.',
+      'Посред нощ Караконджулът тропаше по покривите, а хората шепнеха зад залостените врати до първи петли.',
+    ] })));
+  });
+  const ob = new OllamaBrain(settings(srv.url), new ScriptedBrain());
+  await ob.connect();
+  const ev = (text: string) => ({ title: 'Случка', text, time: 2000, participants: ['ivan', 'maria'] });
+  const r = await ob.retell({ events: [ev('Иван каза на Мария, че я обича.'), ev('Радка продаде боб.'), ev('Караконджулът дойде.')], situation: 'Ден 3, 08:00.', seed: 1 });
+  assert.equal(r.ai, true);
+  assert.equal(r.texts.length, 3);
+  assert.ok(r.texts[0]?.includes('Мария'));
+  assert.equal(r.texts[1], null);
+  assert.ok(r.texts[2]?.includes('Караконджулът'));
+  assert.match(asked, /Иван \(ковач\)/);
+  assert.match(asked, /участници: Иван, Мария/);
+  // без връзка → всичко null, ai:false
+  const off = await new OllamaBrain(settings('http://127.0.0.1:9'), new ScriptedBrain()).retell({ events: [ev('x y z')], situation: '', seed: 1 });
+  assert.deepEqual(off, { texts: [null], ai: false });
+  ob.dispose(); await srv.close();
+});
+
+test('ScriptedBrain: свободни въпроси — кметът, „обичаш ли…“, къде е Ламята, без издадени тайни', () => {
+  const sb = new ScriptedBrain();
+  const ask = (id: VillagerId, input: string, situation = SITS[0], extra: Partial<TalkRequest> = {}) => sb.talkNow(talkReq(id, { input, optionId: undefined, situation, ...extra })).say;
+  // кметът за самия себе си
+  assert.match(ask('peyu', 'Какво мислиш за кмета?'), /Аз съм/);
+  // друг кмет (от ситуацията)
+  assert.match(ask('radka', 'Какво мислиш за кмета?', SITS[0] + ' Кмет е Радка.'), /кметът/i);
+  assert.doesNotMatch(ask('maria', 'Какво мислиш за кмета?', SITS[0] + ' Кмет е Радка.'), /Пею/);
+  // „обичаш ли Мария“ към самата Мария — не „Мария съм, тъкачката“
+  assert.match(ask('maria', 'Обичаш ли Мария?'), /Себе си/);
+  assert.match(ask('maria', 'Обичаш ли Иван?'), /Иван/);
+  for (const id of VILLAGER_IDS) {
+    const t = ask(id, 'Обичаш ли баба Гена?');
+    assertGood(t, `${id} / обичаш ли`);
+    assert.doesNotMatch(t, /(^|[.!?] )баба/, `${id}: малка буква в началото на изречение: ${t}`);
+    assert.match(ask(id, 'Къде спи Ламята?'), /Ламин връх|върха/, `${id}: къде е Ламята`);
+  }
+  // тайните не излизат в „какво ново“ при малко доверие
+  const secretMem: Memory = { id: 1, time: 1500, text: 'Пуснах козите в нивата на Иван. Да види и той как е.', importance: 9, about: ['ivan', 'goats', 'secret'], kind: 'event' };
+  for (let seed = 0; seed < 20; seed++) {
+    const t = sb.talkNow(talkReq('petko', { input: 'Какво ново?', optionId: undefined, memories: [secretMem], seed })).say;
+    assert.doesNotMatch(t, /Пуснах козите/, t);
+  }
+  // слух в спомен → „Х ми каза, че …“, без „Чух, че Х ми каза“ и без „.“.“
+  const rumorMem: Memory = { id: 2, time: 1500, text: 'Дядо Пею ми каза: „Петко нарочно пуска козите в нивата на Иван!“', importance: 9, about: ['peyu', 'petko', 'goats'], kind: 'rumor' };
+  for (let seed = 0; seed < 20; seed++) {
+    const t = sb.talkNow(talkReq('maria', { input: 'Какво ново?', optionId: undefined, memories: [rumorMem], seed })).say;
+    assert.doesNotMatch(t, /Чух, че дядо Пею ми каза|“\./, t);
+  }
+});

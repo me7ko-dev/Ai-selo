@@ -16,7 +16,7 @@ import { scheduleFor, spotFor, horoSpot, gatherSpot, placeCenter, type Goal } fr
 import { clueText, beliefIn, type ClueTopic } from './clues';
 import { LOC, Name, WEATHER_TEXT, cap, g, hash, hpick, isVillager, moodScore, moodWord, nameOf, type MoodKey } from './text';
 import { addMemory, pruneMemories, retrieve } from './memory';
-import { worldTick, injectEvent, initialRumors, distortion } from './events';
+import { worldTick, injectEvent, initialRumors, distortion, pickNew } from './events';
 
 /** Метра за игрова минута (= 1,3 м/с реално при 0,25 игрови минути в секунда). */
 export const WALK_SPEED = 5.2;
@@ -166,7 +166,7 @@ export class VillageSim {
         v.facing = h.facing; continue;
       }
       if (!v.path.length || v.talkingWith) continue;
-      let d = WALK_SPEED * (SPEED_MUL[v.id] ?? 1) * (v.flags.hurry ? 1.5 : 1) * dt;
+      let d = WALK_SPEED * (SPEED_MUL[v.id] ?? 1) * (v.activity === 'flee' ? 1.8 : v.flags.hurry ? 1.5 : 1) * dt;
       while (d > 1e-9 && v.path.length) {
         const p = v.path[0];
         const dx = p.x - v.pos.x, dz = p.z - v.pos.z, l = Math.hypot(dx, dz);
@@ -196,11 +196,12 @@ export class VillageSim {
   private onArrive(v: VillagerState, place: PlaceId) {
     const id = v.id;
     if (id === 'maria' && (place === 'south_road' || place === 'gate') && this.r.chance(0.5)) {
-      this.chronicle('mood', hpick([
+      this.chronicle('mood', pickNew(this.s, 'maria_gaze', [
         'Мария пак стоя на пътя на юг и гледа към планините, докато сенките не се удължиха. Какво ли има отвъд?',
         'Мария излезе до края на селото и дълго гледа пътя на юг. „Някой ден…“, прошепна тя.',
-        'Мария седна на камъка до пътя и гледаше облаците, които отиваха към морето, което никога не е виждала.',
-      ], this.day, 'maria_gaze'), ['maria'], 2, 'maria_dreams');
+        'Мария седна на камъка до пътя и гледаше как облаците плуват на юг — към морето, което никога не е виждала.',
+        'Мария стигна до последния завой на пътя на юг, постоя там и се върна с венче от полски цветя — и с мечта, която не каза на никого.',
+      ], this.day), ['maria'], 2, 'maria_dreams');
       addMemory(this.s, v, 'Гледах пътя на юг и мечтаех за света отвъд планините.', 3, ['world', 'dream']);
     }
     if (id === 'peyu' && place === 'bridge' && this.r.chance(0.35)) {
@@ -208,10 +209,12 @@ export class VillageSim {
         this.chronicle('mood', 'Дядо Пею стоя на каменния мост и се усмихваше на водата като на стар приятел.', ['peyu'], 3, 'peyu_river');
         this.say('peyu', 'Тече… Бистрица пак тече!');
       } else {
-        this.chronicle('mood', hpick([
+        this.chronicle('mood', pickNew(this.s, 'peyu_bridge', [
           'Дядо Пею пак стоя дълго на каменния мост и гледа сухото корито на Бистрица. „Без вода нивите ще умрат“, мърмореше си той.',
           'Дядо Пею хвърли камъче в коритото на Бистрица. Чу се сухо тракане, а не плясък. Кметът въздъхна и си тръгна.',
-        ], this.day, 'peyu_bridge'), ['peyu'], 2, 'peyu_river');
+          'Дядо Пею слезе в коритото на Бистрица и дълго ровеше с тоягата между камъните. „Някъде тук трябва да има поне капка“, мърмореше той.',
+          'Дядо Пею премери с крачки сухото корито на Бистрица — от единия бряг до другия — и надраска нещо на парче кора. Никой не разбра какво.',
+        ], this.day), ['peyu'], 2, 'peyu_river');
         this.say('peyu', 'Едно време тук имаше вода до коляно…');
       }
       addMemory(this.s, v, 'Пак гледах сухото корито на Бистрица. Тревожа се за селото.', 3, ['river', 'lamia']);
@@ -347,6 +350,7 @@ export class VillageSim {
       // вече върви натам / там е; само обнови дейността, ако е стигнал
       if (!v.path.length && v.activity !== goal.act && v.activity !== 'dance') { v.activity = goal.act; v.flags.gAct = goal.act; }
       if (hurry) v.flags.hurry = true;
+      if (v.path.length && v.activity === 'walk' && this.danger(time)) v.activity = 'flee'; // вече вървеше към къщи — сега тича
       this.checkSeek(v);
       return;
     }
@@ -359,8 +363,31 @@ export class VillageSim {
     v.path = roadPath(v.pos, spot).map(p => ({ x: p.x, z: p.z }));
     if (v.flags.seek) v.flags.seekPathT = time; else delete v.flags.seekPathT;
     v.place = null; v.indoors = false;
-    v.activity = Number(this.s.flags.karakondzhul_until ?? 0) > time ? 'flee' : 'walk';
+    v.activity = this.danger(time) ? 'flee' : 'walk';
     this.checkSeek(v);
+  }
+
+  /** Караконджул или буря — който е навън, тича към къщи. */
+  private danger(time: number): boolean {
+    const f = this.s.flags;
+    return Number(f.karakondzhul_until ?? 0) > time || Number(f.storm_until ?? 0) > time;
+  }
+
+  /** @internal Опасност (Караконджул, буря): разговорите навън секват и всички веднага тръгват (тичат) към къщи. */
+  panic(): void {
+    const time = this.s.time, mod = this.mod;
+    for (const v of this.s.villagers) {
+      if (v.talkingWith && v.talkingWith !== 'player') this.freeFromTalk(v);
+    }
+    // недоизказаните реплики от прекъснатите разговори изчезват
+    this.s.queue = this.s.queue!.filter(l => !(l.to && l.to !== 'player' && l.at > time));
+    for (const v of this.s.villagers) {
+      if (v.talkingWith === 'player') continue;
+      delete v.flags.seek; delete v.flags.seekUntil; delete v.flags.seekTopic; delete v.flags.errand; delete v.flags.errandUntil;
+      if (v.activity === 'sleep' && v.indoors) continue;
+      v.goal = undefined;
+      this.retarget(v, time, mod);
+    }
   }
 
   private checkSeek(v: VillagerState) {
@@ -437,6 +464,7 @@ export class VillageSim {
     if (s.villagers.some(v => v.flags.metPlayer) && (a.flags.metPlayer || b.flags.metPlayer)) items.push(['stranger', 1.5]);
     if (Number(f.last_theft_day ?? -9) >= day - 1) items.push(['chickens', 1.5]);
     if (f.sabor === day) items.push(['festival', 2]);
+    if (f.karakondzhul_day !== undefined && Number(f.karakondzhul_day) >= day - 1) items.push(['fear', 4]);
     if (s.nextElectionDay - day <= 2 && s.nextElectionDay >= day) items.push(['election', 2]);
     return this.r.weighted(items);
   }
@@ -456,8 +484,16 @@ export class VillageSim {
       memoriesA: this.retrieveMemories(a.id as VillagerId, [topic, b.id], 5), memoriesB: this.retrieveMemories(b.id as VillagerId, [topic, a.id], 5),
       relationAB: { ...a.relations[b.id] }, relationBA: { ...b.relations[a.id] }, rumor: rumor?.text, seed,
     };
-    let reply: ChatReply;
-    try { reply = this.scripted.chatNow(req); } catch { reply = { lines: [], summary: '', ai: false }; }
+    let reply: ChatReply = { lines: [], summary: '', ai: false };
+    // същият диалог да не се чува по два пъти в един ден (броячите се нулират в полунощ)
+    for (let k = 0; k < 4; k++) {
+      try { reply = this.scripted.chatNow(k ? { ...req, seed: (seed + k * 7919) >>> 0 } : req); } catch { reply = { lines: [], summary: '', ai: false }; }
+      // ключ без обръщенията и имената („Помниш ли, дядо Пею, как…“ = „Помниш ли, Петко, как…“)
+      const first = (reply.lines?.[0]?.text ?? '').replace(/^[^—]{0,32}—\s*/, '').replace(/(дядо|бабо|баба)\s+\S+/gi, '')
+        .replace(/(?<=\S\s)[А-Я][а-я]+/g, '').replace(/[^а-я]/gi, '').toLowerCase().slice(0, 32);
+      const ck = 'dlg_' + hash(first);
+      if (!first || !s.counters![ck] || k === 3) { if (first) s.counters![ck] = 1; break; }
+    }
     const lines = (reply.lines ?? []).filter(l => l && typeof l.text === 'string' && l.text.trim()).slice(0, 4)
       .map((l, i) => ({ who: l.who === a.id || l.who === b.id ? l.who : (i % 2 ? b.id : a.id), text: l.text.trim() }));
     if (!lines.length) lines.push({ who: a.id, text: 'Добър ден.' }, { who: b.id, text: 'Добър ден и на теб.' });
@@ -520,11 +556,16 @@ export class VillageSim {
       this.adjustRelation(A, B, -8 + ad, -4); this.adjustRelation(B, A, -8 + ad, -4);
       this.feel(A, -15, 'angry'); this.feel(B, -15, 'angry');
       const goats = A === 'ivan' && B === 'petko' || A === 'petko' && B === 'ivan';
-      const text = goats ? hpick([
+      const text = goats ? pickNew(s, 'quarrel_goats', [
         `${cap(here)} Иван и Петко пак се скараха за козите. Иван стискаше юмруци, Петко викаше, че козите сами си ходят. Разтърваха ги чак когато дядо Пею повиши глас.`,
         `Иван и Петко се сдърпаха ${here}. „Козите ти пак ми изядоха ечемика!“ — „Абе кво ми викаш, да не съм ги вързал за нивата ти?!“ Половин час селото не говори за друго.`,
         `${cap(here)} се чуха викове — Иван и Петко пак не можаха да се разберат за нивата. Накрая Петко плю на земята и си тръгна, а Иван дълго гледа след него.`,
-      ], s.time, 'quarrel') : `${Name(A)} и ${nameOf(B)} се скараха ${here}. Думите им се чуваха чак до чешмата.`;
+        `Иван мълча, мълча — и ${here} най-сетне избухна: „Петко, още една коза в нивата ми и ще ти изкова звънец колкото камбана!“ Петко само изсумтя, но този път се дръпна назад.`,
+      ], s.time) : pickNew(s, 'quarrel', [
+        `${Name(A)} и ${nameOf(B)} се скараха ${here}. Думите им се чуваха чак на другия край на селото.`,
+        `${cap(here)} ${nameOf(A)} и ${nameOf(B)} се хванаха за думата — от дума на дума и стигнаха до викове. После дълго не се поглеждаха.`,
+        `${Name(A)} и ${nameOf(B)} се спречкаха ${here}. Никой не разбра за какво точно, но и двамата си тръгнаха с червени бузи.`,
+      ], s.time);
       this.chronicle('quarrel', text, [A, B], 5, goats ? 'goats_quarrel' : 'quarrel');
       for (const x of [a, b]) addMemory(s, x, `Скарах се с ${nameOf(x.id === A ? B : A)}${goats ? ' за козите и нивата' : ''}.`, 6, [x.id === A ? B : A, 'quarrel', goats ? 'goats' : 'quarrel']);
       this.witness([a, b], text, 4, [A, B, 'quarrel']);
@@ -538,11 +579,13 @@ export class VillageSim {
       addMemory(s, maria, 'Иван пак се изчерви, докато ми говореше. Мил е.', 4, ['ivan', 'love']);
       const iv = ivan.relations.maria?.affinity ?? 0, mv = maria.relations.ivan?.affinity ?? 0;
       if (!s.flags.ivan_confessed && iv >= 85 && mv >= 55) { this.confession(ivan, maria, here); return; }
-      if (cnt('love_log') <= 2) this.chronicle('love', hpick([
+      if (cnt('love_log') <= 2) this.chronicle('love', pickNew(s, 'love_talk', [
         `Иван и Мария дълго стояха ${here}. Той почти нищо не каза, но тя се смееше на всяка негова дума.`,
         `${cap(here)} Мария разказваше на Иван за морето, което никога не е виждала. Иван слушаше и забрави, че е гладен.`,
         `Иван и Мария си говориха ${here}. Когато тя го докосна по ръката, ковачът се изчерви като желязо в огнището.`,
-      ], s.time, 'love'), ['ivan', 'maria'], 3, 'love_talk');
+        `${cap(here)} Мария показа на Иван нова шевица — звезди над път. Иван я гледа дълго и каза само „хубаво“, но с такъв глас, че Мария се изчерви.`,
+        `Иван и Мария се засякоха ${here} и забравиха накъде са тръгнали. Радка, като ги видя, само се усмихна многозначително.`,
+      ], s.time), ['ivan', 'maria'], 3, 'love_talk');
       return;
     }
     this.adjustRelation(A, B, 1 + ad, 0.5); this.adjustRelation(B, A, 1 + ad, 0.5);
@@ -556,16 +599,26 @@ export class VillageSim {
       const other = A === 'kalin' ? B : A;
       addMemory(s, this.v('kalin')!, `${Name(other)} ме заговори! Рядко някой ме забелязва.`, 4, [other, 'kalin']);
       this.feel('kalin', 12);
-      if (cnt('talk_log') <= 10) {
-        this.chronicle('talk', `${Name(other)} заговори Калин ${here} — ${phrase}. Калин се усмихваше чак до вечерта.`, [other, 'kalin'], 3, 'kalin_noticed');
+      if (cnt('kalin_log') <= 1 && cnt('talk_log') <= 8) {
+        const late = this.mod >= 17 * 60;
+        this.chronicle('talk', pickNew(s, 'kalin_noticed', [
+          `${Name(other)} заговори Калин ${here} — ${phrase}. Калин се усмихваше ${late ? 'чак докато заспа' : 'до вечерта'}.`,
+          `${cap(here)} ${nameOf(other)} неочаквано попита Калин как е. Дърводелецът се смути, но после дълго разказваше ${phrase}.`,
+          `${Name(other)} се сети за Калин и го заговори ${here}. „Значи ме виждат“, помисли си Калин и се усмихна.`,
+        ], s.time, other), [other, 'kalin'], 3, 'kalin_noticed');
       }
       return;
     }
-    if (this.r.chance(0.6) && cnt('talk_log') <= 12) {
-      const t = hpick([
+    if (this.r.chance(0.5) && cnt('talk_log') <= 7) {
+      const sum = (reply.summary ?? '').trim();
+      const elsewhere = /край чешмата|край стана|пред хана|на мегдана|насред пътя/.exec(sum);
+      const useSum = sum && !reply.ai && topic !== 'gossip' && !(elsewhere && !here.includes(elsewhere[0].split(' ').pop()!)) && hash(sum, s.time) % 3 !== 0;
+      const t = useSum ? sum : hpick([
         `${Name(A)} и ${nameOf(B)} си поговориха ${phrase} ${here}.`,
         `${cap(here)} ${nameOf(A)} и ${nameOf(B)} дълго си говориха ${phrase}.`,
         `${Name(A)} се спря при ${nameOf(B)} ${here} да си поговорят ${phrase}.`,
+        `${Name(A)} и ${nameOf(B)} поседяха ${here} и си приказваха ${phrase}.`,
+        `${cap(here)} ${nameOf(A)} срещна ${nameOf(B)} и се заприказваха ${phrase}.`,
       ], s.time, A, B);
       this.chronicle('talk', t, [A, B], 2, 'chat_' + topic);
     }
@@ -594,7 +647,9 @@ export class VillageSim {
     const verbFixed = hpick(a.id === 'radka' ? ['пошепна', 'разказа', 'каза под секрет'] : ['каза', 'разказа', 'пошепна'], r.id, b.id);
     const doubt = belief < 0.25 ? ` ${Name(b.id)} само поклати глава — не повярва.` : '';
     const n = (s.counters!.rumor_log = (s.counters!.rumor_log ?? 0) + 1);
-    if (n <= 8) this.chronicle('rumor', `${Name(a.id)} ${verbFixed} на ${nameOf(b.id)} ${here}: „${r.text}“${doubt}`, [a.id, b.id], r.parent ? 4 : 3, 'rumor_' + (r.tag ?? 'x'));
+    const rk = 'rumor_r' + (r.parent ?? r.id);
+    const same = (s.counters![rk] = (s.counters![rk] ?? 0) + 1);
+    if (n <= 8 && same <= 1) this.chronicle('rumor', `${Name(a.id)} ${verbFixed} на ${nameOf(b.id)} ${here}: „${r.text}“${doubt}`, [a.id, b.id], r.parent ? 4 : 3, 'rumor_' + (r.tag ?? 'x'));
   }
 
   /** @internal Жителят научава слух с дадена вяра. */
@@ -915,6 +970,7 @@ export function TOPIC_PHRASE(topic: string, s: WorldState): string {
     case 'festival': return 'за сбора';
     case 'election': return 'за изборите';
     case 'love': return 'за сърдечни работи';
+    case 'fear': return 'за страшната нощ с Караконджула';
     case 'quarrel': return 'на висок глас';
     default: return 'за това-онова';
   }

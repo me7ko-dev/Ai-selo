@@ -5,7 +5,7 @@ import { VILLAGERS, type VillagerId } from '../../data/villagers';
 import type { Memory, Relation } from '../types';
 import type {
   Brain, BrainReply, BrainStatus, ChatReply, ChatRequest, Partner, Persona, PlanReply, PlanRequest, ReactRequest,
-  ReflectReply, ReflectRequest, SyncBrain, TalkRequest,
+  ReflectReply, ReflectRequest, RetellReply, RetellRequest, SyncBrain, TalkRequest,
 } from './Brain';
 import {
   cap, ensurePeriod, eligible, fill, hasFresh, isFemale, isVillagerId, join, lcFirst, makeCtx, nameOf, parseSituation,
@@ -15,8 +15,8 @@ import { detectIntent, type Intent } from './intent';
 import { GENERIC, TALK, WEATHER_LINES, type Bank, type TalkCat } from './lines';
 import { CHAT_EXTRA, EXTRA } from './lines-extra';
 import {
-  ABOUT, ABOUT_KALIN_FORGET, ABOUT_OPEN, CHAT, CHAT_PREFIX, FACTS, JOB_LINES, PAIR_CHAT, PLANS, REACT, REACT_GENERIC, VOICE_PREFIX,
-  VOTE_LINES, type ChatDialog, type EventKind,
+  ABOUT, ABOUT_KALIN_FORGET, ABOUT_OPEN, CHAT, CHAT_PREFIX, FACTS, JOB_LINES, LAMIA_WHERE, LOVE_OTHER, LOVE_SELF, MARIA_LOVES_IVAN,
+  MAYOR_SELF, PAIR_CHAT, PLANS, REACT, REACT_GENERIC, ROSEN, VOICE_PREFIX, VOTE_LINES, WORLD_TALK, type ChatDialog, type EventKind,
 } from './lines-world';
 
 export const SCRIPTED_LABEL = 'ИИ: няма връзка — жителите говорят по сценарий';
@@ -119,6 +119,10 @@ interface Out { say: string; action?: string; mood?: string; remember?: string }
 export class ScriptedBrain implements Brain, SyncBrain {
   status(): BrainStatus { return { connected: false, model: '', label: SCRIPTED_LABEL, busy: false, queue: 0 }; }
 
+  /** Без ИИ преразказът е самият текст от летописа (null = остави го). */
+  retellNow(req: RetellRequest): RetellReply { return { texts: req.events.map(() => null), ai: false }; }
+  retell(req: RetellRequest): Promise<RetellReply> { return Promise.resolve(this.retellNow(req)); }
+
   // ——————————————— Разговор с играча ———————————————
   talkNow(req: TalkRequest): BrainReply {
     const c = makeCtx(req.speaker, req.partner, req.situation, req.memories, req.history, req.seed);
@@ -128,7 +132,7 @@ export class ScriptedBrain implements Brain, SyncBrain {
     } catch {
       out = { say: '' };
     }
-    let text = tidy(out.say || '');
+    let text = capSentences(tidy(out.say || ''));
     if (!text) text = fill('{hello}, {p}.', c);
     const reply: BrainReply = { say: text, ai: false };
     if (out.action) reply.action = out.action;
@@ -142,6 +146,11 @@ export class ScriptedBrain implements Brain, SyncBrain {
     const who = partnerWho(c.partner);
     if (opt) return this.byOption(c, opt, who);
     const it = detectIntent(req.input ?? '', c.id);
+    if (it.intent === 'mayor') return this.mayor(c, who);
+    if (it.intent === 'love' && it.target && !(c.vid === 'ivan' && it.target === 'maria')) return this.loveAbout(c, it.target, who);
+    if (it.intent === 'lamia' && it.word === 'where' && c.vid && !c.sit.lamiaDead) {
+      return { say: pickFresh(LAMIA_WHERE[c.vid], c), remember: `${who} ме пита къде е Ламята.` };
+    }
     return this.byIntent(c, it.intent, who, it.question, it.target);
   }
 
@@ -204,6 +213,8 @@ export class ScriptedBrain implements Brain, SyncBrain {
       case 'forest': return this.topic(c, 'forest', who);
       case 'rosen': {
         if (c.vid === 'gena') return this.help(c, who);
+        const own = c.vid ? ROSEN[c.vid] : undefined;
+        if (own) return { say: pickFresh(own, c) };
         const t = voice(c, c.rng, c.rng.pick(['За росен и билки питай баба Гена. Тя знае всяка трева.', 'Росен ли? Баба Гена знае къде расте. Аз не разбирам от билки.']), 0.6);
         return { say: t };
       }
@@ -307,7 +318,34 @@ export class ScriptedBrain implements Brain, SyncBrain {
       ]);
       return { say: fill(t, c), mood: 'щастлива', remember: `${who} ми разказа за света отвъд планините.` };
     }
+    const own = c.vid ? WORLD_TALK[c.vid] : undefined;
+    if (own) return { say: pickFresh(own, c) };
     return { say: voice(c, c.rng, c.rng.pick(['За света ли? Разкажи го на Мария — тя ще те слуша с отворена уста.', 'Светът си е свят. На мен ми стига Самодивско.']), 0.6) };
+  }
+
+  /** „Какво мислиш за кмета?“ — истинският кмет е в ситуацията („Кмет е Радка.“); иначе е дядо Пею. */
+  private mayor(c: Ctx, who: string): Out {
+    const m = /кмет е ([^.]+)\./iu.exec(c.sit.raw);
+    const name = m ? m[1].trim().toLowerCase() : '';
+    const mayor = (Object.keys(VILLAGERS) as VillagerId[]).find((id) => VILLAGERS[id].name.toLowerCase() === name) ?? 'peyu';
+    if (mayor === c.id && c.vid) return { say: pickFresh(MAYOR_SELF[c.vid], c), remember: `${who} ме пита какъв кмет съм.` };
+    return this.person(c, mayor, who);
+  }
+
+  /** „Обичаш ли {T}?“ */
+  private loveAbout(c: Ctx, target: VillagerId, who: string): Out {
+    const remember = `${who} ме пита обичам ли ${target === c.id ? 'себе си' : nameOf(target)}.`;
+    if (!c.vid) return this.person(c, target, who);
+    if (target === c.id) return { say: pickFresh(LOVE_SELF[c.vid], c), remember };
+    if (c.vid === 'maria' && target === 'ivan') return { say: pickFresh(MARIA_LOVES_IVAN, c), mood: 'смутена', remember };
+    const tProf = VILLAGERS[target];
+    const sub: Ctx = { ...c, partnerFemale: tProf.gender === 'f' };
+    let core = pickFresh(LOVE_OTHER[c.vid], sub, { T: tProf.name });
+    core = cap(core);
+    let tail: string | undefined;
+    if (target === 'maria' && c.vid !== 'ivan' && c.rng.chance(0.6)) tail = c.vid === 'radka' ? 'Ама Иван — Иван я обича до уши! Цялото село знае.' : 'А Иван — той я обича истински. Ама шшт.';
+    else if (target === 'ivan' && c.vid !== 'maria' && c.rng.chance(0.6)) tail = 'Ама ако питаш за сърдечни работи — питай Мария. Тя знае най-добре.';
+    return { say: join([core, tail]), remember };
   }
 
   private topic(c: Ctx, cat: TalkCat, who: string, memAbout?: string, remember?: string): Out {
@@ -329,7 +367,7 @@ export class ScriptedBrain implements Brain, SyncBrain {
     if (target === c.id) return { say: say(c, 'whoareyou') };
     const special = c.vid ? ABOUT[c.vid]?.[target] : undefined;
     let core: string | undefined;
-    if (special && c.rng.chance(0.75)) {
+    if (special && c.rng.chance(0.85)) {
       core = pickFresh(special, c);
     } else if (target === 'kalin' && c.vid !== 'gena' && c.vid !== 'maria' && c.vid !== 'kalin' && c.rng.chance(0.6)) {
       core = c.rng.pick(ABOUT_KALIN_FORGET);
@@ -340,7 +378,7 @@ export class ScriptedBrain implements Brain, SyncBrain {
       const sub: Ctx = { ...c, partnerFemale: tProf.gender === 'f' };
       const open = fill(c.rng.pick(ABOUT_OPEN[lvl]), sub, { T: tProf.name.split(' ').length > 1 ? tProf.name : tProf.short });
       const fact = c.rng.pick(FACTS[target]);
-      core = c.vid === 'ivan' ? `${tProf.short}. Хм.` : `${cap(open)} ${fact}`;
+      core = c.vid === 'ivan' ? `${tProf.short}. Хм. ${fact}` : `${cap(open)} ${fact}`;
     }
     // клюка/спомен за този човек
     const m = pickMemory(c, { about: target, avoidPlayer: c.partner.isPlayer });
@@ -371,7 +409,7 @@ export class ScriptedBrain implements Brain, SyncBrain {
     const ctxA = this.chatCtx(a, b, req.relationAB, req, rng);
     const ctxB = this.chatCtx(b, a, req.relationBA, req, rng);
     const bothF = isFemale(a) && isFemale(b);
-    const names = { A: cap(nameOf(a.id, a.name)), B: nameOf(b.id, b.name), Both: bothF ? 'И двете' : 'И двамата' };
+    const names = { A: nameOf(a.id, a.name), B: nameOf(b.id, b.name), Both: bothF ? 'И двете' : 'И двамата' };
 
     // 1) особени двойки
     const key = `${topic}:${[a.id, b.id].sort().join(':')}`;
@@ -596,7 +634,9 @@ export class ScriptedBrain implements Brain, SyncBrain {
       } else if (key === 'lamia') {
         text = lamiaDead ? 'Ламята я няма — вече не се страхувам.' : 'Ламята е голямата беда на селото.';
       } else if (key === 'chickens') {
-        text = 'Някой краде кокошките на Радка. Трябва да се разбере кой.';
+        text = req.speaker.id === 'radka' ? 'Някой ми краде кокошките. Трябва да разбера кой — и тогава ще види той!'
+          : req.speaker.id === 'petko' ? 'Радка ме мисли за крадец. А кокошките ги взима нещо от гората.'
+            : 'Някой краде кокошките на Радка. Трябва да се разбере кой.';
       } else if (key === 'election') {
         text = 'Изборите наближават. Кой ли ще е кмет?';
       } else if (key === 'love') {

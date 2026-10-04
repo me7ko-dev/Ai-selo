@@ -5,7 +5,7 @@ export type Intent =
   | 'insult' | 'bye' | 'thanks' | 'compliment' | 'greet' | 'secret' | 'person'
   | 'lamia' | 'river' | 'chickens' | 'samodivi' | 'talasam' | 'karakondzhul' | 'election' | 'forest' | 'rosen'
   | 'love' | 'money' | 'weapon' | 'inn' | 'howareyou' | 'doing' | 'whoareyou' | 'self' | 'village' | 'news'
-  | 'help' | 'weather' | 'introduce' | 'unknown';
+  | 'help' | 'weather' | 'introduce' | 'mayor' | 'unknown';
 
 export interface IntentResult { intent: Intent; target?: VillagerId; question: boolean; word?: string }
 
@@ -62,16 +62,23 @@ export function detectIntent(raw: string, speakerId: string): IntentResult {
   if (any(t, ['кокош', 'лисиц', 'кражб', 'краде', 'крадец', 'крадат', 'откраднал', 'кокошар'])) return { intent: 'chickens', question, target };
   if (any(t, ['тайн', 'криеш', 'скриваш'])) return { intent: 'secret', question, target };
 
+  const loveQ = !!any(t, ['обич', 'любов', 'влюб', 'харес']);
+  // „кметът“ (без име) — истинският кмет се разбира от ситуацията (може да не е Пею)
+  const mayorOnly = target === 'peyu' && has(t, 'кмет') && !any(t, ['пею', 'пейо', 'дядо']);
+  if (mayorOnly && !any(t, ['избор', 'глас'])) return { intent: 'mayor', question, target, word: 'кмет' };
+
   if (target === speakerId) {
-    if (any(t, ['кмет']) && speakerId === 'peyu') return { intent: 'election', question };
+    if (loveQ) return { intent: 'love', question, target };
     return { intent: question ? 'whoareyou' : 'self', question };
   }
   if (target && !(target === 'peyu' && any(t, ['избор', 'глас']))) {
-    if (target === 'maria' && speakerId === 'ivan' && any(t, ['обич', 'любов', 'влюб', 'харес'])) return { intent: 'love', question, target };
+    if (loveQ) return { intent: 'love', question, target };
     return { intent: 'person', question, target };
   }
 
-  if (any(t, ['ламя', 'ламят', 'ламя ', 'змей', 'хала', 'три глави', 'триглав', 'ламин'])) return { intent: 'lamia', question };
+  if (any(t, ['ламя', 'ламят', 'ламя ', 'змей', 'хала', 'три глави', 'триглав', 'ламин'])) {
+    return { intent: 'lamia', question, word: /(^|[^а-я])(къде|накъде|откъде)([^а-я]|$)|бърлог|живее|спи/u.test(t) ? 'where' : undefined };
+  }
   if (any(t, ['караконджул'])) return { intent: 'karakondzhul', question };
   if (any(t, ['таласъм', 'таласъми', 'чудовищ', 'сянк'])) return { intent: 'talasam', question };
   if (any(t, ['самодив', 'поляна', 'юди', 'горски моми'])) return { intent: 'samodivi', question };
