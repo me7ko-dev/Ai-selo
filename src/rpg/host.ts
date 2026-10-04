@@ -28,4 +28,9 @@ export interface QuestHost {
   villagerName(id: VillagerId): string;
   /** Звук. */
   sfx(name: string): void;
+  // ---- по желание (RPG работи и без тях) ----
+  /** Къде е жителят сега (за маркерите на картата). Без него — домът му. */
+  villagerPos?(id: VillagerId): { x: number; z: number } | null;
+  /** Превърта времето до дадена минута от деня (напр. 22*60 — „Изчакай нощта“ при кокошарника). */
+  waitUntil?(minuteOfDay: number): void;
 }
