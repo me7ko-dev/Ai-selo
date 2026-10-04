@@ -289,7 +289,12 @@ export class Game {
     // камерата за разговора — преди етикетите, за да са над главите в същия кадър
     if (this.modal === 'dialogue' && this.dialogue.active) this.dialogueCamera(dt, this.dialogue.active);
     this.updateTags(state.villagers, state.time);
-    if (this.modal === 'watch') return;
+    if (this.modal === 'watch') {
+      // часовникът долу вляво показва момента, който се гледа
+      this.hudAcc += dt;
+      if (this.hudAcc > 0.1) { this.hudAcc = 0; this.updateHud(state.time); }
+      return;
+    }
     this.ui.hud.minimap(this.rpg.heroPos.x, this.rpg.heroPos.z, this.rpg.heroYaw, this.mapMarkers(), this.villagerDots());
     this.hudAcc += dt;
     if (this.hudAcc > 0.1) { this.hudAcc = 0; this.updateHud(); }
@@ -384,9 +389,9 @@ export class Game {
     return this.sim.state.villagers.filter((v) => this.villagers.isVisible(v.id)).map((v) => ({ x: v.pos.x, z: v.pos.z }));
   }
 
-  private updateHud(): void {
+  private updateHud(timeShown?: number): void {
     const h = this.rpg.hud();
-    const t = this.sim.state.time;
+    const t = timeShown ?? this.sim.state.time;
     this.ui.hud.update({
       name: 'Стоян', level: h.level, title: h.title,
       hp: h.hp, hpMax: h.maxHp, stamina: h.stamina, staminaMax: h.maxStamina, xp: h.xp, xpMax: h.xpNext,
