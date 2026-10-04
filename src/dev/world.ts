@@ -49,6 +49,7 @@ for (const k of Object.keys(VIEWS)) { const b = document.createElement('button')
 ($('quality') as HTMLSelectElement).onchange = (e) => world.setQuality((e.target as HTMLSelectElement).value as Quality);
 ($('river') as HTMLInputElement).onchange = (e) => world.setRiverFlowing((e.target as HTMLInputElement).checked, true);
 ($('festival') as HTMLInputElement).onchange = (e) => world.setFestival((e.target as HTMLInputElement).checked);
+($('gloom') as HTMLInputElement).onchange = (e) => world.setGloom((e.target as HTMLInputElement).checked);
 ($('showmap') as HTMLInputElement).onchange = (e) => {
   const on = (e.target as HTMLInputElement).checked, m = $('map') as HTMLCanvasElement;
   m.style.display = on ? 'block' : 'none';
