@@ -393,7 +393,7 @@ export function injectEvent(sim: VillageSim, ev: InjectedEvent) {
       s.weather = 'storm'; s.flags.storm_until = t + 120;
       sim.chronicle('weather', 'Над Самодивско се изви страшна буря — гръмотевици, вятър и пороен дъжд. Всички се прибраха по къщите, само Радка остана да залоства капаците на хана.' + byTxt(ev.by, 'Говори се, че я е извикал някой на име {by}.'), [], 5, 'storm');
       for (const v of outside()) { addMemory(s, v, 'Изви се страшна буря и тичах да се прибера.', 4, ['storm', 'weather']); sim.feel(v.id, -6); }
-      reactBubble(sim, 'Бурята! Бягайте да се приберете!');
+      sim.react('Изви се страшна буря с гръмотевици.', 'Бурята! Бягайте да се приберете!');
       break;
     }
     case 'karakondzhul': {
@@ -405,7 +405,7 @@ export function injectEvent(sim: VillageSim, ev: InjectedEvent) {
       sim.chronicle('monster', txt + byTxt(ev.by, 'Казват, че го е довел {by}.'), [...VILLAGER_IDS], 7, 'karakondzhul');
       for (const v of s.villagers) { addMemory(s, v, 'Караконджулът дойде в селото! Чух тропота му по покривите.', 7, ['karakondzhul', 'monster', 'fear']); sim.feel(v.id, -30, 'afraid', 300); }
       sim.feel('ivan', -15, 'afraid', 600);
-      reactBubble(sim, 'Караконджулът! Бягайте!');
+      sim.react('Караконджулът дойде в селото!', 'Караконджулът! Бягайте!');
       break;
     }
     case 'samodivi': {
@@ -419,6 +419,7 @@ export function injectEvent(sim: VillageSim, ev: InjectedEvent) {
       addMemory(s, sim.v(who)!, 'Видях самодиви да играят хоро на поляната! Никога няма да го забравя.', 8, ['samodivi', 'glade']);
       addMemory(s, sim.v('gena')!, 'Пак си спомних самодивата, която видях като млада на поляната. Никому не съм казвала.', 8, ['samodivi', 'secret']);
       sim.feel(who, 15, 'thoughtful', 300); sim.feel('gena', 10, 'thoughtful', 300);
+      sim.react(`${Name(who)} видял${g(who, 'а', '')} самодиви да играят хоро на поляната.`, 'Самодиви! Истински самодиви!', 1);
       sim.addRumor({ topic: 'samodivi', tag: 'samodivi', text: `${Name(who)} видял${g(who, 'а', '')} самодиви да играят хоро на поляната.`, about: [who, 'samodivi'], truth: true, origin: who, sentiment: 0 }, [[who, 1], ['gena', 1]]);
       break;
     }
@@ -431,6 +432,7 @@ export function injectEvent(sim: VillageSim, ev: InjectedEvent) {
         ? 'Самодивско си направи сбор! На мегдана запалиха огън, гайдата засвири и цялото село се хвана на хоро около стария орех.'
         : `Дядо Пею обяви, че ${d === day ? 'тази вечер' : 'утре вечер'} ще има сбор! Жените месят баници, Калин сковава маси, а Иван — колкото и да не обича тъмното — обеща да дойде.`) + byTxt(ev.by, 'Сборът е по желание на {by}.'), [...VILLAGER_IDS], 7, 'sabor');
       for (const v of s.villagers) { addMemory(s, v, 'Ще има сбор на мегдана — с огън, гайда и хоро!', 5, ['sabor', 'festival']); sim.feel(v.id, 20, 'cheerful', 300); }
+      sim.react('В селото ще има сбор с хоро и огън!', 'Сбор! Хайде на хорото!');
       break;
     }
     case 'theft': {
@@ -448,6 +450,7 @@ export function injectEvent(sim: VillageSim, ev: InjectedEvent) {
       sim.chronicle('theft', `${cap(objS)} изчезна безследно! ${Name(victim)} обърна всичко наопаки и накрая започна да гледа накриво ${nameOf(suspect)}.` + byTxt(ev.by, 'А някои шепнат, че зад всичко стои {by}.'), [victim, suspect], 5, 'theft');
       addMemory(s, v, `Някой ми открадна ${obj.replace(/ на .*$| от .*$/, '')}! Сигурно е ${nameOf(suspect)}.`, 6, ['theft', suspect]);
       sim.feel(victim, -20, 'angry', 240);
+      sim.react(`Някой открадна ${obj}.`, 'Крадец! В селото има крадец!', 1);
       sim.adjustRelation(victim, suspect, -6, -6);
       sim.addRumor({ topic: 'theft', tag: 'theft', text: `${Name(suspect)} е взел${g(suspect, 'а', '')} ${obj} — така казва ${nameOf(victim)}.`, about: [suspect], truth: false, origin: victim, sentiment: -1 }, [[victim, 0.8], ['radka', 0.6]]);
       break;
@@ -462,14 +465,6 @@ export function injectEvent(sim: VillageSim, ev: InjectedEvent) {
     }
   }
   void LOC;
-}
-
-/** Някой отвън (близо до играча, ако може) вика нещо — по сценарий. */
-function reactBubble(sim: VillageSim, fallback: string) {
-  const out = sim.s.villagers.filter(v => !v.indoors && v.activity !== 'sleep');
-  if (!out.length) return;
-  const v = out[0];
-  sim.say(v.id as VillagerId, fallback);
 }
 
 void VILLAGERS;

@@ -235,3 +235,48 @@ test('бързина: 2 игрови дни за под 2 секунди', () =>
   const ms = performance.now() - t;
   assert.ok(ms < 1500, `${ms.toFixed(0)} ms`);
 });
+
+test('ИИ мозък: допълнителни реплики, без да спира селото; старите отговори се изхвърлят след load', async () => {
+  let chats = 0, talks = 0;
+  const pending: (() => void)[] = [];
+  type ChatReq = Parameters<ScriptedBrain['chat']>[0];
+  type ChatRep = Awaited<ReturnType<ScriptedBrain['chat']>>;
+  const fake = {
+    status: () => ({ connected: true, model: 'проба', label: 'ИИ: свързан (проба)', busy: false, queue: 0 }),
+    talk: async () => { talks++; return { say: 'Здравей от ИИ.', mood: 'весела', remember: 'Странникът ме заговори.', ai: true }; },
+    chat: (req: ChatReq) => new Promise<ChatRep>(res => {
+      chats++;
+      pending.push(() => res({ lines: [{ who: req.a.id, text: 'ИИ реплика.' }, { who: req.b.id, text: 'ИИ отговор.' }], summary: `${req.a.name} и ${req.b.name} си говориха (ИИ).`, ai: true }));
+    }),
+    react: async () => ({ say: 'Ох (ИИ)!', ai: true }),
+    plan: async () => ({ plan: 'план (ИИ)', ai: true }),
+    reflect: async () => ({ beliefs: ['Убеждение от ИИ.'], ai: true }),
+  };
+  const sim = new VillageSim({ seed: 12 });
+  sim.setBrain(fake);
+  const aiSays: string[] = [], aiLog: ChronicleEntry[] = [];
+  sim.bus.on('say', s => { if (s.ai) aiSays.push(s.text); });
+  sim.bus.on('chronicle', e => { if (e.ai) aiLog.push(e); });
+  sim.setPlayer({ ...PLACES.inn.pos });
+  const t0 = sim.state.time;
+  for (let i = 0; i < 900 && chats === 0; i++) sim.advance(1);
+  assert.ok(chats > 0, 'ИИ разговор е поискан');
+  assert.ok(sim.state.time > t0);
+  pending.shift()!();
+  await new Promise(r => setTimeout(r, 0));
+  sim.advance(2);
+  assert.ok(aiSays.includes('ИИ реплика.'), 'ИИ репликите се показват');
+  assert.equal(aiLog.length, 1);
+  // отговор, който пристига след load, се изхвърля
+  for (let i = 0; i < 900 && pending.length === 0; i++) sim.advance(1);
+  assert.ok(pending.length > 0);
+  sim.load(sim.snapshot());
+  const before = aiSays.length;
+  pending.forEach(f => f());
+  await new Promise(r => setTimeout(r, 0));
+  sim.advance(2);
+  assert.equal(aiSays.filter(t => t === 'ИИ реплика.').length, aiSays.slice(0, before).filter(t => t === 'ИИ реплика.').length);
+  const r = await sim.playerSay('radka', { text: 'Как си?' });
+  assert.equal(r.ai, true); assert.equal(talks, 1);
+  assert.ok(sim.villager('radka').memories.some(m => m.text === 'Странникът ме заговори.'));
+});

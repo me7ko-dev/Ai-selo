@@ -258,7 +258,7 @@ export class VillageSim {
     if (v.talkingWith && v.talkingWith !== 'player' && (v.busyUntil ?? 0) <= time) this.freeFromTalk(v);
     if (v.talkingWith === 'player') {
       const t = this.talks.get(v.id);
-      if (!t || time - t.lastAt > 120) this.endTalk(v.id);
+      if (!t || time - t.lastAt > 120 || (this.player && dist(this.player, v.pos) > 15)) this.endTalk(v.id);
       else { if (this.player) v.facing = Math.atan2(this.player.x - v.pos.x, this.player.z - v.pos.z); return; }
     }
     if (v.talkingWith) return;
@@ -492,9 +492,12 @@ export class VillageSim {
     const eager = a.id === 'radka' ? 0.85 : 0.3;
     if (!this.r.chance(eager)) return undefined;
     const cands: Rumor[] = [];
+    const root = (r: Rumor) => r.parent ?? r.id;
+    const bRoots = new Set<number>();
+    for (const rid of b.knownRumors) { const r = this.s.rumors.find(x => x.id === rid); if (r) bRoots.add(root(r)); }
     for (const rid of a.knownRumors) {
       const r = this.s.rumors.find(x => x.id === rid); if (!r) continue;
-      if (b.knownRumors.includes(rid)) continue;
+      if (bRoots.has(root(r))) continue;           // вече е чувал (някакъв вариант на) този слух
       if ((a.rumorBelief?.[String(rid)] ?? 0) < 0.3) continue;
       if (r.about.includes(b.id) || r.about.includes(a.id)) continue; // не разказва слух за себе си / за самия слушател
       if (r.tag === 'fox' && a.id === 'radka' && !this.s.flags.radka_admitted) continue; // Радка мълчи за лисицата
@@ -651,6 +654,23 @@ export class VillageSim {
       }
       if (rep.summary && rep.ai) this.addChronicle('talk', rep.summary, [A.id, B.id], 2, true);
     }).catch(() => { if (gen === this.gen) { this.aiChatBusy = false; fall(); } });
+  }
+
+  /** @internal Реакция на случка: до n будни жители (най-близките до играча) казват нещо; ИИ — допълнително балонче. */
+  react(event: string, fallback: string, n = 2): void {
+    const p = this.player;
+    const awake = this.s.villagers.filter(v => v.activity !== 'sleep' && !v.talkingWith);
+    const pool = awake.length ? awake : [...this.s.villagers];
+    const sorted = p ? [...pool].sort((a, b) => dist(a.pos, p) - dist(b.pos, p) || VILLAGER_IDS.indexOf(a.id) - VILLAGER_IDS.indexOf(b.id)) : pool;
+    const ai = this.aiOn(), gen = this.gen;
+    sorted.slice(0, n).forEach((v, i) => {
+      const id = v.id as VillagerId, seed = this.r.fork();
+      const req = { speaker: this.persona(id), event, memories: this.retrieveMemories(id, [event.split(' ')[0]], 5), situation: this.situation(id), seed };
+      let say = '';
+      try { say = this.scripted.reactNow(req).say; } catch { say = ''; }
+      if (v.activity !== 'sleep') this.say(id, say || fallback, undefined, i * 0.6);
+      if (ai) ai.react(req).then(rep => { if (gen === this.gen && rep?.ai && rep.say) this.say(id, rep.say, undefined, 0, true); }).catch(() => {});
+    });
   }
 
   // ───────────────────────── памет, размисъл, план ─────────────────────────
