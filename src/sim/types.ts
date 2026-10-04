@@ -123,3 +123,29 @@ export interface SimEvents extends Record<string, unknown> {
   election: { mayor: VillagerId; votes: Record<string, number> };
   ai: { connected: boolean; label: string };
 }
+
+/** Записи на света (машината на времето). Самото съдържание (state) е целият GameState — за симулацията е непрозрачно. */
+export interface SnapshotMeta {
+  id: string;
+  branchId: string;
+  time: number;                   // игрови минути
+  kind: 'hour' | 'day' | 'manual' | 'auto';
+  label: string;                  // „Ден 3 · 14:00“
+  realTime: number;               // Date.now() при записа
+}
+/** Къде се пазят записите (в паметта за проби; IndexedDB в играта — src/save/). */
+export interface SnapshotStore {
+  put(meta: SnapshotMeta, state: unknown): Promise<void>;
+  get(id: string): Promise<{ meta: SnapshotMeta; state: unknown } | undefined>;
+  delete(id: string): Promise<void>;
+  list(): Promise<SnapshotMeta[]>;
+}
+/** Клон на историята. */
+export interface Branch {
+  id: string;
+  parentId: string | null;
+  forkTime: number;               // от кой игрови момент е разклонен
+  forkEntryId: number;            // последният запис в летописа от родителя, който важи за този клон
+  createdAt: number;              // Date.now()
+  label: string;                  // „Основна история“, „Клон 2 (от Ден 3 · 14:00)“
+}
