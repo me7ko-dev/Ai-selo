@@ -28,6 +28,7 @@ import { heightAt } from '../world/height';
 import type { IconKey } from '../data/icons';
 import type { EquipSlot } from '../ui/InventoryView';
 import { wireUi } from './uiWire';
+import { AutoQuality } from './perf';
 import { buildSpotTable } from './spots';
 import { setSpotTable } from '../sim/schedules';
 
@@ -51,6 +52,7 @@ export class Game {
   twitch: TwitchChat | null = null;
   vote!: LiveVote;
   liveOn = false;
+  private autoQ = new AutoQuality();
 
   mode: 'menu' | 'play' = 'menu';
   modal: Modal = null;
@@ -284,6 +286,7 @@ export class Game {
     this.saveAcc += dt;
     if (this.saveAcc > 30) { this.saveAcc = 0; void this.saveMain(); }
     if (this.liveOn) this.vote.tick();
+    this.autoQ.update(this, dt);
     this.audioAcc += dt;
     if (this.audioAcc > 1) { this.audioAcc = 0; this.updateAudio(); }
     void input;
