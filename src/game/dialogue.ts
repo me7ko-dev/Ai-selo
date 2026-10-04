@@ -35,6 +35,8 @@ export class DialogueController {
     const quest = this.g.rpg.questOptions(this.active);
     const seen = new Set<string>();
     const out: DialogueOption[] = [];
+    // „Мога ли да помогна?“ от селото се дублира с предложението на задачата — тогава остава само задачата
+    if (quest.length) seen.add('help');
     for (const o of [...quest, ...simOpts]) { if (!seen.has(o.id)) { seen.add(o.id); out.push(o); } }
     // най-много 4: задачите първо, после селото (винаги остави „Сбогом“, ако го има)
     if (out.length > 4) {

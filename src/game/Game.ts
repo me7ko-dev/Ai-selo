@@ -342,7 +342,8 @@ export class Game {
   private dlgCand = -1;
   resetDialogueCamera(): void { this.dlgCam.copy(this.engine.camera.position); this.dlgLook.set(0, 0, 0); this.dlgCand = -1; }
   /** Места за камерата при разговор: [назад, встрани] спрямо героя; първото, от което жителят се вижда. */
-  private static DLG_CANDS: [number, number][] = [[2.6, 1.1], [2.6, -1.1], [1.9, 1.4], [1.9, -1.4], [1.3, 0.8]];
+  // страничното отместване е голямо, за да не закрива героят лицето на жителя
+  private static DLG_CANDS: [number, number][] = [[2.4, 1.6], [2.4, -1.6], [1.8, 1.8], [1.8, -1.8], [1.3, 1.0]];
   private dialogueCamera(dt: number, id: VillagerId): void {
     const hero = this.rpg.heroPos;
     const vp = this.villagers.position(id);

@@ -42,8 +42,18 @@ export class Banner {
     root.append(this.el);
   }
 
+  /** Чакащи надписи: победа + ново ниво идват в един кадър — вторият се показва след първия, вместо да го смени. */
+  private queue: [string, string, number, 'gold' | 'red' | 'quest'][] = [];
+
   /** kind: 'gold' (победа/задача) | 'red' (опасност) | 'quest' (нова задача). */
   show(title: string, subtitle = '', ms = 4500, kind: 'gold' | 'red' | 'quest' = 'gold'): void {
+    if (this.isOpen && this.timer !== null) {
+      if (this.queue.length < 4 && !this.queue.some((q) => q[0] === title && q[1] === subtitle)) this.queue.push([title, subtitle, ms, kind]);
+      return;
+    }
+    this.display(title, subtitle, ms, kind);
+  }
+  private display(title: string, subtitle: string, ms: number, kind: 'gold' | 'red' | 'quest'): void {
     this.t.innerHTML = `${rosetteHtml('0.7em')}<span>${esc(title)}</span>${rosetteHtml('0.7em')}`;
     setText(this.s, subtitle);
     this.s.classList.toggle('hidden', !subtitle);
@@ -51,14 +61,21 @@ export class Banner {
     void this.el.offsetWidth; this.el.classList.add('go');
     this.isOpen = true;
     if (this.timer !== null) clearTimeout(this.timer);
-    if (ms > 0) this.timer = window.setTimeout(() => this.hide(), ms);
+    this.timer = ms > 0 ? window.setTimeout(() => this.close(true), ms) : null;
   }
-  hide(): void {
+  /** Скрива надписа (и забравя чакащите). */
+  hide(): void { this.queue = []; this.close(false); }
+  private close(next: boolean): void {
     if (this.timer !== null) { clearTimeout(this.timer); this.timer = null; }
     if (!this.isOpen) return;
     this.isOpen = false;
     this.el.classList.add('out');
-    window.setTimeout(() => { if (!this.isOpen) this.el.classList.add('hidden'); }, 450);
+    window.setTimeout(() => {
+      if (this.isOpen) return;
+      this.el.classList.add('hidden');
+      const q = next ? this.queue.shift() : undefined;
+      if (q) this.display(...q);
+    }, 450);
   }
 }
 
