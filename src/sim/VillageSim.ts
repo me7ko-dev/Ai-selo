@@ -160,7 +160,10 @@ export class VillageSim {
     const t = this.s.time + dt;
     for (const v of this.s.villagers) {
       if (v.activity === 'dance' && v.place === 'square') {
-        const h = horoSpot(v.id, t); v.pos = h.pos; v.facing = h.facing; continue;
+        const h = horoSpot(v.id, t);
+        const dx = h.pos.x - v.pos.x, dz = h.pos.z - v.pos.z, l = Math.hypot(dx, dz), step = WALK_SPEED * dt;
+        if (l <= step) v.pos = h.pos; else v.pos = { x: v.pos.x + (dx / l) * step, z: v.pos.z + (dz / l) * step };
+        v.facing = h.facing; continue;
       }
       if (!v.path.length || v.talkingWith) continue;
       let d = WALK_SPEED * (SPEED_MUL[v.id] ?? 1) * (v.flags.hurry ? 1.5 : 1) * dt;
@@ -310,7 +313,7 @@ export class VillageSim {
       return { goal: gl, spot: spotFor(pl, id, true), hurry: true };
     }
     if (f.sabor === day && mod >= 18 * 60 && mod < 23 * 60 + 30) {
-      return { goal: { place: 'square', act: 'dance', why: 'на сбора' }, spot: horoSpot(id, time).pos };
+      return { goal: { place: 'square', act: 'dance', why: 'на сбора' }, spot: horoSpot(id, 0).pos };
     }
     if (s.nextElectionDay === day && mod >= 11 * 60 && mod < 12 * 60 + 30) {
       return { goal: { place: 'square', act: 'vote', why: 'избори' }, spot: gatherSpot(id) };
@@ -335,10 +338,12 @@ export class VillageSim {
 
   private retarget(v: VillagerState, time: number, mod: number) {
     const { goal, spot, hurry } = this.desire(v, time, mod);
+    if (goal.act === 'dance' && v.activity === 'dance' && v.place === 'square') return; // вече е в хорото
     v.plan = v.plan || goal.why || '';
     const g0 = v.goal;
     const tol = v.flags.seek ? 3.5 : 0.5;
-    if (g0 && dist(g0, spot) <= tol && (v.path.length || v.target === goal.place)) {
+    const seekHold = !!v.flags.seek && v.path.length > 0 && time - Number(v.flags.seekPathT ?? -1e9) < 5;
+    if (seekHold || (g0 && dist(g0, spot) <= tol && (v.path.length || v.target === goal.place))) {
       // вече върви натам / там е; само обнови дейността, ако е стигнал
       if (!v.path.length && v.activity !== goal.act && v.activity !== 'dance') { v.activity = goal.act; v.flags.gAct = goal.act; }
       if (hurry) v.flags.hurry = true;
@@ -352,6 +357,7 @@ export class VillageSim {
     if (hurry) v.flags.hurry = true; else delete v.flags.hurry;
     if (dist(v.pos, spot) < 0.3) { v.path = []; this.arrive(v); return; }
     v.path = roadPath(v.pos, spot).map(p => ({ x: p.x, z: p.z }));
+    if (v.flags.seek) v.flags.seekPathT = time; else delete v.flags.seekPathT;
     v.place = null; v.indoors = false;
     v.activity = Number(this.s.flags.karakondzhul_until ?? 0) > time ? 'flee' : 'walk';
     this.checkSeek(v);
