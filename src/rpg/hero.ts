@@ -274,7 +274,7 @@ export class CameraRig {
     this.focus.set(heroPos.x, heroPos.y + 1.6, heroPos.z);
   }
 
-  update(dt: number, heroPos: THREE.Vector3, world: WorldQuery, look: { dx: number; dy: number; wheel: number; keyYaw: number; sensitivity: number }): void {
+  update(dt: number, heroPos: THREE.Vector3, world: WorldQuery, look: { dx: number; dy: number; wheel: number; keyYaw: number; sensitivity: number }, blockers: { x: number; z: number; r: number; h: number }[] = []): void {
     const k = 0.0025 * look.sensitivity;
     this.yaw -= look.dx * k + look.keyYaw * dt * 2.2;
     this.pitch = Math.max(-0.3, Math.min(1.25, this.pitch + look.dy * k));
@@ -294,6 +294,13 @@ export class CameraRig {
       this.focus.y + Math.sin(this.pitch) * d,
       this.focus.z + rz + Math.cos(this.yaw) * cp * d,
     );
+    // не влиза в големи тела (Ламята)
+    for (const b of blockers) {
+      for (let k = 0; k < 12; k++) {
+        if (Math.hypot(cam.x - b.x, cam.z - b.z) > b.r || cam.y > world.heightAt(b.x, b.z) + b.h) break;
+        cam.lerp(this.focus, 0.15);
+      }
+    }
     // никога под терена (и по средата на лъча)
     const minY = world.heightAt(cam.x, cam.z) + 0.5;
     if (cam.y < minY) cam.y = minY;

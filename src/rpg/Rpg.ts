@@ -201,7 +201,8 @@ export class Rpg {
       keyYaw: this.controls ? (input.down('ArrowLeft') ? -1 : 0) + (input.down('ArrowRight') ? 1 : 0) : 0,
       sensitivity: input.sensitivity,
     };
-    this.cam.update(dt, this.hero.pos, this.world, look);
+    const L = this.lamia;
+    this.cam.update(dt, this.hero.pos, this.world, look, L.state === 'dead' ? [] : [{ x: L.pos.x, z: L.pos.z, r: LAMIA.bodyR + 0.8, h: 7 }]);
   }
 
   // ---------------- бой ----------------
@@ -426,7 +427,7 @@ export class Rpg {
   private coopHint(): { label: string; dist: number; act: () => boolean } | null {
     if (this.quests.stages.chickens !== 'watch') return null;
     const c = PLACES.coop.pos, d = Math.hypot(c.x - this.hero.pos.x, c.z - this.hero.pos.z);
-    if (d > 6) return null;
+    if (d > 8) return null;
     const m = minuteOfDay(this.time);
     if (m >= 22 * 60 || m < 4 * 60) return null;
     if (this.host.waitUntil) {
