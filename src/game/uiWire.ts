@@ -40,7 +40,8 @@ export function wireUi(g: Game): void {
   ui.chronicle.onClose = () => g.onModalClosed('chronicle');
 
   // машина на времето
-  ui.time.onClose = () => g.onModalClosed('time');
+  // при гледане назад Esc / × връщат в настоящето (прозорецът се отваря отново)
+  ui.time.onClose = () => { if (g.modal === 'watch') g.timeMachine.stopWatching(); else g.onModalClosed('time'); };
   ui.time.onWatch = (time, speed) => { void g.timeMachine.watch(time, speed); };
   ui.time.onStopWatch = () => g.timeMachine.stopWatching();
   ui.time.onLoadFrom = (time) => { void g.timeMachine.loadFrom(time); };
