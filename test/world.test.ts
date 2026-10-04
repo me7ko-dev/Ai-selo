@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { getPlan, ROAD_SEGS, ARENA_RADIUS } from '../src/world/plan';
 import { PLACES, ROAD_NODES } from '../src/data/layout';
 import { heightAt, riverWaterHeight, terrainHeight, BRIDGE } from '../src/world/height';
+import { CameraBlockers } from '../src/world/cameraBlock';
 
 test('планът се строи бързо', () => {
   const t = performance.now();
@@ -56,4 +57,32 @@ test('мостът: по него се ходи над коритото, вод�
   const x = (BRIDGE.x0 + BRIDGE.x1) / 2, z = BRIDGE.z;
   assert.ok(heightAt(x, z) > terrainHeight(x, z) + 2, 'мостът не е над коритото');
   assert.ok(riverWaterHeight(x, z) < heightAt(x, z) - 1);
+});
+
+test('нивата на Иван има портичка: от пътя се влиза вътре', () => {
+  const p = getPlan(), col = p.colliders;
+  const gate = p.props.find(q => q.type === 'field_gate');
+  const field = p.props.find(q => q.type === 'field');
+  assert.ok(gate && field, 'няма портичка/нива');
+  // от 4 м пред портичката до 4 м навътре — свободно
+  const fx = Math.sin(field!.rot), fz = Math.cos(field!.rot); // локалното +z на нивата (навътре от северния зид)
+  for (let t = -4; t <= 4; t += 0.5) {
+    const x = gate!.x + fx * t, z = gate!.z + fz * t;
+    assert.ok(!col.blocked(x, z, 0.4), `портичката е затворена при ${x.toFixed(1)},${z.toFixed(1)}`);
+  }
+});
+
+test('от ореха на изток се минава право (чешмата не е на пътеката)', () => {
+  const col = getPlan().colliders, W = PLACES.walnut.pos;
+  for (let x = W.x + 4.2; x <= W.x + 18; x += 0.5) assert.ok(!col.blocked(x, W.z, 0.4), `препятствие при ${x.toFixed(1)},${W.z}`);
+});
+
+test('камерата се спира от стволове и къщи, не от короните', () => {
+  const p = getPlan(), cb = new CameraBlockers(p);
+  const t = p.pines[100];
+  const g = heightAt(t.x, t.z);
+  assert.ok(cb.hit(t.x, g + 2, t.z), 'стволът не спира камерата');
+  assert.ok(!cb.hit(t.x + 1.4 * t.s, g + 3.5 * t.s, t.z), 'короната спира камерата');
+  const h = p.houses[0];
+  assert.ok(cb.hit(h.x, heightAt(h.x, h.z) + 3, h.z), 'къщата не спира камерата');
 });
