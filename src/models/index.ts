@@ -6,6 +6,7 @@ import type { CharacterModel, HeroModel, LamiaModel, AnimalKind, MonsterKind } f
 import { buildVillager } from './villager';
 import { Hero } from './hero';
 import { Samodiva, Talasam } from './creatures';
+import { Karakondzhul } from './karakondzhul';
 import { Quadruped, buildAnimal } from './animals';
 import { Lamia } from './lamia';
 import { buildRosen, buildChest, buildSaber, buildBow, buildPotion, buildFeather, buildEgg } from './items';
@@ -19,6 +20,7 @@ export function createVillagerModel(look: VillagerLook): CharacterModel { return
 export function createHeroModel(): HeroModel { return new Hero(); }
 
 export function createMonsterModel(kind: MonsterKind): CharacterModel {
+  if (kind === 'karakondzhul') return new Karakondzhul();
   return kind === 'talasam' ? new Talasam() : new Quadruped('fox_talasam');
 }
 

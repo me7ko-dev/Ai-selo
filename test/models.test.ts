@@ -12,7 +12,7 @@ const ANIMS: AnimName[] = ['idle', 'walk', 'run', 'attack', 'attack2', 'hit', 'd
 
 function allModels(): [string, CharacterModel][] {
   const out: [string, CharacterModel][] = VILLAGER_IDS.map((id) => [id, createVillagerModel(VILLAGERS[id].look)]);
-  out.push(['hero', createHeroModel()], ['talasam', createMonsterModel('talasam')], ['fox', createMonsterModel('fox_talasam')]);
+  out.push(['hero', createHeroModel()], ['talasam', createMonsterModel('talasam')], ['fox', createMonsterModel('fox_talasam')], ['karakondzhul', createMonsterModel('karakondzhul')]);
   for (let i = 0; i < 3; i++) out.push(['samodiva' + i, createSamodivaModel(i)]);
   for (const k of ['sheep', 'goat', 'chicken', 'dog', 'cat'] as const) out.push([k, createAnimalModel(k)]);
   out.push(['lamia', createLamiaModel()]);
@@ -43,6 +43,9 @@ test('бюджет на триъгълниците', () => {
     assert.ok(n <= 1500, `${id}: ${n}`);
   }
   assert.ok(countTris(createHeroModel().root) <= 2200);
+  const k = createMonsterModel('karakondzhul');
+  assert.ok(countTris(k.root) <= 3000, `Караконджул: ${countTris(k.root)}`);
+  assert.ok(k.height > 2.5);
   const l = countTris(createLamiaModel().root);
   assert.ok(l <= 12000, `Ламята: ${l}`);
 });

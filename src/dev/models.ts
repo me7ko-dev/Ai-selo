@@ -46,6 +46,7 @@ if (set === 'all' || set === 'villagers') for (const id of VILLAGER_IDS) { const
 if (set === 'all' || set === 'hero' || set === 'villagers') { const h = createHeroModel(); add('Стоян', h, h.root, 1.2); (window as any).hero = h; }
 if (set === 'all' || set === 'monsters') {
   for (const k of ['talasam', 'fox_talasam'] as const) { const m = createMonsterModel(k); add(k, m, m.root, 1.5); }
+  { const m = createMonsterModel('karakondzhul'); add('karakondzhul', m, m.root, 2.6); }
   for (let i = 0; i < 3; i++) { const m = createSamodivaModel(i); add('самодива ' + i, m, m.root, 1.3); }
 }
 if (set === 'all' || set === 'animals') for (const k of ['sheep', 'goat', 'chicken', 'dog', 'cat'] as const) { const m = createAnimalModel(k); add(k, m, m.root, 1.2); }

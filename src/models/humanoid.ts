@@ -90,7 +90,7 @@ const s = Math.sin, c = Math.cos, max = Math.max;
 const smooth01 = (x: number) => { x = x < 0 ? 0 : x > 1 ? 1 : x; return x * x * (3 - 2 * x); };
 
 export interface HumanStyle {
-  kind: 'villager' | 'hero' | 'samodiva' | 'talasam';
+  kind: 'villager' | 'hero' | 'samodiva' | 'talasam' | 'karakondzhul';
   female?: boolean;
   old?: boolean;
   tool?: ToolKind;
@@ -196,7 +196,7 @@ export class HumanoidModel extends RigModel {
     o[LSH * 3] = 0.04 + 0.03 * max(0, -sw); o[RSH * 3] = 0.04 + 0.03 * max(0, sw);
     o[HEAD * 3 + 1] = 0.35 * s(T * 0.31) * s(T * 0.13);
     o[HEAD * 3] = 0.05 * s(T * 0.7);
-    if (this.style.kind === 'talasam') { o[HEAD * 3 + 2] = 0.25 * s(T * 0.9) * s(T * 2.3); o[LFA * 3] = -0.3 + 0.1 * s(T * 1.3); }
+    if (this.style.kind === 'talasam' || this.style.kind === 'karakondzhul') { o[HEAD * 3 + 2] = 0.25 * s(T * 0.9) * s(T * 2.3); o[LFA * 3] = -0.3 + 0.1 * s(T * 1.3); }
   }
 
   private walk(o: Float32Array, run: boolean): void {
