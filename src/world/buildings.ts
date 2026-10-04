@@ -248,7 +248,8 @@ export function buildHouse(b: Batch, glow: Batch, h: HouseSpec): void {
 export function buildProp(b: Batch, glow: Batch, p: Prop): void {
   const y = p.y ?? heightAt(p.x, p.z);
   const rng = new Rng(Math.floor(p.x * 73 + p.z * 197) >>> 0);
-  b.push(p.x, y, p.z, p.rot, 1); glow.push(p.x, y, p.z, p.rot, 1);
+  const sc = p.type === 'cave' ? p.s : 1;
+  b.push(p.x, y, p.z, p.rot, sc); glow.push(p.x, y, p.z, p.rot, sc);
   switch (p.type) {
     case 'walnut': {
       // огромно старо орехово дърво
@@ -274,7 +275,7 @@ export function buildProp(b: Batch, glow: Batch, p: Prop): void {
     case 'fountain': {
       // чешма: каменна стена с арка, тръба, корито
       b.box(2.8, 2.0, 0.6, 0, 1.0, -0.3, PAL.stoneLight, 0, 0, 0, 0.05);
-      b.geo(new THREE.CylinderGeometry(1.4, 1.4, 0.6, 12, 1, false, -Math.PI / 2, Math.PI), PAL.stoneLight, 0, 2.0, -0.3, Math.PI / 2, 0, 0);
+      b.geo(new THREE.CylinderGeometry(1.4, 1.4, 0.6, 12, 1, false, -Math.PI / 2, Math.PI), PAL.stoneLight, 0, 2.0, -0.3, -Math.PI / 2, 0, 0);
       roof(b, -1.75, 1.75, -0.85, 0.25, 3.25, 0.45, 'gable', PAL.roof, PAL.roof2, PAL.stoneLight);
       b.box(0.5, 0.5, 0.06, 0, 2.55, 0.01, PAL.stoneDark);
       b.box(1.0, 1.3, 0.05, 0, 1.6, 0.01, '#d8cfbe');
@@ -449,14 +450,17 @@ export function buildProp(b: Batch, glow: Batch, p: Prop): void {
       break;
     }
     case 'cave': {
-      // скален масив с тъмен отвор (лицето на отвора е към +z)
-      const rocks: [number, number, number, number][] = [[0, 4.5, -4, 6.5], [-6.5, 2.5, -1.5, 4.2], [6.5, 2.5, -1.5, 4.4], [-4, 7.5, -3, 4], [4, 7.8, -3.5, 4.2], [0, 9.5, -6, 5], [-8.5, 1, 1, 2.6], [8.5, 1, 1.2, 2.8]];
-      rocks.forEach(([x, yy, z, r], i) => b.geo(lumpy(new THREE.DodecahedronGeometry(r, 1), 0.3, i + 7), i % 2 ? PAL.rockDark : PAL.rock, x, yy - 1.5, z, 0, i * 1.3, 0, 1, 0.9, 1, 0.1));
-      // самият отвор: тъмна арка
-      b.geo(new THREE.CylinderGeometry(3.2, 3.2, 3.0, 14, 1, false, -Math.PI / 2, Math.PI), '#0b0908', 0, 0.2, 0.6, Math.PI / 2, 0, 0, 1, 1, 1.35, 0);
-      b.box(6.4, 0.3, 3.0, 0, -0.1, 0.6, '#151110', 0, 0, 0, 0);
+      // скален масив с тъмен отвор (лицето на отвора е към +z): две колони, праг отгоре, маса отзад
+      const rocks: [number, number, number, number, number][] = [
+        [-6.6, 2.2, -1.6, 3.2, 1], [6.7, 2.0, -1.8, 3.3, 1], [0, 8.6, -2.6, 4.4, 0.7], [0, 5.5, -9, 7.5, 1],
+        [-8.8, 1.2, -1.5, 3.0, 1], [8.6, 1.5, -2, 3.2, 1], [-4.5, 9.5, -4, 4.4, 1], [4.8, 9.8, -4.5, 4.6, 1], [0, 12, -8, 5.5, 1],
+      ];
+      rocks.forEach(([x, yy, z, r, sy], i) => b.geo(lumpy(new THREE.DodecahedronGeometry(r, 1), 0.28, i + 7), i % 3 === 1 ? PAL.rockDark : i % 3 === 2 ? '#6e675d' : PAL.rock, x, yy - 1.2, z, 0, i * 1.3, 0, 1, sy, 1, 0.1));
+      // самият отвор: тъмна арка с дълбочина
+      b.geo(new THREE.CylinderGeometry(3.4, 3.4, 5.0, 16, 1, false, -Math.PI / 2, Math.PI), '#070605', 0, 0.0, -2.4, -Math.PI / 2, 0, 0, 1, 1, 1.25, 0);
+      b.box(6.8, 0.25, 5.0, 0, -0.05, -2.4, '#120f0d', 0, 0, 0, 0);
       // опушено около входа
-      for (let k = 0; k < 6; k++) b.geo(lumpy(new THREE.DodecahedronGeometry(0.9, 0), 0.4, k + 30), '#2e2824', (k - 2.5) * 1.5, 0.1, 2.6 + rng.next(), 0, k, 0, 1, 0.5, 1);
+      for (let k = 0; k < 7; k++) b.geo(lumpy(new THREE.DodecahedronGeometry(0.8, 0), 0.4, k + 30), '#2e2824', (k - 3) * 1.4, 0.05, 0.8 + rng.next() * 1.4, 0, k, 0, 1, 0.45, 1);
       break;
     }
     case 'bones': {

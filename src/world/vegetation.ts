@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { prep, lumpy } from './geom';
-import { heightAt } from './height';
+import { heightAt, normalAt } from './height';
 import type { TreeInst } from './plan';
 import { PAL } from './palette';
 
@@ -100,7 +100,9 @@ export function instanced(name: string, geo: THREE.BufferGeometry, mat: THREE.Ma
   for (const arr of buckets.values()) {
     const im = new THREE.InstancedMesh(geo, mat, arr.length);
     arr.forEach((t, i) => {
-      const y = heightAt(t.x, t.z) - (opts.sink ?? 0.15) * t.s + (opts.yOff ?? 0);
+      // на стръмно — по-дълбоко в склона, за да не виси
+      const steep = 1 - normalAt(t.x, t.z)[1];
+      const y = heightAt(t.x, t.z) - (opts.sink ?? 0.15) * t.s - steep * 2.2 * t.s + (opts.yOff ?? 0);
       q.setFromEuler(e.set(0, t.rot, 0));
       m.compose(v.set(t.x, y, t.z), q, s.set(t.s, t.s * (opts.scaleY ? opts.scaleY(t) : 1), t.s));
       im.setMatrixAt(i, m);
