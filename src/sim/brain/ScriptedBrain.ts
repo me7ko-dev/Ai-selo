@@ -8,11 +8,12 @@ import type {
   ReflectReply, ReflectRequest, SyncBrain, TalkRequest,
 } from './Brain';
 import {
-  cap, ensurePeriod, eligible, fill, isFemale, isVillagerId, join, lcFirst, makeCtx, nameOf, parseSituation,
-  pickFresh, pickMemory, relLevel, tidy, weaveMemory, type Ctx, type RelLevel,
+  cap, ensurePeriod, eligible, fill, hasFresh, isFemale, isVillagerId, join, lcFirst, makeCtx, nameOf, parseSituation,
+  pickFresh, pickMemory, relLevel, sentences, tidy, weaveMemory, type Ctx, type RelLevel,
 } from './context';
 import { detectIntent, type Intent } from './intent';
 import { GENERIC, TALK, WEATHER_LINES, type Bank, type TalkCat } from './lines';
+import { CHAT_EXTRA, EXTRA } from './lines-extra';
 import {
   ABOUT, ABOUT_KALIN_FORGET, ABOUT_OPEN, CHAT, FACTS, JOB_LINES, PAIR_CHAT, PLANS, REACT, REACT_GENERIC, VOICE_PREFIX,
   VOTE_LINES, type ChatDialog, type EventKind,
@@ -53,7 +54,18 @@ export function sentiment(text: string): number {
   return s;
 }
 
-function bankOf(c: Ctx): Bank { return c.vid ? TALK[c.vid] : GENERIC; }
+/** Основните банки + допълнителните реплики, слети веднъж. */
+const BANKS: Record<VillagerId, Bank> = Object.fromEntries(Object.entries(TALK).map(([id, bank]) => {
+  const extra = EXTRA[id as VillagerId] ?? {};
+  const merged: Bank = { ...bank };
+  for (const [k, v] of Object.entries(extra) as [TalkCat, string[]][]) merged[k] = [...(merged[k] ?? []), ...v];
+  return [id, merged];
+})) as Record<VillagerId, Bank>;
+
+const CHATS: Record<string, ChatDialog[]> = { ...CHAT };
+for (const [k, v] of Object.entries(CHAT_EXTRA)) CHATS[k] = [...(CHATS[k] ?? []), ...v];
+
+function bankOf(c: Ctx): Bank { return c.vid ? BANKS[c.vid] : GENERIC; }
 function lines(c: Ctx, cat: TalkCat): string[] {
   const own = bankOf(c)[cat];
   if (own && eligible(own, c).length) return own;
@@ -89,6 +101,14 @@ function voice(c: Ctx | { vid?: VillagerId }, rng: Rng, text: string, p = 0.35):
   if (text.toLowerCase().startsWith(head)) return text;
   if (pre.endsWith('.') || pre.endsWith('…')) return `${pre} ${text}`;
   return `${pre} ${lcFirst(text)}`;
+}
+
+/** Студено или топло начало според отношението (понякога). */
+function attitude(c: Ctx, core: string): string | undefined {
+  if (sentences(core) >= 3) return undefined;
+  if (c.rel === 'hostile' && c.rng.chance(0.5)) return say(c, 'cold') || undefined;
+  if (c.rel === 'loving' && c.rng.chance(0.3)) return say(c, 'warm') || undefined;
+  return undefined;
 }
 
 function partnerWho(p: Partner): string { return p.isPlayer || p.id === 'player' ? 'Странникът' : cap(nameOf(p.id, p.name)); }
@@ -238,7 +258,7 @@ export class ScriptedBrain implements Brain, SyncBrain {
     }
     const core = say(c, 'news');
     const extra = c.vid === 'radka' && c.rng.chance(0.5) ? say(c, 'close') : undefined;
-    return { say: join([core, extra]) };
+    return { say: join([attitude(c, core), core, extra]) };
   }
 
   private self(c: Ctx, who: string): Out {
@@ -248,7 +268,7 @@ export class ScriptedBrain implements Brain, SyncBrain {
     }
     const core = say(c, 'self');
     const hint = c.trust >= 40 && c.rng.chance(0.5) ? say(c, 'hint') : undefined;
-    return { say: join([core, hint]) };
+    return { say: join([hint ? undefined : attitude(c, core), core, hint]) };
   }
 
   private secret(c: Ctx, who: string): Out {
@@ -266,14 +286,14 @@ export class ScriptedBrain implements Brain, SyncBrain {
 
   private help(c: Ctx, who: string): Out {
     const core = say(c, 'help');
-    const out: Out = { say: join([core]), remember: `${who} предложи да ми помогне.` };
+    const out: Out = { say: join([attitude(c, core), core]), remember: `${who} предложи да ми помогне.` };
     if ((c.vid === 'gena' && !c.sit.lamiaDead && /росен/.test(core)) || (c.vid === 'radka' && /кокош/.test(core))) out.action = 'give_quest';
     return out;
   }
 
   private chickens(c: Ctx, who: string): Out {
     let core: string;
-    if (c.vid === 'radka' && c.trust >= 70 && c.rng.chance(0.6)) core = say(c, 'reveal');
+    if (c.vid === 'radka' && c.trust >= 70 && hasFresh(lines(c, 'reveal'), c) && c.rng.chance(0.6)) core = say(c, 'reveal');
     else core = say(c, 'chickens');
     return { say: join([core]), remember: `${who} ме пита за кокошките на Радка.` };
   }
@@ -298,7 +318,7 @@ export class ScriptedBrain implements Brain, SyncBrain {
       if (m && c.rng.chance(0.4)) extra = weaveMemory(m, c, c.vid === 'radka' ? 'eager' : c.vid === 'ivan' ? 'terse' : 'plain');
     }
     if (!extra && c.rng.chance(0.15)) extra = closeBit(c);
-    const out: Out = { say: join([core, extra]) };
+    const out: Out = { say: join([extra ? undefined : attitude(c, core), core, extra]) };
     if (remember) out.remember = remember;
     return out;
   }
@@ -341,7 +361,7 @@ export class ScriptedBrain implements Brain, SyncBrain {
     const rng = new Rng((req.seed ^ 0x2c1b3c6d) >>> 0);
     const sit = parseSituation(req.situation);
     const a = req.a, b = req.b;
-    const topic = CHAT[req.topic] || PAIR_CHAT[`${req.topic}:${[a.id, b.id].sort().join(':')}`] ? req.topic : 'greeting';
+    const topic = CHATS[req.topic] || PAIR_CHAT[`${req.topic}:${[a.id, b.id].sort().join(':')}`] ? req.topic : 'greeting';
     const ctxA = this.chatCtx(a, b, req.relationAB, req, rng);
     const ctxB = this.chatCtx(b, a, req.relationBA, req, rng);
     const bothF = isFemale(a) && isFemale(b);
@@ -357,7 +377,7 @@ export class ScriptedBrain implements Brain, SyncBrain {
         return { who: vid as string, text: fill(tpl, sc) };
       });
       const summary = fill(rng.pick(d.summary), ctxA, names);
-      return { lines: out, summary: ensurePeriod(summary), affinityDelta: rng.int(d.delta[0], d.delta[1]), ai: false };
+      return { lines: out, summary: capSentences(ensurePeriod(summary)), affinityDelta: rng.int(d.delta[0], d.delta[1]), ai: false };
     }
 
     // 2) любов, когато единият е Иван или Мария — закачка
@@ -376,8 +396,8 @@ export class ScriptedBrain implements Brain, SyncBrain {
     // 3) общ диалог по темата
     let t = topic;
     if (relLevel(req.relationAB) === 'hostile' && (t === 'greeting' || t === 'weather' || t === 'work') && rng.chance(0.6)) t = 'cold';
-    const pool = (CHAT[t] ?? CHAT.greeting).filter((d: ChatDialog) => !d.cond || ctxOk(d.cond, ctxA));
-    const dialog = rng.pick(pool.length ? pool : CHAT.greeting);
+    const pool = (CHATS[t] ?? CHATS.greeting).filter((d: ChatDialog) => !d.cond || ctxOk(d.cond, ctxA));
+    const dialog = rng.pick(pool.length ? pool : CHATS.greeting);
     const rumorText = ensurePeriod((req.rumor && req.rumor.trim()) || rng.pick(STOCK_RUMORS));
     const opA = this.opinionOfPlayer(ctxA, req.memoriesA, rng);
     const opB = this.opinionOfPlayer(ctxB, req.memoriesB, rng);
@@ -415,7 +435,7 @@ export class ScriptedBrain implements Brain, SyncBrain {
     };
     const [lo, hi] = delta[t] ?? [0, 2];
     void sit;
-    return { lines: out, summary: ensurePeriod(tidy(summary)), affinityDelta: rng.int(lo, hi), ai: false };
+    return { lines: out, summary: capSentences(ensurePeriod(tidy(summary))), affinityDelta: rng.int(lo, hi), ai: false };
   }
 
   private chatCtx(sp: Persona, other: Persona, rel: Relation, req: ChatRequest, rng: Rng): Ctx {
@@ -593,6 +613,11 @@ export class ScriptedBrain implements Brain, SyncBrain {
 
 const PERSONAL_GOOD = ['Странникът ми помогна! Няма да го забравя.', 'Не съм [очаквал/очаквала] такава доброта от чужд човек. Благодарен[/а] съм му.', 'Ей това се казва човек — помогна ми, без да му се моля.'];
 const PERSONAL_BAD = ['Странникът ме нарани. Няма да му простя лесно.', 'Как можа да ми направи такова нещо! Срамота!', 'Ще го запомня това на странника.'];
+
+/** Главна буква в началото на всяко изречение („… баба Гена не повярва.“ → „… Баба Гена не повярва.“). */
+export function capSentences(t: string): string {
+  return t.replace(/(^|[.!?]\s+)([а-яё])/gu, (_m, a: string, b: string) => a + b.toUpperCase());
+}
 
 function ctxOk(cond: string, c: Ctx): boolean {
   return eligible([`#${cond} x`], c).length > 0;

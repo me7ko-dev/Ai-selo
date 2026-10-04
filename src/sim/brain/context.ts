@@ -184,7 +184,9 @@ export function condOk(cond: string, c: Ctx): boolean {
     case 'alive': return !s.lamiaDead;
     case 'dead': return s.lamiaDead;
     case 'night': return s.phase === 'night' || s.phase === 'evening';
-    case 'day': return s.phase !== 'night';
+    case 'late': return s.phase === 'night';
+    case 'evening': return s.phase === 'evening';
+    case 'day': return s.phase === 'morning' || s.phase === 'day';
     case 'morning': return s.phase === 'dawn' || s.phase === 'morning';
     case 'rain': return s.weather === 'rain' || s.weather === 'storm';
     case 'storm': return s.weather === 'storm';
@@ -197,6 +199,8 @@ export function condOk(cond: string, c: Ctx): boolean {
     case 'hitrust': return c.trust >= 70;
     case 'friend': return c.rel === 'friendly' || c.rel === 'loving';
     case 'foe': return c.rel === 'hostile';
+    case 'neu': return c.rel === 'neutral';
+    case 'love': return c.rel === 'loving';
     case 'angry': return c.mood === 'angry';
     case 'sad': return c.mood === 'sad' || c.mood === 'scared';
     case 'happy': return c.mood === 'happy';
@@ -256,9 +260,22 @@ export function pickFresh(list: readonly string[], c: Ctx, extra?: Record<string
   if (!pool.length) return '';
   const filled = pool.map((t) => fill(t, c, extra));
   const fresh = filled.filter((f) => !c.used.includes(f));
-  const from = fresh.length ? fresh : filled;
-  return c.rng.pick(from);
+  if (fresh.length) return c.rng.pick(fresh);
+  // всичко е казано — повтаря, но си признава
+  const again = c.rng.pick(filled);
+  const pre = c.vid ? REPEAT[c.vid] : 'Както казах —';
+  return pre.endsWith(".") ? `${pre} ${again}` : `${pre} ${lcFirst(again)}`;
 }
+
+/** Има ли още неказана реплика от списъка. */
+export function hasFresh(list: readonly string[], c: Ctx, extra?: Record<string, string>): boolean {
+  return eligible(list, c).some((t) => !c.used.includes(fill(t, c, extra)));
+}
+
+const REPEAT: Record<VillagerId, string> = {
+  gena: 'Казах ти вече, чедо —', peyu: 'Аз като кмет повтарям —', petko: 'Абе, казах ти вече —', ivan: 'Казах.',
+  maria: 'Нали ти казах —', radka: 'Ох, нали ти казах —', kalin: 'Извинявай, че се повтарям, но',
+};
 
 export function sentences(t: string): number {
   const m = t.match(/[.!?…]+(\s|$)/g);
