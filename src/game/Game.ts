@@ -416,7 +416,7 @@ export class Game {
       return;
     }
     // прозорците сами се затварят със своя клавиш/Esc; тук само ги отваряме
-    if (this.modal !== null || this.frameNo - this.closedFrame <= 1 || performance.now() < this.suppressKeysUntil || this.rpg.dead) return;
+    if (this.modal !== null || this.frameNo - this.closedFrame <= 1 || this.rpg.dead) return;
     if (inp.pressedRaw('Tab')) this.openInventory();
     else if (inp.pressedRaw('KeyM')) this.openMap();
     else if (inp.pressedRaw('KeyJ')) this.openChronicle();
