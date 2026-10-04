@@ -2,31 +2,9 @@
 import { h, onKeys, setText } from './dom';
 import { dividerHtml } from './ornament';
 import { cornersHtml } from './view';
-import { artLamia, artVillage, artHero } from './introArt';
+import { INTRO_PAGES } from './introArt';
+export { INTRO_PAGES, type IntroPage } from './introArt';
 import './css/intro.css';
-
-export interface IntroPage { kicker: string; title: string; text: string; art: () => string }
-
-export const INTRO_PAGES: IntroPage[] = [
-  {
-    kicker: 'Отдавна, в Балкана…',
-    title: 'Ламята пресуши Бистрица',
-    text: 'Високо на Ламин връх се събуди Ламята — змей с три глави. Тя легна върху извора на река Бистрица и я изпи до капка. Където течеше вода, сега има само напукани камъни.',
-    art: artLamia,
-  },
-  {
-    kicker: 'Под планината',
-    title: 'Самодивско чака помощ',
-    text: 'В селото Самодивско чешмата едва капе, а нивите жълтеят. Хората се карат и шушукат, а по здрач от Тъмната гора излизат таласъми. Никой не смее да тръгне срещу Ламята.',
-    art: artVillage,
-  },
-  {
-    kicker: 'А ти…',
-    title: 'Ти си Стоян, странникът',
-    text: 'С кафяво наметало и стара сабя на гърба. Пътят те доведе до Самодивско. Поговори с хората — баба Гена знае пътеките през гората. Може би заедно ще върнете Бистрица.',
-    art: artHero,
-  },
-];
 
 export class IntroView {
   readonly el: HTMLElement;

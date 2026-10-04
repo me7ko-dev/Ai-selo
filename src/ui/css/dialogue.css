@@ -17,7 +17,7 @@
 .bl-ui .dl-hrow { padding: 0.08em 0; }
 .bl-ui .dl-hrow b { color: #d8c8a0; font-weight: 700; }
 .bl-ui .dl-say { position: relative; min-height: 3.6em; }
-.bl-ui .dl-meta { position: absolute; top: -0.2em; right: 0; }
+.bl-ui .dl-meta { position: absolute; top: -0.2em; right: 1.6em; } /* вляво от бутона × */
 .bl-ui .dl-line { font-size: 1.15em; line-height: 1.45; padding-right: 6em; color: var(--text); cursor: pointer; white-space: pre-wrap; min-height: 1.45em; }
 .bl-ui .dl-think { font-size: 1.1em; font-style: italic; color: var(--text2); }
 .bl-ui .dl-think .dots { margin-left: 0.2em; color: var(--gold); }
