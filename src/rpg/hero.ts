@@ -80,7 +80,10 @@ export class Hero {
     const dx = this.pos.x - fromX, dz = this.pos.z - fromZ, l = Math.hypot(dx, dz) || 1;
     this.knock.set((dx / l) * knockback * (blocked ? 0.35 : 1), (dz / l) * knockback * (blocked ? 0.35 : 1));
     this.invuln = blocked ? 0.25 : 0.5;
-    if (!blocked) {
+    if (!blocked && knockback < 1) {
+      // огън/горяща земя: без зашеметяване — иначе героят замръзва в пламъците и не може да излезе
+      this.model.flash(0xff4433);
+    } else if (!blocked) {
       this.stagger = 0.3;
       this.attackIdx = -1;
       this.model.play('hit');
@@ -257,6 +260,8 @@ export class CameraRig {
   pitch = 0.32;
   dist = 7;
   targetDist = 7;
+  /** Разстоянието, до което лъчът е свободен от дървета/къщи. */
+  private occl = 7;
   private focus = new THREE.Vector3();
   private shakeAmp = 0;
   private shakeT = 0;
@@ -274,7 +279,11 @@ export class CameraRig {
     this.focus.set(heroPos.x, heroPos.y + 1.6, heroPos.z);
   }
 
-  update(dt: number, heroPos: THREE.Vector3, world: WorldQuery, look: { dx: number; dy: number; wheel: number; keyYaw: number; sensitivity: number }, blockers: { x: number; z: number; r: number; h: number }[] = []): void {
+  /** Колко над героя гледа камерата (при Ламята — нагоре, за да се виждат главите). */
+  private lift = 0;
+
+  update(dt: number, heroPos: THREE.Vector3, world: WorldQuery, look: { dx: number; dy: number; wheel: number; keyYaw: number; sensitivity: number }, blockers: { x: number; z: number; r: number; h: number }[] = [], lookLift = 0): void {
+    this.lift += (lookLift - this.lift) * (1 - Math.exp(-dt * 2));
     const k = 0.0025 * look.sensitivity;
     this.yaw -= look.dx * k + look.keyYaw * dt * 2.2;
     this.pitch = Math.max(-0.3, Math.min(1.25, this.pitch + look.dy * k));
@@ -287,7 +296,17 @@ export class CameraRig {
 
     const sh = 0.55 * Math.min(1, this.dist / 6);
     const rx = Math.cos(this.yaw) * sh, rz = -Math.sin(this.yaw) * sh;
-    const cp = Math.cos(this.pitch), d = this.dist;
+    const cp = Math.cos(this.pitch);
+    // дървета и къщи между героя и камерата → камерата се приближава (бързо), после бавно се връща
+    let free = this.dist;
+    if (world.cameraHit) {
+      const ux = rx / Math.max(this.dist, 0.01) + Math.sin(this.yaw) * cp, uy = Math.sin(this.pitch), uz = rz / Math.max(this.dist, 0.01) + Math.cos(this.yaw) * cp;
+      for (let s = 2.2; s <= this.dist; s += 0.3) {
+        if (world.cameraHit(this.focus.x + ux * s, this.focus.y + uy * s, this.focus.z + uz * s)) { free = Math.max(2.2, s - 0.4); break; }
+      }
+    }
+    this.occl = free < this.occl ? free : this.occl + (free - this.occl) * (1 - Math.exp(-dt * 2.5));
+    const d = Math.min(this.dist, this.occl);
     const cam = this.camera.position;
     cam.set(
       this.focus.x + rx + Math.sin(this.yaw) * cp * d,
@@ -316,7 +335,7 @@ export class CameraRig {
       cam.z += (Math.random() - 0.5) * this.shakeAmp;
       this.shakeAmp *= Math.exp(-dt * 9);
     }
-    this.camera.lookAt(this.focus.x + rx, this.focus.y, this.focus.z + rz);
+    this.camera.lookAt(this.focus.x + rx, this.focus.y + this.lift, this.focus.z + rz);
   }
 
   /** Посоката напред по земята (накъдето гледа камерата). */

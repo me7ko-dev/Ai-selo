@@ -154,7 +154,7 @@ test('задача 1 → 3: росен, после Ламята, после дя
   assert.equal(r3?.options?.length, 2);
   T.quests.choose('peyu', 'q:lamia_mart');
   assert.equal(T.quests.stages.lamia, 'done');
-  assert.equal(T.inv.count('martenitsa'), 1);
+  assert.equal(T.inv.equipment.amulet, 'martenitsa'); // празният слот → слага я веднага
   // бонус: Калин
   assert.ok(T.quests.options('kalin').some(o => o.id === 'q:kalin_bow'));
   T.quests.choose('kalin', 'q:kalin_bow');

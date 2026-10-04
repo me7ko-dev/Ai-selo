@@ -46,12 +46,20 @@ export interface QuestCtx {
   notify(text: string, kind: NotifyKind): void;
   questChanged(id: QuestId, stage: string, title: string, text: string): void;
   questDone(id: QuestId, title: string): void;
+  /** Купува предмет за грошове (false — не стигат или няма място). */
+  buy?(id: ItemId, price: number): boolean;
+  /** Продава всички такива предмети по each гроша. Връща получените грошове. */
+  sellAll?(id: ItemId, each: number): number;
 }
 
 export interface QuestReply { say: string; options?: DialogueOption[]; end?: boolean }
 
 export interface QuestMarker { label: string; kind: 'quest' | 'boss' | 'item'; villager?: VillagerId; place?: PlaceId; x?: number; z?: number }
 
+export const BANITSA_PRICE = 5;
+export const TEA_PRICE = 3;
+export const POTION_PRICE = 25;
+export const CLAW_PRICE = 2;
 export const ROSEN_NEEDED = 3;
 export const CLUES_NEEDED = 2;
 
@@ -156,8 +164,10 @@ export class Quests {
         if (s.rosen === 'collect') out.push(o('rosen_where', 'Къде точно расте росенът?'));
         if (s.rosen === 'return') out.push(o('rosen_give', 'Донесох ти три стръка росен, бабо.'));
         if (s.lamia === 'go') out.push(o('lamia_how', 'Бабо, как да победя Ламята?'));
+        if (s.rosen === 'done' && this.ctx.buy) out.push(o('gena_potion', `Ще ми свариш ли още отвара? (${POTION_PRICE} гроша)`));
         break;
       case 'radka':
+        if (this.ctx.buy) out.push(o('shop', 'Какво има за хапване, Радке?'));
         if (s.chickens === 'none') out.push(o('chickens_ask', 'Изглеждаш разтревожена, Радке.'));
         if (s.chickens === 'watch') out.push(o('chickens_radka', 'Ти самата какво видя онази нощ?'));
         if (s.chickens === 'return') out.push(o('chickens_tail', 'Ето кой крадеше кокошките ти — лисица-таласъм.'));
@@ -165,6 +175,7 @@ export class Quests {
       case 'ivan':
         if (s.iron === 'none') out.push(o('iron_ask', 'Нещо те гложди, ковачо?'));
         if (s.iron === 'tell') out.push(o('iron_tell', 'Петко си призна. Ще огради козите си.'));
+        if (this.ctx.sellAll && this.ctx.inv.count('claw') > 0) out.push(o('sell_claws', `Купуваш ли таласъмски нокти? (${this.ctx.inv.count('claw')} бр.)`));
         break;
       case 'petko':
         if (s.iron === 'confront') out.push(o('iron_bell', 'Това звънче е от твоя коза. Намерих го в нивата на Иван.'));
@@ -209,7 +220,7 @@ export class Quests {
         if (v !== 'gena' || s.rosen !== 'return' || inv.count('rosen') < ROSEN_NEEDED) return null;
         inv.remove('rosen', ROSEN_NEEDED);
         c.give('rosen_potion', 2);
-        c.xp(150);
+        c.xp(200);
         h.deed({ kind: 'quest_done', villager: 'gena', text: 'Странникът донесе три стръка росен на баба Гена от Тъмната гора.', importance: 6, affinity: 20, trust: 20, witnesses: ['gena', 'kalin'] });
         h.chronicle('Странникът донесе на баба Гена три стръка росен от Тъмната гора.', ['player', 'gena'], 5, 'quest');
         this.set('rosen', 'done');
@@ -220,6 +231,29 @@ export class Quests {
       }
       case 'lamia_how':
         return { say: 'Чуй баба си, чедо. Не стой пред нея като пън — когато глава се надигне, отскочи, а щом захапе земята, удряй. Като ѝ паднат две глави, ще бълва огън — не стой в пламъците. Вземи си баници и отвари. И се върни жив, че кой ще ми носи росен?' };
+
+      // ---------- ханът, отварите, ноктите ----------
+      case 'shop':
+        if (v !== 'radka') return null;
+        return { say: `Баница със сирене — ${BANITSA_PRICE} гроша, билков чай — ${TEA_PRICE}. Ханът е за хора, не за празни стомаси!`, options: this.shopOptions() };
+      case 'buy_banitsa':
+      case 'buy_tea': {
+        if (v !== 'radka' || !c.buy) return null;
+        const ok = id === 'buy_banitsa' ? c.buy('banitsa', BANITSA_PRICE) : c.buy('tea', TEA_PRICE);
+        return { say: ok ? (id === 'buy_banitsa' ? 'Заповядай, топла е! Пази я за после — по пътя към Ламята ще ти дотрябва.' : 'Мащерка и липа. Пий, че силата ще ти трябва.') : 'Ех, грошовете не стигат, чедо… Ела пак.', options: this.shopOptions() };
+      }
+      case 'shop_no':
+        return { say: 'Както кажеш. Ако огладнееш — знаеш къде съм.' };
+      case 'gena_potion': {
+        if (v !== 'gena' || s.rosen !== 'done' || !c.buy) return null;
+        const ok = c.buy('rosen_potion', POTION_PRICE);
+        return { say: ok ? 'Ей, сварих една и за теб. Пий я, когато ти причернее пред очите.' : `Билките не растат на дърво, чедо… е, растат, ама грошове трябват. ${POTION_PRICE}.` };
+      }
+      case 'sell_claws': {
+        if (v !== 'ivan' || !c.sellAll) return null;
+        const got = c.sellAll('claw', CLAW_PRICE);
+        return { say: got > 0 ? `Хм. ${got} гроша. Ще стане за пирони.` : 'Нямаш нищо. Хм.' };
+      }
 
       // ---------- 2) Кой краде кокошките? ----------
       case 'chickens_ask':
@@ -269,6 +303,7 @@ export class Quests {
         if (v !== 'peyu' || s.lamia !== 'report') return null;
         const kalpak = id === 'lamia_kalpak';
         c.give(kalpak ? 'kalpak' : 'martenitsa', 1);
+        if (!inv.equipment[kalpak ? 'head' : 'amulet']) c.equip(kalpak ? 'kalpak' : 'martenitsa');
         c.xp(200);
         h.deed({ kind: 'quest_done', villager: 'peyu', text: 'Странникът разказа на кмета, че Ламята е мъртва и реката тече.', importance: 7, affinity: 30, trust: 30, witnesses: 'all' });
         h.chronicle('Дядо Пею награди странника, който уби Ламята. Кметът обяви сбор на мегдана.', ['player', 'peyu'], 7, 'quest');
@@ -347,11 +382,16 @@ export class Quests {
     return null;
   }
 
+  private shopOptions(): DialogueOption[] {
+    return [o('buy_banitsa', `Една баница (${BANITSA_PRICE} гроша)`), o('buy_tea', `Чаша чай (${TEA_PRICE} гроша)`), o('shop_no', 'Друг път.')];
+  }
+
   // ---------- за картата и дневника ----------
   log(): { id: string; title: string; step: string; done: boolean; main: boolean }[] {
     const out: { id: string; title: string; step: string; done: boolean; main: boolean }[] = [];
     for (const id of QUEST_IDS) {
-      if (this.stages[id] === 'none') continue;
+      // в началото — подсказка накъде да тръгне („Поговори с баба Гена.“)
+      if (this.stages[id] === 'none' && !(id === 'rosen' && Object.values(this.stages).every((v) => v === 'none'))) continue;
       out.push({ id, title: QUEST_TITLES[id], step: this.step(id), done: this.stages[id] === 'done', main: QUEST_MAIN[id] });
     }
     // активните най-отгоре, главните преди страничните

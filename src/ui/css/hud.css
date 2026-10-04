@@ -109,16 +109,18 @@
 @keyframes toast-in { from { opacity: 0; transform: translateX(2em); } to { opacity: 1; transform: none; } }
 
 /* ---- бос ---- */
-.bl-ui .hud-boss { position: absolute; top: 1.1em; left: 50%; transform: translateX(-50%); width: min(36em, 44vw); text-align: center; padding: 0.4em 1em 0.45em; background: rgba(20, 16, 12, 0.7); border: 1px solid rgba(200, 66, 58, 0.5); border-radius: var(--radius); box-shadow: 0 0.3em 1.2em rgba(0, 0, 0, 0.45); animation: bl-pop 0.4s ease-out; }
+/* горе, но ниско и тясно — камерата при Ламята гледа нагоре, така че главите са под лентата, а героят долу остава открит */
+.bl-ui .hud-boss { position: absolute; top: 0.5em; left: 50%; transform: translateX(-50%); width: min(30em, 40vw); text-align: center; padding: 0.2em 0.9em 0.25em; background: rgba(20, 16, 12, 0.7); border: 1px solid rgba(200, 66, 58, 0.5); border-radius: var(--radius); box-shadow: 0 0.3em 1.2em rgba(0, 0, 0, 0.45); animation: boss-pop 0.4s ease-out; }
+@keyframes boss-pop { from { opacity: 0; transform: translateX(-50%) translateY(-0.6em) scale(0.98); } to { opacity: 1; transform: translateX(-50%); } }
 .bl-ui .boss-title { display: flex; align-items: center; justify-content: center; gap: 0.6em; }
-.bl-ui .boss-name { font-family: var(--f-title); font-size: 1.45em; color: #f0a090; letter-spacing: 0.1em; text-shadow: 0 0 0.6em rgba(200, 66, 58, 0.6), 0 0.08em 0 #2a0a08; }
-.bl-ui .boss-heads { display: flex; gap: 0.6em; margin: 0.35em 0 0.25em; }
+.bl-ui .boss-name { font-family: var(--f-title); font-size: 1.1em; color: #f0a090; letter-spacing: 0.1em; text-shadow: 0 0 0.6em rgba(200, 66, 58, 0.6), 0 0.08em 0 #2a0a08; }
+.bl-ui .boss-heads { display: flex; gap: 0.6em; margin: 0.2em 0 0.1em; }
 .bl-ui .boss-head { flex: 1; }
-.bl-ui .boss-bar { height: 0.9em; }
-.bl-ui .boss-hname { font-size: 0.72em; color: var(--text2); margin-top: 0.15em; }
+.bl-ui .boss-bar { height: 0.7em; }
+.bl-ui .boss-hname { font-size: 0.62em; color: var(--text2); margin-top: 0.1em; }
 .bl-ui .boss-head.dead .boss-bar { filter: grayscale(1) brightness(0.6); }
 .bl-ui .boss-head.dead .boss-hname { color: #7a7268; text-decoration: line-through; }
-.bl-ui .boss-phase { font-size: 0.82em; color: #f6c27a; font-style: italic; }
+.bl-ui .boss-phase { font-size: 0.72em; color: #f6c27a; font-style: italic; }
 
 /* ---- червено при удар ---- */
 .bl-ui .hud-vignette { position: absolute; inset: 0; opacity: 0; background: radial-gradient(ellipse at center, transparent 45%, rgba(160, 20, 16, 0.55) 80%, rgba(110, 8, 6, 0.85) 100%); }

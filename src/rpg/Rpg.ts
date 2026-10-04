@@ -30,7 +30,8 @@ const CHESTS: { key: string; x: number; z: number; items: { id: ItemId; count: n
   { key: 'chest_forest', x: -156, z: -106, items: [{ id: 'gloves', count: 1 }, { id: 'coin', count: 20 }] },
   { key: 'chest_glade', x: -158, z: -166, items: [{ id: 'tea', count: 2 }, { id: 'rosen_potion', count: 1 }] },
 ];
-const BELL_POS = { x: PLACES.field_ivan.pos.x + 7, z: PLACES.field_ivan.pos.z - 5 };
+// до оградата на нивата (отвън), за да се вижда и стига — оградата минава на z≈103
+const BELL_POS = { x: PLACES.field_ivan.pos.x + 7, z: PLACES.field_ivan.pos.z - 7.5 };
 const START = { x: PLACES.start.pos.x, z: PLACES.start.pos.z, yaw: Math.PI };
 
 export class Rpg {
@@ -83,6 +84,15 @@ export class Rpg {
       notify: (t, k) => this.notify(t, k),
       questChanged: (id, stage, title, text) => this.bus.emit('quest', { id, stage, title, text }),
       questDone: (id, title) => { this.bus.emit('questDone', { id, title }); this.sfx('quest'); },
+      buy: (id, price) => this.buy(id, price),
+      sellAll: (id, each) => {
+        const n = this.inv.count(id); if (n <= 0) return 0;
+        this.inv.remove(id, n);
+        this.inv.gold += n * each;
+        this.notify(`Продаде ${ITEMS[id].name} ×${n} за ${n * each} гроша`, 'item');
+        this.sfx('coin');
+        return n * each;
+      },
     };
     this.quests = new Quests(qctx);
 
@@ -202,7 +212,8 @@ export class Rpg {
       sensitivity: input.sensitivity,
     };
     const L = this.lamia;
-    this.cam.update(dt, this.hero.pos, this.world, look, L.state === 'dead' ? [] : [{ x: L.pos.x, z: L.pos.z, r: LAMIA.bodyR + 0.8, h: 7 }]);
+    const nearBoss = L.active && Math.hypot(L.pos.x - this.hero.pos.x, L.pos.z - this.hero.pos.z) < 22;
+    this.cam.update(dt, this.hero.pos, this.world, look, L.state === 'dead' ? [] : [{ x: L.pos.x, z: L.pos.z, r: LAMIA.bodyR + 0.8, h: 7 }], nearBoss ? 1.3 : 0);
   }
 
   // ---------------- бой ----------------
@@ -316,8 +327,10 @@ export class Rpg {
     this.quests.onFoxCaught();
     this.bus.emit('killed', { kind: 'fox_talasam' });
     this.addXp(FOX.xp);
-    this.pickups.add('loot', null, e.pos.x, e.pos.z, [{ id: 'fox_tail', count: 1 }], this.world, { auto: true });
     this.notify('Хвана лисицата-таласъм! Тя избяга в мрака — без опашката си.', 'quest');
+    // направо в раницата: на земята в тъмното лесно се изпуска (а задачата чака опашката)
+    this.give('fox_tail', 1);
+    void e;
   }
 
   private onLamiaDefeated(): void {
@@ -366,6 +379,11 @@ export class Rpg {
       this.bus.emit('pickup', { item: id, count: got, name: d.name, icon: d.icon });
       this.notify(id === 'coin' ? `+${got} гроша` : `+ ${d.name}${got > 1 ? ` ×${got}` : ''}`, 'item');
       this.sfx(id === 'coin' ? 'coin' : 'pickup');
+      // нова отвара/храна → сама отива в първата празна клетка на бързата лента (за боя с Ламята)
+      if (d.kind === 'consumable' && !this.inv.hotbar.includes(id)) {
+        const k = this.inv.hotbar.indexOf(null);
+        if (k >= 0) { this.inv.hotbar[k] = id; this.notify(`${d.name} — на клавиш ${k + 1}`, 'info'); }
+      }
       this.quests.onItem(id);
     }
     if (left > 0) {

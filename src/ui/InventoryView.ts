@@ -112,7 +112,7 @@ export class InventoryView extends ModalView {
       ${dividerHtml()}
       ${row('sword', 'Щета', String(s.damage))}
       ${row('shield', 'Броня', String(s.armor))}
-      ${row('coin', 'Жълтици', String(s.gold), 'gold')}`;
+      ${row('coin', 'Грошове', String(s.gold), 'gold')}`;
   }
 
   private renderEq(eq: Record<EquipSlot, ItemView | null>): void {

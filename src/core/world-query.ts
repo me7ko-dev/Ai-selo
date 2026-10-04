@@ -11,6 +11,8 @@ export interface WorldQuery {
   lockedAt(x: number, z: number): string | null;
   /** Има ли вода (езерото, а по-късно и реката) — за звук/забавяне. */
   waterAt(x: number, z: number): boolean;
+  /** По желание: точката е в корона на дърво или в къща (камерата се приближава до героя). */
+  cameraHit?(x: number, y: number, z: number): boolean;
 }
 
 export const simpleWorldQuery: WorldQuery = {

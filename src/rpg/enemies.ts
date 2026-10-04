@@ -73,6 +73,8 @@ export class Enemy {
       ctx.sfx('die'); ctx.onKilled(this);
       return true;
     }
+    // замахът не се прекъсва (иначе комбото го държи вечно зашеметен) — блокирай или отскочи
+    if (this.state === 'windup') { this.knock.multiplyScalar(0.25); return true; }
     this.state = 'hurt'; this.t = 0.4; this.model.play('hit');
     return true;
   }

@@ -14,7 +14,7 @@ export const LAMIA = {
   bodyR: 3.2,
   biteReach: 11,
   biteDmg: 22,
-  fireDmg: 14,
+  fireDmg: 11,
   tailDmg: 20,
   rockDmg: 22,
   vuln: 1.15,
@@ -114,6 +114,12 @@ export class Lamia {
   }
 
   private pickHead(): number {
+    // най-често напада най-ранената глава — иначе щетата се разпределя по трите и фазите 2–3 идват накрая наведнъж
+    if (Math.random() < 0.75) {
+      let best = -1;
+      for (let i = 0; i < 3; i++) if (this.heads[i].hp > 0 && (best < 0 || this.heads[i].hp < this.heads[best].hp)) best = i;
+      if (best >= 0) return best;
+    }
     for (let k = 0; k < 3; k++) { const i = (this.nextHead + k) % 3; if (this.heads[i].hp > 0) { this.nextHead = i + 1; return i; } }
     return 0;
   }
@@ -162,7 +168,7 @@ export class Lamia {
       if (!ctx.heroDead && Math.hypot(heroPos.x - r.x, heroPos.z - r.z) < 2.1) ctx.damageHero(LAMIA.rockDmg, r.x, r.z, 2.5);
     }
     // горяща земя
-    if (!ctx.heroDead && this.burns.inside(heroPos.x, heroPos.z)) ctx.damageHero(8, heroPos.x + 0.01, heroPos.z, 0);
+    if (!ctx.heroDead && this.burns.inside(heroPos.x, heroPos.z)) ctx.damageHero(6, heroPos.x + 0.01, heroPos.z, 0);
 
     this.model.update(dt, 0);
     this.sync();
@@ -240,21 +246,21 @@ export class Lamia {
     at.t += dt;
     if (at.kind === 'bite') {
       if (at.t < at.tele) {
-        // целта следи героя до 60% от предупреждението, после се заковава
-        if (at.t < at.tele * 0.6) {
+        // целта следи героя до половината от предупреждението, после се заковава (и пеша се смогва да отскочиш)
+        if (at.t < at.tele * 0.5) {
           let tx = heroPos.x, tz = heroPos.z;
           const dx = tx - this.pos.x, dz = tz - this.pos.z, l = Math.hypot(dx, dz);
           if (l > LAMIA.biteReach) { tx = this.pos.x + (dx / l) * LAMIA.biteReach; tz = this.pos.z + (dz / l) * LAMIA.biteReach; }
           at.tx = tx; at.tz = tz; this.ring.place(tx, tz, world);
         }
         this.ring.progress(at.t / at.tele);
-        if (at.t > at.tele * 0.55 && at.t - dt <= at.tele * 0.55) this.model.flash(0xff6644);
+        if (at.t > at.tele * 0.5 && at.t - dt <= at.tele * 0.5) this.model.flash(0xff6644);
       } else if (!at.done) {
         at.done = true;
         this.ring.mesh.visible = false;
         this.model.headAttack(at.head, 'bite');
         ctx.sfx('bite'); ctx.shake(0.18);
-        if (!ctx.heroDead && Math.hypot(heroPos.x - at.tx, heroPos.z - at.tz) < 2.3) ctx.damageHero(LAMIA.biteDmg * (ph === 3 ? 1.25 : 1), at.tx, at.tz - 0.01, 2);
+        if (!ctx.heroDead && Math.hypot(heroPos.x - at.tx, heroPos.z - at.tz) < 2.05) ctx.damageHero(LAMIA.biteDmg * (ph === 3 ? 1.25 : 1), at.tx, at.tz - 0.01, 2);
         this.setVuln(at.head, at.tx, at.tz, world);
       }
     } else if (at.kind === 'fire') {
@@ -277,7 +283,8 @@ export class Lamia {
         let da = Math.atan2(dx, dz) - at.dir; da = Math.atan2(Math.sin(da), Math.cos(da));
         if (!ctx.heroDead && l < 15 && l > 1 && Math.abs(da) < 0.4) ctx.damageHero(LAMIA.fireDmg, this.pos.x, this.pos.z, 0.6);
       } else {
-        for (const r of [5, 8.5, 12]) this.burns.add(this.pos.x + Math.sin(at.dir) * r, this.pos.z + Math.cos(at.dir) * r, 2, 8, world);
+        // горящата земя започва след главата (тя пада на 4,5 м), за да може да се удари, без да стоиш в огъня
+        for (const r of [7.5, 11, 14.5]) this.burns.add(this.pos.x + Math.sin(at.dir) * r, this.pos.z + Math.cos(at.dir) * r, 2, 8, world);
         this.setVuln(at.head, this.pos.x + Math.sin(at.dir) * 4.5, this.pos.z + Math.cos(at.dir) * 4.5, world, 0.85);
         this.endAttack(fast);
         return;
