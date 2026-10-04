@@ -23,7 +23,7 @@ export interface MapData {
 export const DEFAULT_LABELS: MapLabel[] = [
   { ...PLACES.square.pos, z: PLACES.square.pos.z + 22, text: 'Самодивско', size: 'big' },
   { ...PLACES.forest.pos, text: 'Тъмната гора', size: 'big' },
-  { ...PLACES.glade.pos, z: PLACES.glade.pos.z + 40, text: 'Поляната на самодивите', size: 'mid' },
+  { ...PLACES.glade.pos, x: PLACES.glade.pos.x + 48, z: PLACES.glade.pos.z + 40, text: 'Поляната на самодивите', size: 'mid' },
   { x: 104, z: 120, text: 'Бистрица', size: 'small' },
   { ...PLACES.lamia_peak.pos, z: PLACES.lamia_peak.pos.z - 28, text: 'Ламин връх', size: 'mid' },
   { ...PLACES.lamia_plateau.pos, z: PLACES.lamia_plateau.pos.z + 36, text: 'Бърлогата на Ламята', size: 'small' },

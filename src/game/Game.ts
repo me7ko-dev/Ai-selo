@@ -213,8 +213,15 @@ export class Game {
     rpg.bus.on('levelup', (e) => { this.ui.banner.show(`Ниво ${e.level}`, e.title); this.sfx('levelup'); });
     rpg.bus.on('questDone', (e) => { this.ui.banner.show('Задачата е изпълнена', e.title); this.sfx('quest'); });
     rpg.bus.on('lamiaDefeated', () => { this.ui.banner.show('Ламята е победена!', 'Бистрица тече отново. Тази вечер селото вдига сбор.'); this.sfx('victory'); });
-    rpg.bus.on('died', () => { this.sfx('death'); this.ui.death.show(); });
-    rpg.bus.on('respawn', () => { this.ui.death.hide(); });
+    // мишката се пуска, за да може да се натисне „Събуди се в хана“ (при заключена мишка кликът отива в платното)
+    rpg.bus.on('died', () => { this.sfx('death'); this.ui.death.show(); this.unlockPointer(); this.ui.hud.setPaused(false); });
+    rpg.bus.on('respawn', () => {
+      this.ui.death.hide();
+      if (this.mode === 'play' && this.modal === null) {
+        this.lockPointer();
+        setTimeout(() => this.ui.hud.setPaused(this.mode === 'play' && this.modal === null && document.pointerLockElement !== this.engine.canvas), 150);
+      }
+    });
     rpg.bus.on('pickup', () => this.refreshInventory());
     return rpg;
   }
@@ -277,9 +284,10 @@ export class Game {
   private lateUpdate(dt: number): void {
     if (this.mode !== 'play') { this.ui.tags.update([]); return; }
     const state = this.modal === 'watch' ? this.timeMachine.viewState() : this.sim.state;
+    // камерата на разговора първо — иначе етикетите над главите се смятат със старата камера и са встрани
+    if (this.modal === 'dialogue' && this.dialogue.active) this.dialogueCamera(dt, this.dialogue.active);
     this.updateTags(state.villagers, state.time);
     if (this.modal === 'watch') return;
-    if (this.modal === 'dialogue' && this.dialogue.active) this.dialogueCamera(dt, this.dialogue.active);
     this.ui.hud.minimap(this.rpg.heroPos.x, this.rpg.heroPos.z, this.rpg.heroYaw, this.mapMarkers(), this.villagerDots());
     this.hudAcc += dt;
     if (this.hudAcc > 0.1) { this.hudAcc = 0; this.updateHud(); }
@@ -287,19 +295,39 @@ export class Game {
 
   private dlgCam = new THREE.Vector3();
   private dlgLook = new THREE.Vector3();
-  resetDialogueCamera(): void { this.dlgCam.copy(this.engine.camera.position); this.dlgLook.set(0, 0, 0); }
+  private dlgCand = -1;
+  resetDialogueCamera(): void { this.dlgCam.copy(this.engine.camera.position); this.dlgLook.set(0, 0, 0); this.dlgCand = -1; }
+  /** Места за камерата при разговор: [назад, встрани] спрямо героя; първото, от което жителят се вижда. */
+  private static DLG_CANDS: [number, number][] = [[2.6, 1.1], [2.6, -1.1], [1.9, 1.4], [1.9, -1.4], [1.3, 0.8]];
   private dialogueCamera(dt: number, id: VillagerId): void {
     const hero = this.rpg.heroPos;
     const vp = this.villagers.position(id);
     const dx = vp.x - hero.x, dz = vp.z - hero.z, d = Math.max(0.5, Math.hypot(dx, dz));
     const nx = dx / d, nz = dz / d;
+    if (this.dlgCand < 0) {
+      // да не е зад чардак, стена или в дърво
+      this.dlgCand = Game.DLG_CANDS.length - 1;
+      for (let i = 0; i < Game.DLG_CANDS.length; i++) {
+        const [b, sd] = Game.DLG_CANDS[i];
+        const px = hero.x - nx * b + nz * sd, pz = hero.z - nz * b - nx * sd, py = Math.max(heightAt(px, pz), hero.y) + 2.1;
+        let clear = true;
+        for (let t = 0.3; t <= 1.0001 && clear; t += 0.1) {
+          const x = vp.x + (px - vp.x) * t, z = vp.z + (pz - vp.z) * t, y = vp.y + 1.5 + (py - vp.y - 1.5) * t;
+          const c = this.world.collide(x, z, 0.2);
+          if (this.world.cameraHit(x, y, z) || Math.hypot(c.x - x, c.z - z) > 1e-3) clear = false;
+        }
+        if (clear) { this.dlgCand = i; break; }
+      }
+    }
+    const [back, side] = Game.DLG_CANDS[this.dlgCand];
     // през рамото на героя, към лицето на жителя
-    const cx = hero.x - nx * 2.6 + nz * 1.1, cz = hero.z - nz * 2.6 - nx * 1.1;
+    const cx = hero.x - nx * back + nz * side, cz = hero.z - nz * back - nx * side;
     const target = this.tmpV.set(cx, Math.max(heightAt(cx, cz), hero.y) + 2.1, cz);
     const k = 1 - Math.exp(-dt * 4);
     if (this.dlgCam.lengthSq() === 0) this.dlgCam.copy(this.engine.camera.position);
     this.dlgCam.lerp(target, k);
-    this.dlgLook.lerp(new THREE.Vector3(vp.x, vp.y + 1.45, vp.z), this.dlgLook.lengthSq() === 0 ? 1 : k);
+    // гледа под лицето → жителят е в горната половина на екрана, над прозореца с разговора
+    this.dlgLook.lerp(new THREE.Vector3(vp.x, vp.y + 0.75, vp.z), this.dlgLook.lengthSq() === 0 ? 1 : k);
     this.engine.camera.position.copy(this.dlgCam);
     this.engine.camera.lookAt(this.dlgLook);
   }
@@ -348,6 +376,7 @@ export class Game {
 
   private updateTags(villagers: VillagerState[], time: number): void {
     const cam = this.engine.camera;
+    cam.updateMatrixWorld(); // позицията от този кадър (иначе етикетите изостават с един кадър)
     const w = window.innerWidth, h = window.innerHeight;
     const tags = [];
     for (const v of villagers) {
@@ -431,11 +460,11 @@ export class Game {
 
   private wirePointerLock(): void {
     const canvas = this.engine.canvas;
-    canvas.addEventListener('click', () => { if (this.mode === 'play' && this.modal === null) this.lockPointer(); });
+    canvas.addEventListener('click', () => { if (this.mode === 'play' && this.modal === null && !this.rpg.dead) this.lockPointer(); });
     document.addEventListener('pointerlockchange', () => {
       const locked = document.pointerLockElement === canvas;
-      this.ui.hud.setPaused(!locked && this.mode === 'play' && this.modal === null);
-      if (!locked && !this.expectUnlock && this.mode === 'play' && this.modal === null && performance.now() >= this.suppressKeysUntil) {
+      this.ui.hud.setPaused(!locked && this.mode === 'play' && this.modal === null && !this.rpg.dead);
+      if (!locked && !this.expectUnlock && this.mode === 'play' && this.modal === null && !this.rpg.dead && performance.now() >= this.suppressKeysUntil) {
         // Esc освободи мишката → менюто
         this.openSettings();
       }

@@ -351,7 +351,8 @@ export class Quests {
   log(): { id: string; title: string; step: string; done: boolean; main: boolean }[] {
     const out: { id: string; title: string; step: string; done: boolean; main: boolean }[] = [];
     for (const id of QUEST_IDS) {
-      if (this.stages[id] === 'none') continue;
+      // в началото — подсказка накъде да тръгне („Поговори с баба Гена.“)
+      if (this.stages[id] === 'none' && !(id === 'rosen' && Object.values(this.stages).every((v) => v === 'none'))) continue;
       out.push({ id, title: QUEST_TITLES[id], step: this.step(id), done: this.stages[id] === 'done', main: QUEST_MAIN[id] });
     }
     // активните най-отгоре, главните преди страничните

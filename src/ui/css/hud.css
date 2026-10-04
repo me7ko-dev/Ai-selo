@@ -109,9 +109,11 @@
 @keyframes toast-in { from { opacity: 0; transform: translateX(2em); } to { opacity: 1; transform: none; } }
 
 /* ---- бос ---- */
-.bl-ui .hud-boss { position: absolute; top: 1.1em; left: 50%; transform: translateX(-50%); width: min(36em, 44vw); text-align: center; padding: 0.4em 1em 0.45em; background: rgba(20, 16, 12, 0.7); border: 1px solid rgba(200, 66, 58, 0.5); border-radius: var(--radius); box-shadow: 0 0.3em 1.2em rgba(0, 0, 0, 0.45); animation: bl-pop 0.4s ease-out; }
+/* долу над бързата лента — горе закриваше главите на Ламята */
+.bl-ui .hud-boss { position: absolute; bottom: 6.3em; left: 50%; transform: translateX(-50%); width: min(30em, 40vw); text-align: center; padding: 0.3em 1em 0.35em; background: rgba(20, 16, 12, 0.7); border: 1px solid rgba(200, 66, 58, 0.5); border-radius: var(--radius); box-shadow: 0 0.3em 1.2em rgba(0, 0, 0, 0.45); animation: boss-pop 0.4s ease-out; }
+@keyframes boss-pop { from { opacity: 0; transform: translateX(-50%) translateY(0.6em) scale(0.98); } to { opacity: 1; transform: translateX(-50%); } }
 .bl-ui .boss-title { display: flex; align-items: center; justify-content: center; gap: 0.6em; }
-.bl-ui .boss-name { font-family: var(--f-title); font-size: 1.45em; color: #f0a090; letter-spacing: 0.1em; text-shadow: 0 0 0.6em rgba(200, 66, 58, 0.6), 0 0.08em 0 #2a0a08; }
+.bl-ui .boss-name { font-family: var(--f-title); font-size: 1.25em; color: #f0a090; letter-spacing: 0.1em; text-shadow: 0 0 0.6em rgba(200, 66, 58, 0.6), 0 0.08em 0 #2a0a08; }
 .bl-ui .boss-heads { display: flex; gap: 0.6em; margin: 0.35em 0 0.25em; }
 .bl-ui .boss-head { flex: 1; }
 .bl-ui .boss-bar { height: 0.9em; }
