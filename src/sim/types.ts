@@ -40,7 +40,19 @@ export interface VillagerState {
   talkingWith: string | null;     // id на жител или 'player'
   plan: string;                   // какво смята да прави днес (кратко)
   flags: Record<string, number | string | boolean>;
+  // ── добавено от симулацията (по желание за външни модули) ──
+  /** Точката, към която върви в момента (крайната точка на path). */
+  goal?: Vec2;
+  /** Вътре в сграда (спи / яде у дома) — светът може да го скрие. */
+  indoors?: boolean;
+  /** Доколко вярва на всеки слух, който знае: id на слух → −1..1. */
+  rumorBelief?: Record<string, number>;
+  /** Зает (в разговор) до този момент. */
+  busyUntil?: number;
 }
+
+/** Реплика на опашката (балончетата в разговор се показват една след друга). */
+export interface QueuedLine { at: number; id: VillagerId; text: string; to?: string; dur: number; ai?: boolean }
 
 export interface Rumor {
   id: number;
@@ -50,6 +62,12 @@ export interface Rumor {
   truth: boolean;                 // вярно ли е
   origin: string;                 // кой го е пуснал
   time: number;
+  /** Вид слух (за подсказките): 'petko_thief', 'fox', 'goats', 'debt', 'love', 'lamia', 'samodivi', 'theft', 'stranger'… */
+  tag?: string;
+  /** −1 (лошо за тези, за които се говори) .. 1 (хубаво). */
+  sentiment?: number;
+  /** От кой слух е изкривен. */
+  parent?: number;
 }
 
 export type ChronicleType =
@@ -65,6 +83,8 @@ export interface ChronicleEntry {
   branchId: string;
   importance: number;             // 1..10 (за „Докато те нямаше…“ и точките на машината на времето)
   ai?: boolean;                   // текстът е от ИИ (при гледане назад се преиграва записаното)
+  /** Подвид на случката (за заглавия/икони): 'goats_quarrel', 'chicken_theft', 'new_mayor', 'confession', 'storm', 'karakondzhul', 'samodivi', 'sabor'… */
+  tag?: string;
 }
 
 export type Weather = 'clear' | 'cloudy' | 'rain' | 'storm' | 'fog';
@@ -83,6 +103,10 @@ export interface WorldState {
   flags: Record<string, number | string | boolean>; // 'lamia_dead', 'river_flowing', 'sabor', 'fox_caught'…
   branchId: string;
   nextId: number;                 // за id на спомени/слухове/записи в летописа
+  // ── добавено от симулацията (попълва се автоматично при load/new) ──
+  queue?: QueuedLine[];           // предстоящи реплики (балончета)
+  pairCd?: Record<string, number>; // кога двама жители може пак да си говорят
+  counters?: Record<string, number>; // броячи за деня (за да не се пълни летописът)
 }
 
 /** Случки отвън (лайв режим, задачи, играчът). */
