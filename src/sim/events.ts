@@ -409,6 +409,7 @@ export function injectEvent(sim: VillageSim, ev: InjectedEvent) {
       break;
     }
     case 'samodivi': {
+      s.flags.samodivi_until = t + 180; // три часа самодивите играят на поляната (и денем)
       const who = sim.r.pick<VillagerId>(['petko', 'maria', 'kalin']);
       const SAM: Record<string, string> = {
         petko: 'Петко закъсня със стадото край гората и после се кълнеше, че видял самодиви да играят хоро на поляната — в бели ризи, леки като мъгла.',
