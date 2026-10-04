@@ -393,6 +393,8 @@ export class Game {
     if (fest !== this.flagsSeen.festival) { this.flagsSeen.festival = fest; this.world.setFestival(fest); }
     const w = this.sim.state.weather;
     if (w !== this.flagsSeen.weather) { this.flagsSeen.weather = w; this.world.setWeather(w); }
+    const kara = typeof f['karakondzhul_until'] === 'number' && (f['karakondzhul_until'] as number) > this.sim.state.time;
+    if (kara !== this.world.gloomy) this.world.setGloom(kara);
   }
 
   private updateAudio(): void {
