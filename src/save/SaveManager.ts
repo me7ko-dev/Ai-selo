@@ -82,7 +82,8 @@ class IdbBackend implements Backend {
     await done(tx);
   }
   async getSnap(id: string) {
-    return (await req(this.store('snapshots', 'readonly').get(id))) as { meta: SnapshotMeta; state: unknown } | undefined;
+    const r = (await req(this.store('snapshots', 'readonly').get(id))) as { meta: SnapshotMeta; state: unknown } | undefined;
+    return r ? { meta: r.meta, state: r.state } : undefined;
   }
   async putSnap(rec: { meta: SnapshotMeta; state: unknown }) {
     const tx = this.db.transaction('snapshots', 'readwrite');
@@ -189,7 +190,23 @@ export class SaveManager implements SnapshotStore {
   static async open(): Promise<SaveManager> {
     const db = await openIdb();
     if (!db) return new SaveManager(new MemoryBackend(), true);
+    // молим браузъра да не трие записите при липса на място (без да чакаме отговора)
+    try { void (globalThis as { navigator?: Navigator }).navigator?.storage?.persist?.().catch(() => {}); } catch { /* */ }
     return new SaveManager(new IdbBackend(db), false);
+  }
+
+  /**
+   * Чисти старите часови записи: пази 'hour' записите от последните keepMinutes игрови минути (по подразбиране 3 дни)
+   * спрямо nowTime за всеки клон; 'day', 'manual' и 'auto' се пазят завинаги. Връща броя изтрити.
+   */
+  async pruneHourly(nowTime: number, branchId?: string, keepMinutes = 3 * 24 * 60): Promise<number> {
+    let n = 0;
+    for (const m of await this.backend.allMetas()) {
+      if (m.kind !== 'hour') continue;
+      if (branchId !== undefined && m.branchId !== branchId) continue;
+      if (nowTime - m.time > keepMinutes) { await this.backend.delSnap(m.id); n++; }
+    }
+    return n;
   }
 
   /** Само в паметта (за проби). */

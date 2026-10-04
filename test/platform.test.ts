@@ -202,6 +202,13 @@ test('записи: без IndexedDB → в паметта; put/get/list/delete/
   await assert.rejects(other.importFile(new Blob([JSON.stringify({ kind: 'balkanski-legendi-save', version: 1, main: null, snapshots: [{ meta: {} }] })])), /повредени/);
   assert.deepEqual((await other.list()).map((m) => m.id), ['a']); // лош файл не трие нищо
 
+  // чистене на старите часови записи (пазят се 3 игрови дни; дневните — завинаги)
+  await other.put(meta('h-old', 100), {});
+  await other.put({ ...meta('d-old', 50), kind: 'day' }, {});
+  await other.put(meta('h-new', 4500), {});
+  assert.equal(await other.pruneHourly(4500), 1);
+  assert.deepEqual((await other.list()).map((m) => m.id), ['d-old', 'a', 'h-new']);
+
   await other.wipe();
   assert.equal(await other.hasSave(), false);
   assert.deepEqual(await other.list(), []);
