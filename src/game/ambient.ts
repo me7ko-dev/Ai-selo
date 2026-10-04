@@ -111,8 +111,7 @@ export class Ambient {
     // Караконджул: тъмна сянка обикаля мегдана
     const karaOn = typeof state.flags['karakondzhul_until'] === 'number' && (state.flags['karakondzhul_until'] as number) > state.time;
     if (karaOn && !this.kara) {
-      this.kara = createMonsterModel('talasam');
-      this.kara.root.scale.setScalar(1.9);
+      this.kara = createMonsterModel('karakondzhul');
       this.kara.play('walk');
       this.group.add(this.kara.root);
     } else if (!karaOn && this.kara) {

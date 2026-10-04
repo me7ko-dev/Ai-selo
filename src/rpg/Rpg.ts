@@ -299,7 +299,7 @@ export class Rpg {
   }
 
   private onKilled(e: Enemy): void {
-    this.bus.emit('killed', { kind: e.kind });
+    this.bus.emit('killed', { kind: e.kind as 'talasam' | 'fox_talasam' });
     this.addXp(TALASAM.xp);
     const drops: { id: ItemId; count: number }[] = [];
     if (Math.random() < 0.6) drops.push({ id: 'claw', count: 1 });
