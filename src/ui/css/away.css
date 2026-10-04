@@ -1,0 +1,25 @@
+.bl-ui .away { position: absolute; inset: 0; pointer-events: auto; display: grid; place-items: center; background: radial-gradient(ellipse at center, rgba(14, 10, 8, 0.6), rgba(8, 6, 4, 0.9)); animation: bl-fade 0.4s; overflow-y: auto; }
+.bl-ui .away-inner { width: min(66em, 94vw); text-align: center; padding: 2em 0; }
+.bl-ui .away-title { margin: 0; font-family: var(--f-title); font-weight: 400; font-size: 2.6em; color: var(--gold); letter-spacing: 0.05em; animation: bl-glow 4s infinite, bl-pop 0.6s ease-out; }
+.bl-ui .away-sub { color: var(--text2); font-style: italic; margin-top: 0.3em; font-size: 1.05em; }
+.bl-ui .away-orn { width: 24em; margin: 0.4em auto 1.2em; }
+.bl-ui .away-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1em; text-align: left; }
+.bl-ui .away-grid[data-n="1"], .bl-ui .away-grid[data-n="2"], .bl-ui .away-grid[data-n="4"] { grid-template-columns: repeat(2, 1fr); width: min(44em, 100%); margin: 0 auto; }
+.bl-ui .away-card {
+  position: relative; display: flex; flex-direction: column; gap: 0.4em; padding: 0.9em 1em 0.8em; min-height: 11em;
+  background: linear-gradient(180deg, rgba(40, 30, 22, 0.92), rgba(22, 17, 12, 0.94)); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: 0 0.5em 1.4em rgba(0, 0, 0, 0.45); opacity: 0; animation: away-in 0.55s cubic-bezier(.2, .9, .3, 1.1) forwards;
+}
+.bl-ui .away-card::before { content: ''; position: absolute; left: 0.8em; right: 0.8em; top: -0.3em; height: 0.6em; background-image: var(--orn-strip); background-size: auto 100%; background-repeat: repeat-x; image-rendering: pixelated; opacity: 0.85; }
+@keyframes away-in { from { opacity: 0; transform: translateY(1.2em) rotateX(20deg); } to { opacity: 1; transform: none; } }
+.bl-ui .away-card-top { display: flex; align-items: center; gap: 0.45em; font-size: 0.78em; color: var(--text2); }
+.bl-ui .away-time { margin-left: auto; font-family: var(--f-title); color: var(--gold); letter-spacing: 0.04em; }
+.bl-ui .away-card-t { font-weight: 700; font-size: 1.1em; color: #fff2d6; }
+.bl-ui .away-ai { color: var(--gold); }
+.bl-ui .away-card-x { font-size: 0.9em; color: #e0d6bf; line-height: 1.42; flex: 1; }
+.bl-ui .away-people { display: flex; gap: 0.2em; margin-top: 0.2em; }
+.bl-ui .away-card.t-monster { border-color: rgba(200, 66, 58, 0.55); }
+.bl-ui .away-card.t-love { border-color: rgba(229, 138, 166, 0.5); }
+.bl-ui .away-card.t-election, .bl-ui .away-card.t-festival { border-color: rgba(232, 194, 122, 0.65); }
+.bl-ui .away-none { grid-column: 1 / -1; text-align: center; font-style: italic; color: var(--text2); padding: 2em; }
+.bl-ui .away-btn { margin-top: 1.6em; font-size: 1.15em; padding: 0.6em 2.6em; opacity: 0; animation: bl-pop 0.4s ease-out forwards; }

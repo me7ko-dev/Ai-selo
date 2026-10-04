@@ -1,0 +1,41 @@
+/* смърт */
+.bl-ui .death { position: absolute; inset: 0; pointer-events: auto; display: grid; place-items: center; background: radial-gradient(ellipse at center, rgba(60, 8, 6, 0.55), rgba(10, 2, 2, 0.92)); animation: bl-fade 1.4s ease-out; }
+.bl-ui .death-box { text-align: center; width: min(34em, 90vw); animation: death-in 1.6s ease-out; }
+@keyframes death-in { from { opacity: 0; transform: scale(1.08); filter: blur(4px); } to { opacity: 1; transform: none; filter: none; } }
+.bl-ui .death-title { font-family: var(--f-title); font-size: 3.6em; color: #d8574a; letter-spacing: 0.06em; text-shadow: 0 0 0.5em rgba(200, 40, 30, 0.6), 0 0.06em 0 #2a0604; }
+.bl-ui .death-sub { color: #e6cfc0; font-style: italic; font-size: 1.1em; margin: 0.4em 0 1.6em; }
+.bl-ui .death-btn { font-size: 1.15em; padding: 0.6em 2em; opacity: 0; animation: bl-pop 0.5s ease-out 1.2s forwards; }
+
+/* голямо съобщение */
+.bl-ui .banner { position: absolute; left: 50%; top: 26%; transform: translateX(-50%); pointer-events: none; }
+.bl-ui .banner-box { min-width: 30em; max-width: 80vw; text-align: center; background: radial-gradient(closest-side, rgba(30, 22, 14, 0.92), rgba(20, 16, 12, 0.8) 60%, rgba(20, 16, 12, 0)); padding: 0 4em; }
+.bl-ui .banner .orn-strip { height: 0.8em; margin: 0 3em; }
+.bl-ui .banner-in { padding: 0.8em 0 0.9em; }
+.bl-ui .banner-t { display: flex; align-items: center; justify-content: center; gap: 0.5em; font-family: var(--f-title); font-size: 2.4em; letter-spacing: 0.05em; color: var(--gold); text-shadow: 0 0 0.6em rgba(232, 194, 122, 0.45), 0 0.06em 0 #2a1a0e; }
+.bl-ui .banner-s { font-size: 1.2em; color: #f3ead7; margin-top: 0.2em; text-shadow: 0 1px 4px #000; }
+.bl-ui .banner.k-red .banner-t { color: #f08a7a; text-shadow: 0 0 0.6em rgba(200, 66, 58, 0.6), 0 0.06em 0 #2a0604; }
+.bl-ui .banner.k-quest .banner-t { font-size: 1.8em; }
+.bl-ui .banner.go { animation: banner-in 0.7s cubic-bezier(.2, .9, .3, 1.2); }
+.bl-ui .banner.go .orn-strip { animation: banner-strip 0.9s ease-out; }
+.bl-ui .banner.out { animation: banner-out 0.45s ease-in forwards; }
+@keyframes banner-in { from { opacity: 0; transform: translateX(-50%) scale(0.85); } to { opacity: 1; transform: translateX(-50%) scale(1); } }
+@keyframes banner-out { to { opacity: 0; transform: translateX(-50%) translateY(-0.8em); } }
+@keyframes banner-strip { from { clip-path: inset(0 50% 0 50%); } to { clip-path: inset(0 0 0 0); } }
+
+/* зареждане */
+.bl-ui .loading { position: absolute; inset: 0; z-index: 100; pointer-events: auto; display: grid; place-items: center; background: radial-gradient(ellipse at center, #2a1f16, #0e0a07 75%); transition: opacity 0.5s; }
+.bl-ui .loading.out { opacity: 0; }
+.bl-ui .loading-box { width: min(30em, 86vw); text-align: center; }
+.bl-ui .loading-title { font-family: var(--f-title); font-size: 2.8em; color: var(--gold); animation: bl-glow 3s infinite; }
+.bl-ui .load-txt { color: var(--text2); font-style: italic; margin: 0.3em 0 0.9em; }
+.bl-ui .loading-bar { height: 0.55em; border-radius: 1em; background: rgba(0, 0, 0, 0.5); border: 1px solid var(--line); overflow: hidden; }
+.bl-ui .loading-bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #8e2a24, var(--red), var(--gold)); transition: width 0.3s ease-out; }
+
+/* потвърждение */
+.bl-ui .cf-back { z-index: 60; }
+.bl-ui .cf { width: min(30em, 92vw); padding-bottom: 1.1em; }
+.bl-ui .cf-text { padding: 0.2em 1.3em 0.4em; color: var(--text); line-height: 1.5; }
+.bl-ui .cf-btns { display: flex; justify-content: flex-end; gap: 0.6em; padding: 0.6em 1.3em 0; }
+
+/* пауза */
+.bl-ui .pause-hint { position: absolute; top: 1.4em; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 0.5em; padding: 0.35em 1.2em; font-family: var(--f-title); letter-spacing: 0.12em; color: var(--gold); background: rgba(20, 16, 12, 0.78); border: 1px solid var(--line); border-radius: 2em; animation: bl-pop 0.2s; }

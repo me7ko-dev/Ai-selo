@@ -1,0 +1,58 @@
+.bl-ui .inv { width: min(66em, 96vw); padding-bottom: 1.1em; }
+.bl-ui .inv-body { display: grid; grid-template-columns: 15em 19em auto; gap: 1.4em; padding: 0.4em 1.5em 0; }
+.bl-ui .inv-h { font-family: var(--f-title); color: var(--gold); font-size: 0.95em; letter-spacing: 0.06em; margin-bottom: 0.6em; padding-bottom: 0.3em; border-bottom: 1px solid rgba(232, 194, 122, 0.2); }
+.bl-ui .inv-h.sm { margin-top: 1em; font-size: 0.85em; }
+.bl-ui .inv-lvl { display: flex; align-items: center; gap: 0.7em; margin-bottom: 0.8em; }
+.bl-ui .inv-lvl-n { width: 2.4em; height: 2.4em; display: grid; place-items: center; border-radius: 50%; font-family: var(--f-title); font-size: 1.2em; color: #1c140c; background: radial-gradient(circle at 40% 35%, #ffe4ae, #c99a4a); border: 1px solid #5a3a1a; }
+.bl-ui .inv-lvl-t { font-size: 1.1em; font-weight: 700; }
+.bl-ui .inv-barlbl { display: flex; justify-content: space-between; font-size: 0.78em; color: var(--text2); margin: 0.5em 0 0.2em; }
+.bl-ui .inv-left .bar:not(.xp) { height: 1em; }
+.bl-ui .inv-xp { height: 0.45em !important; }
+.bl-ui .inv-stat { display: flex; align-items: center; gap: 0.55em; padding: 0.35em 0; font-size: 0.95em; }
+.bl-ui .inv-stat span { flex: 1; color: var(--text2); }
+.bl-ui .inv-stat b { font-size: 1.1em; }
+.bl-ui .inv-stat.gold b { color: var(--gold); }
+
+/* екипировка */
+.bl-ui .inv-eq { position: relative; width: 19em; height: 21em; }
+.bl-ui .inv-sil { position: absolute; left: 50%; top: 0.5em; height: 19.5em; transform: translateX(-50%); }
+.bl-ui .inv-cell.inv-eqslot { position: absolute; }
+.bl-ui .inv-eqslot.eq-head { left: 50%; top: 0; transform: translateX(-50%); }
+.bl-ui .inv-eqslot.eq-amulet { right: 0.6em; top: 2.6em; }
+.bl-ui .inv-eqslot.eq-weapon { left: 0.6em; top: 7.6em; }
+.bl-ui .inv-eqslot.eq-body { left: 50%; top: 7em; transform: translateX(-50%); }
+.bl-ui .inv-eqslot.eq-hands { right: 0.6em; top: 10.4em; }
+.bl-ui .inv-eqslot.eq-feet { left: 50%; bottom: 0.8em; transform: translateX(-50%); }
+.bl-ui .inv-eqlbl { position: absolute; left: 50%; bottom: -1.45em; transform: translateX(-50%); font-size: 0.68em; color: var(--text2); white-space: nowrap; pointer-events: none; }
+.bl-ui .inv-ghost { position: absolute; inset: 22%; opacity: 0.22; filter: grayscale(1); pointer-events: none; }
+
+/* клетки */
+.bl-ui .inv-bag { display: grid; grid-template-columns: repeat(6, 3.6em); gap: 0.35em; }
+.bl-ui .inv-hot { display: grid; grid-template-columns: repeat(6, 3.6em); gap: 0.35em; }
+.bl-ui .inv-cell {
+  position: relative; width: 3.6em; height: 3.6em; border-radius: 8px; pointer-events: auto;
+  background: radial-gradient(circle at 50% 40%, rgba(70, 54, 38, 0.7), rgba(18, 14, 10, 0.9));
+  border: 1px solid rgba(232, 194, 122, 0.22); transition: border-color 0.12s, box-shadow 0.12s, transform 0.1s;
+}
+.bl-ui .inv-cell:not(.empty) { cursor: pointer; }
+.bl-ui .inv-cell:not(.empty):hover { border-color: var(--gold); box-shadow: 0 0 0.7em rgba(232, 194, 122, 0.3); }
+.bl-ui .inv-cell.over { border-color: #9cd07a; box-shadow: 0 0 0.8em rgba(156, 208, 122, 0.5); }
+.bl-ui .inv-cell.dragging { opacity: 0.4; }
+.bl-ui .inv-cell.r-rare { border-color: rgba(91, 143, 214, 0.75); }
+.bl-ui .inv-cell.r-legend { border-color: rgba(232, 160, 60, 0.95); box-shadow: inset 0 0 0.8em rgba(232, 160, 60, 0.3); }
+.bl-ui .inv-ic { position: absolute; inset: 16%; filter: drop-shadow(0 0.08em 0.15em rgba(0, 0, 0, 0.6)); pointer-events: none; }
+.bl-ui .inv-cnt { position: absolute; right: 0.25em; bottom: 0.1em; font-size: 0.78em; font-weight: 700; text-shadow: 0 1px 2px #000, 0 0 2px #000; pointer-events: none; }
+.bl-ui .inv-key { position: absolute; left: 0.3em; top: 0.1em; font-size: 0.68em; color: var(--text2); pointer-events: none; }
+.bl-ui .inv-help { margin-top: 0.9em; font-size: 0.75em; }
+
+/* подсказка */
+.bl-ui .inv-tip { position: fixed; left: 0; top: 0; z-index: 50; width: 17em; padding: 0.7em 0.85em; pointer-events: none; background: rgba(16, 12, 9, 0.97); border: 1px solid var(--line-strong); border-radius: 8px; box-shadow: 0 0.5em 1.6em rgba(0, 0, 0, 0.6); }
+.bl-ui .tip-head { display: flex; align-items: center; gap: 0.6em; margin-bottom: 0.45em; }
+.bl-ui .tip-name { font-weight: 700; font-size: 1.05em; }
+.bl-ui .tip-name.r-rare { color: #8fb8f0; }
+.bl-ui .tip-name.r-legend { color: #f2b25a; }
+.bl-ui .tip-kind { font-size: 0.75em; color: var(--text2); font-style: italic; }
+.bl-ui .tip-desc { font-size: 0.85em; color: #e6dcc4; margin-bottom: 0.4em; line-height: 1.4; }
+.bl-ui .tip-stat { display: flex; justify-content: space-between; font-size: 0.85em; padding: 0.1em 0; border-top: 1px dashed rgba(232, 194, 122, 0.15); }
+.bl-ui .tip-stat b { color: #a8d898; }
+.bl-ui .tip-act { margin-top: 0.4em; font-size: 0.75em; color: var(--gold); }

@@ -1,0 +1,15 @@
+.bl-ui .nametags { position: absolute; inset: 0; pointer-events: none; }
+.bl-ui .nt { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; transform-origin: 50% 100%; transition: opacity 0.25s; will-change: transform; }
+.bl-ui .nt-label { text-align: center; text-shadow: 0 1px 2px #000, 0 0 4px rgba(0, 0, 0, 0.9); line-height: 1.1; }
+.bl-ui .nt-name { font-family: var(--f-title); color: #fff1d0; font-size: 1em; letter-spacing: 0.04em; }
+.bl-ui .nt-job { color: #e6dcc4; font-size: 0.78em; font-style: italic; opacity: 0.9; }
+.bl-ui .nt-bubble {
+  position: relative; max-width: 16.5em; width: max-content; margin-bottom: 0.7em; padding: 0.45em 0.75em; border-radius: 0.8em;
+  background: rgba(248, 240, 222, 0.95); color: #2a1a0e; font-size: 0.92em; line-height: 1.3; text-align: center;
+  box-shadow: 0 0.2em 0.7em rgba(0, 0, 0, 0.4); border: 1px solid rgba(120, 80, 40, 0.4);
+  opacity: 0; transform: translateY(0.4em) scale(0.9); transition: opacity 0.3s, transform 0.3s cubic-bezier(.2, .9, .3, 1.3);
+}
+.bl-ui .nt-bubble.in { opacity: 1; transform: none; }
+.bl-ui .nt-bubble::after { content: ''; position: absolute; left: 50%; bottom: -0.5em; margin-left: -0.5em; border: 0.5em solid transparent; border-bottom: 0; border-top-color: rgba(248, 240, 222, 0.95); }
+.bl-ui .nt-ai { display: inline-block; margin-right: 0.3em; vertical-align: -0.1em; filter: drop-shadow(0 0 2px rgba(160, 110, 30, 0.8)); }
+.bl-ui .nt-ai .sparkle path:first-child { fill: #c08a2a; }
