@@ -153,9 +153,12 @@ export function baseSpotFor(place: PlaceId, id: VillagerId, inside = false): Vec
   return { x: pl.pos.x + Math.sin(a) * r, z: pl.pos.z + Math.cos(a) * r };
 }
 
-/** Позиция в хорото около ореха (въртим се бавно). */
+/** Огънят на сбора — на мегдана, южно от ореха (светът го пали на същото място). */
+export const BONFIRE: Vec2 = { x: PLACES.square.pos.x, z: PLACES.square.pos.z + 10.5 };
+
+/** Позиция в хорото около огъня на сбора (въртим се бавно). */
 export function horoSpot(id: VillagerId, time: number): { pos: Vec2; facing: number } {
-  const c = PLACES.walnut.pos, r = 7;
+  const c = BONFIRE, r = 4.6;
   const a = (idx(id) / VILLAGER_IDS.length) * Math.PI * 2 + time * 0.15;
   const pos = { x: c.x + Math.sin(a) * r, z: c.z + Math.cos(a) * r };
   return { pos, facing: Math.atan2(c.x - pos.x, c.z - pos.z) };

@@ -136,6 +136,7 @@ export class Game {
     this.rpg.setControlsEnabled(false);
     this.ui.hud.hide();
     this.ui.start.show({ hasSave: canContinue, ai: { connected: this.aiStatus.connected, label: this.aiStatus.label } });
+    if (canContinue) void this.save.loadMain().then((m) => { if (m && this.mode === 'menu') this.ui.start.update({ saveLabel: `${formatDayClock((m.game as GameState).sim.time)} — Самодивско` }); }).catch(() => {});
     this.audio.setMusic('village');
   }
 
@@ -190,7 +191,10 @@ export class Game {
     this.startPlaying();
     // „Докато те нямаше…“
     const away = Date.now() - main.savedAt;
+    const dayBefore = dayOf(this.sim.state.time);
     const cards: AwayCard[] = catchUp(this.sim, away);
+    // превъртяно през полунощ — запис за новия ден (машината на времето да има откъде да гледа)
+    if (dayOf(this.sim.state.time) > dayBefore) void this.makeSnapshot('day');
     this.villagers.update(0.016, this.sim.state, true);
     if (cards.length) this.openAway(cards);
     if (live) this.startLive();

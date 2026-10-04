@@ -65,7 +65,7 @@ const TAG_TITLE: Record<string, string> = {
   new_mayor: 'Нов кмет!', election: 'Избори на мегдана', pre_election: 'Преди изборите', confession: 'Признание под ореха',
   gift: 'Подарък на прага', love_talk: 'Сърдечни работи', storm: 'Буря над селото', storm_end: 'След бурята', rain: 'Дъжд над Самодивско',
   fog: 'Мъгла от гората', karakondzhul: 'Караконджулът!', karakondzhul_end: 'Тропотът утихна', samodivi: 'Самодиви на поляната',
-  sabor: 'Сбор в селото', sabor_dance: 'Хоро около ореха', lamia_news: 'Ламята е мъртва!', river_joy: 'Реката пее',
+  sabor: 'Сбор в селото', sabor_dance: 'Хоро около огъня', lamia_news: 'Ламята е мъртва!', river_joy: 'Реката пее',
   theft: 'Кражба в селото', gena_tracks: 'Странни следи', kalin_light: 'Синкава светлина', kalin_noticed: 'Някой забеляза Калин',
   maria_dreams: 'Мария мечтае', peyu_river: 'Кметът и реката', evening: 'Вечер в селото', reflection: 'Вечерни мисли',
 };
