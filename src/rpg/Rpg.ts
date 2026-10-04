@@ -84,6 +84,15 @@ export class Rpg {
       notify: (t, k) => this.notify(t, k),
       questChanged: (id, stage, title, text) => this.bus.emit('quest', { id, stage, title, text }),
       questDone: (id, title) => { this.bus.emit('questDone', { id, title }); this.sfx('quest'); },
+      buy: (id, price) => this.buy(id, price),
+      sellAll: (id, each) => {
+        const n = this.inv.count(id); if (n <= 0) return 0;
+        this.inv.remove(id, n);
+        this.inv.gold += n * each;
+        this.notify(`Продаде ${ITEMS[id].name} ×${n} за ${n * each} гроша`, 'item');
+        this.sfx('coin');
+        return n * each;
+      },
     };
     this.quests = new Quests(qctx);
 

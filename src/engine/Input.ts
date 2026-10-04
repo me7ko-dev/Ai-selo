@@ -21,7 +21,8 @@ export class Input {
       if (!this.keys.has(e.code)) this.pressedSet.add(e.code);
       this.keys.add(e.code);
     });
-    window.addEventListener('keyup', (e) => this.keys.delete(e.code));
+    // capture: полетата за писане спират keyup (isolateInput) — иначе задържан клавиш остава „натиснат“ завинаги
+    window.addEventListener('keyup', (e) => this.keys.delete(e.code), true);
     window.addEventListener('blur', () => { this.keys.clear(); this.buttons.clear(); });
     el.addEventListener('mousedown', (e) => { this.buttons.add(e.button); this.clicked.add(e.button); });
     window.addEventListener('mouseup', (e) => this.buttons.delete(e.button));
