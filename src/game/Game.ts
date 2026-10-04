@@ -4,7 +4,7 @@ import { Engine } from '../engine/Engine';
 import { World3D } from '../world/World3D';
 import { VillageSim } from '../sim/VillageSim';
 import { Timeline } from '../sim/timeline';
-import { catchUp, type AwayCard } from '../sim/away';
+import { catchUp, retellCards, type AwayCard } from '../sim/away';
 import { createBrain } from '../sim/brain';
 import type { BrainStatus } from '../sim/brain/Brain';
 import type { ChronicleEntry, SnapshotMeta, VillagerState } from '../sim/types';
@@ -198,7 +198,15 @@ export class Game {
     // превъртяно през полунощ — запис за новия ден (машината на времето да има откъде да гледа)
     if (dayOf(this.sim.state.time) > dayBefore) void this.makeSnapshot('day');
     this.villagers.update(0.016, this.sim.state, true);
-    if (cards.length) this.openAway(cards);
+    if (cards.length) {
+      this.openAway(cards);
+      // с ИИ: трите най-важни случки се преразказват (картичките се показват веднага, после се подменят)
+      if (this.aiStatus.connected) {
+        void retellCards(cards, this.brainKit.brain).then((better) => {
+          if (this.modal === 'away' && better.some((c) => c.ai)) this.ui.away.show(better, () => this.onModalClosed('away'));
+        }).catch(() => {});
+      }
+    }
     if (live) this.startLive();
   }
 
