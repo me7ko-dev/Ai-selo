@@ -4,3 +4,4 @@ release/
 test/tmp/
 *.log
 SESSION_NOTES.md
+.claude/worktrees/
