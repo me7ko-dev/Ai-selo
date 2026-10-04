@@ -114,7 +114,7 @@
   box-shadow: 0 1em 3em rgba(0, 0, 0, 0.6);
   animation: bl-pop 0.2s ease-out;
 }
-.bl-ui .modal-head { display: flex; align-items: center; gap: 0.8em; padding: 0.9em 1.3em 0.4em; }
+.bl-ui .modal-head { display: flex; align-items: center; gap: 0.8em; padding: 1em 1.3em 0.4em 1.9em; }
 .bl-ui .modal-title { font-family: var(--f-title); color: var(--gold); font-size: 1.5em; letter-spacing: 0.05em; text-shadow: 0 0 0.6em rgba(232, 194, 122, 0.25); flex: 1; }
 .bl-ui .close-x { margin-left: auto; }
 .bl-ui .hint { color: var(--text2); font-size: 0.85em; }

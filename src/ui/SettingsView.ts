@@ -34,9 +34,9 @@ export interface SettingsStatus {
 export type SettingsTab = 'game' | 'ai' | 'graphics' | 'audio' | 'controls' | 'live';
 const TABS: [SettingsTab, string][] = [['game', 'Игра'], ['ai', 'ИИ'], ['graphics', 'Графика'], ['audio', 'Звук'], ['controls', 'Управление'], ['live', 'Лайв']];
 
-export const CONTROLS_LIST: [string, string][] = [
-  ['W A S D', 'ходене'], ['Мишка', 'камера'], ['Space', 'скок'], ['Ляв бутон', 'удар'], ['E', 'говори / вземи'],
-  ['Tab', 'герой и раница'], ['M', 'карта'], ['J', 'летопис'], ['T', 'машина на времето'], ['1 – 6', 'бърза лента'], ['Esc', 'меню / настройки'],
+export const CONTROLS_LIST: [string[], string][] = [
+  [['W', 'A', 'S', 'D'], 'ходене'], [['Мишка'], 'камера'], [['Space'], 'скок'], [['Ляв бутон'], 'удар'], [['E'], 'говори / вземи'],
+  [['Tab'], 'герой и раница'], [['M'], 'карта'], [['J'], 'летопис'], [['T'], 'машина на времето'], [['1', '–', '6'], 'бърза лента'], [['Esc'], 'меню / настройки'],
 ];
 
 export class SettingsView extends ModalView {
@@ -175,7 +175,7 @@ export class SettingsView extends ModalView {
         row('Чувствителност на мишката', slider(this.s.controls.sensitivity, 0.2, 3, 0.1, (v) => `×${v.toFixed(1)}`, (v) => { this.s.controls.sensitivity = v; this.changed(); }));
         row('Обърната мишка (горе/долу)', toggle(this.s.controls.invertY, (v) => { this.s.controls.invertY = v; this.changed(); }));
         sec('Клавиши');
-        B.append(h('div.set-keys', { html: CONTROLS_LIST.map(([k, v]) => `<div><span>${k.split(' ').map((x) => x === '–' ? '–' : `<kbd>${esc(x)}</kbd>`).join(' ')}</span><em>${esc(v)}</em></div>`).join('') }));
+        B.append(h('div.set-keys', { html: CONTROLS_LIST.map(([k, v]) => `<div><span>${k.map((x) => x === '–' ? '–' : `<kbd>${esc(x)}</kbd>`).join(' ')}</span><em>${esc(v)}</em></div>`).join('') }));
         break;
       case 'live': {
         const lv = this.st.live;

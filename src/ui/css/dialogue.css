@@ -2,7 +2,7 @@
 @keyframes dl-in { from { opacity: 0; transform: translate(-50%, 1em); } to { opacity: 1; transform: translateX(-50%); } }
 .bl-ui .dl-panel {
   position: relative; display: flex; gap: 1.3em; padding: 1.1em 1.4em 0.8em 1.2em;
-  background: linear-gradient(180deg, rgba(26, 20, 15, 0.9), rgba(16, 12, 9, 0.94));
+  background: linear-gradient(180deg, rgba(26, 20, 15, 0.96), rgba(16, 12, 9, 0.98));
   border: 1px solid var(--line); border-radius: var(--radius); box-shadow: 0 0.6em 2.4em rgba(0, 0, 0, 0.55);
 }
 .bl-ui .dl-panel::before { content: ''; position: absolute; left: 1.6em; right: 1.6em; top: -0.35em; height: 0.7em; background-image: var(--orn-strip); background-size: auto 100%; background-repeat: repeat-x; image-rendering: pixelated; }

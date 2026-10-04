@@ -11,6 +11,7 @@ import { showExtra } from './ui-scenes';
 const scene = document.getElementById('scene')!;
 scene.style.background = sceneBg('day');
 const ui: Ui = mountUi(document.getElementById('ui')!);
+(window as unknown as { __ui: Ui }).__ui = ui;
 const base = M.makeBaseMap(1024, PLACES, RIVER_PATH, FOREST, worldToMap);
 ui.hud.setMinimap(base);
 
@@ -51,6 +52,7 @@ function hideAll(): void {
 function showHud(): void {
   ui.hud.show();
   ui.hud.update(M.hudData());
+  ui.hud.minimap(4, 46, 0.6, [{ x: -150, z: -60, kind: 'quest' }], [{ x: -10, z: 30 }]);
 }
 
 function route(): void {
