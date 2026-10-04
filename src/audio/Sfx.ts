@@ -126,6 +126,17 @@ export class Audio {
     if (this.wantedMusic !== 'none') this.startMusic(this.wantedMusic);
   }
 
+  /** Отключва звука при първото щракване/клавиш/докосване (браузърите не пускат звук преди жест). */
+  autoUnlock(target: EventTarget = globalThis as unknown as EventTarget): void {
+    if (!target?.addEventListener) return;
+    const evs = ['pointerdown', 'keydown', 'touchstart'];
+    const h = () => {
+      this.unlock();
+      if (this.ctx) for (const e of evs) target.removeEventListener(e, h, true);
+    };
+    for (const e of evs) target.addEventListener(e, h, true);
+  }
+
   setVolumes(v: Partial<Volumes>): void {
     this.vol = { master: clamp01(v.master ?? this.vol.master), music: clamp01(v.music ?? this.vol.music), sfx: clamp01(v.sfx ?? this.vol.sfx) };
     this.applyVolumes(false);

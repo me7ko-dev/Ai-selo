@@ -5,6 +5,7 @@ import { parseIrcLine, chatMessageFrom } from '../src/live/TwitchChat';
 import { LiveVote, parseLiveCommand, liveAnnouncement, type LiveEventType, type VoteCounts } from '../src/live/LiveVote';
 import { DEFAULT_SETTINGS, loadSettings, saveSettings, mergeSettings, SETTINGS_KEY } from '../src/save/settings';
 import { SaveManager, type MainSave } from '../src/save/SaveManager';
+import { LiveSession } from '../src/live/LiveSession';
 import type { SnapshotMeta } from '../src/sim/types';
 
 test('parseIrcLine: PRIVMSG с тагове и display-name', () => {
@@ -147,6 +148,20 @@ test('настройки: по подразбиране, сливане, бок�
   delete (globalThis as { localStorage?: unknown }).localStorage;
   assert.deepEqual(loadSettings(), DEFAULT_SETTINGS); // без localStorage — не гърми
   saveSettings(changed);
+});
+
+test('лайв сесия: гласуването става InjectedEvent', () => {
+  let t = 0;
+  const got: { e: unknown; text: string }[] = [];
+  const live = new LiveSession({ channel: '', voteSeconds: 10, now: () => t, onEvent: (e, text) => got.push({ e, text }) });
+  live.start();
+  assert.equal(live.isDemo, true);
+  assert.equal(live.state().statusLabel, 'Демо чат (без Twitch)');
+  live.stop();                       // спира демо таймера, за да не държи Node жив
+  live.vote.feed('Стамен', '!сбор');
+  t += 10_000;
+  live.tick();
+  assert.deepEqual(got, [{ e: { type: 'sabor', by: 'Стамен' }, text: 'Стамен свика сбор на мегдана!' }]);
 });
 
 const meta = (id: string, time: number): SnapshotMeta => ({ id, branchId: 'main', time, kind: 'hour', label: `Ден 1 · ${time}`, realTime: 1000 + time });
