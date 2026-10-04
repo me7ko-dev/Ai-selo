@@ -103,6 +103,11 @@ export class ChronicleView extends ModalView {
     for (const g of groups) { rows.push({ kind: 'day', day: g.day }); g.entries.forEach((e, i) => rows.push({ kind: 'e', e, first: i === 0 })); }
     const w = (r: Row) => r.kind === 'day' ? 2 : 0.5 + Math.ceil((r.e.text.length + 8) / this.charsPerLine);
     this.pages = paginate(rows, w, this.linesPerPage);
+    // заглавие „Ден N“ най-долу на страницата, без записи под него — мести се горе на следващата
+    for (let i = 0; i < this.pages.length - 1; i++) {
+      const p = this.pages[i];
+      while (p.length > 1 && p[p.length - 1].kind === 'day') this.pages[i + 1].unshift(p.pop()!);
+    }
     // ако страница започва с запис, повтори деня горе („продължение“)
     for (let i = 1; i < this.pages.length; i++) {
       const p = this.pages[i];

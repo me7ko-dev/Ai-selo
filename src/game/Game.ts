@@ -279,7 +279,8 @@ export class Game {
   }
 
   private lateUpdate(dt: number): void {
-    if (this.mode !== 'play') { this.ui.tags.update([]); return; }
+    // имената над главите — само в света (не върху летописа, картата, раницата…)
+    if (this.mode !== 'play' || (this.modal !== null && this.modal !== 'dialogue' && this.modal !== 'watch')) { this.ui.tags.update([]); return; }
     const state = this.modal === 'watch' ? this.timeMachine.viewState() : this.sim.state;
     // камерата за разговора — преди етикетите, за да са над главите в същия кадър
     if (this.modal === 'dialogue' && this.dialogue.active) this.dialogueCamera(dt, this.dialogue.active);

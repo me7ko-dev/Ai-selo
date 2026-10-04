@@ -69,3 +69,9 @@
 .bl-ui .tm-live { color: #9be08a; font-weight: 700; animation: bl-pulse 1.2s infinite; white-space: nowrap; }
 .bl-ui .tm-tick-time { font-family: var(--f-title); color: var(--gold); white-space: nowrap; }
 .bl-ui .tm-tick-txt { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Гледане назад: само тънка лента долу (линията + сегашната случка), селото се вижда */
+.bl-ui .tm-back.watching { background: none; pointer-events: none; place-items: end center; }
+.bl-ui .tm-back.watching .tm { pointer-events: auto; width: min(62em, 94vw); margin-bottom: 6.2em; padding-bottom: 0.7em; background: rgba(20, 16, 12, 0.8); }
+.bl-ui .tm-back.watching .tm-side, .bl-ui .tm-back.watching .tm-under, .bl-ui .tm-back.watching .tm-left > .tm-h,
+.bl-ui .tm-back.watching .tm-branches, .bl-ui .tm-back.watching .modal-head .hint { display: none; }
+.bl-ui .tm-back.watching .tm-body { grid-template-columns: 1fr; }

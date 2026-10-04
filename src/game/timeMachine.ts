@@ -13,6 +13,7 @@ export class TimeMachine {
   private entries: ChronicleEntry[] = [];
   private nextEntry = 0;
   private camT = 0;
+  private weather = '';
 
   constructor(private g: Game) {}
 
@@ -51,8 +52,10 @@ export class TimeMachine {
     this.entries = g.timeline.entriesFor(g.timeline.currentBranch).filter((e) => e.time >= time);
     this.nextEntry = 0;
     g.modal = 'watch';
-    g.ui.time.hide();
-        g.villagers.update(0.016, this.viewer.state, true);
+    // прозорецът остава като тънка лента долу (линията + сегашната случка)
+    if (!g.ui.time.isOpen) g.ui.time.show(this.data());
+    g.ui.time.setPlayhead(this.viewer.state.time);
+    g.villagers.update(0.016, this.viewer.state, true);
     g.toast(`Гледаш историята от ${formatDayClock(time)} (×${speed}). Esc — назад в настоящето.`, 'info');
   }
 
@@ -74,6 +77,8 @@ export class TimeMachine {
     const x = Math.sin(this.camT) * 60, z = 42 + Math.cos(this.camT) * 60;
     cam.position.set(x, heightAt(x, z) + 26, z);
     cam.lookAt(0, 3, 42);
+    // времето (дъжд, буря…) — както е било тогава
+    if (v.state.weather !== this.weather) { this.weather = v.state.weather; g.world.setWeather(v.state.weather); }
     g.world.update(dt, t, cam.position);
     g.villagers.update(dt, v.state);
     if (t >= this.endTime) { g.toast('Стигна настоящето.', 'info'); this.stopWatching(); }
@@ -81,6 +86,8 @@ export class TimeMachine {
 
   stopWatching(): void {
     const g = this.g;
+    if (this.viewer && this.weather !== g.sim.state.weather) g.world.setWeather(g.sim.state.weather);
+    this.weather = '';
     this.viewer = null;
     g.ui.time.setPlayhead(null);
     g.villagers.update(0.016, g.sim.state, true);
