@@ -59,6 +59,8 @@ export class Game {
   private menuT = 0;
   private expectUnlock = false;
   private suppressKeysUntil = 0;
+  private frameNo = 0;
+  private closedFrame = -10;
   private snapshotSeq = 0;
   private flagsSeen = { river: false, festival: false, weather: '' };
   private unsubSim: (() => void)[] = [];
@@ -237,6 +239,7 @@ export class Game {
 
   private update(dt: number): void {
     const input = this.engine.input;
+    this.frameNo++;
     this.handleKeys();
     if (this.mode === 'menu') {
       this.sim.advance(dt * GAME_MINUTES_PER_REAL_SECOND * 4);
@@ -276,9 +279,29 @@ export class Game {
     const state = this.modal === 'watch' ? this.timeMachine.viewState() : this.sim.state;
     this.updateTags(state.villagers, state.time);
     if (this.modal === 'watch') return;
+    if (this.modal === 'dialogue' && this.dialogue.active) this.dialogueCamera(dt, this.dialogue.active);
     this.ui.hud.minimap(this.rpg.heroPos.x, this.rpg.heroPos.z, this.rpg.heroYaw, this.mapMarkers(), this.villagerDots());
     this.hudAcc += dt;
     if (this.hudAcc > 0.1) { this.hudAcc = 0; this.updateHud(); }
+  }
+
+  private dlgCam = new THREE.Vector3();
+  private dlgLook = new THREE.Vector3();
+  resetDialogueCamera(): void { this.dlgCam.copy(this.engine.camera.position); this.dlgLook.set(0, 0, 0); }
+  private dialogueCamera(dt: number, id: VillagerId): void {
+    const hero = this.rpg.heroPos;
+    const vp = this.villagers.position(id);
+    const dx = vp.x - hero.x, dz = vp.z - hero.z, d = Math.max(0.5, Math.hypot(dx, dz));
+    const nx = dx / d, nz = dz / d;
+    // през рамото на героя, към лицето на жителя
+    const cx = hero.x - nx * 2.6 + nz * 1.1, cz = hero.z - nz * 2.6 - nx * 1.1;
+    const target = this.tmpV.set(cx, Math.max(heightAt(cx, cz), hero.y) + 2.1, cz);
+    const k = 1 - Math.exp(-dt * 4);
+    if (this.dlgCam.lengthSq() === 0) this.dlgCam.copy(this.engine.camera.position);
+    this.dlgCam.lerp(target, k);
+    this.dlgLook.lerp(new THREE.Vector3(vp.x, vp.y + 1.45, vp.z), this.dlgLook.lengthSq() === 0 ? 1 : k);
+    this.engine.camera.position.copy(this.dlgCam);
+    this.engine.camera.lookAt(this.dlgLook);
   }
 
   private menuCamera(dt: number): void {
@@ -393,7 +416,7 @@ export class Game {
       return;
     }
     // прозорците сами се затварят със своя клавиш/Esc; тук само ги отваряме
-    if (this.modal !== null || performance.now() < this.suppressKeysUntil || this.rpg.dead) return;
+    if (this.modal !== null || this.frameNo - this.closedFrame <= 1 || performance.now() < this.suppressKeysUntil || this.rpg.dead) return;
     if (inp.pressedRaw('Tab')) this.openInventory();
     else if (inp.pressedRaw('KeyM')) this.openMap();
     else if (inp.pressedRaw('KeyJ')) this.openChronicle();
@@ -439,6 +462,7 @@ export class Game {
     this.modal = null;
     if (m === 'dialogue') this.dialogue.close();
     this.suppressKeysUntil = performance.now() + 150;
+    this.closedFrame = this.frameNo;
     this.rpg.setControlsEnabled(true);
     this.engine.input.enabled = true;
     if (this.mode === 'play') {

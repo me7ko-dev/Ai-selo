@@ -782,7 +782,7 @@ export class VillageSim {
   }
   private options(v: VillagerState, sess: TalkSession, seed: number) {
     try {
-      return dialogueOptions({ speaker: this.persona(v.id as VillagerId), partner: this.partnerPlayer(v), turn: sess.turn, lastOptionId: sess.lastOptionId, seed }).slice(0, 3);
+      return dialogueOptions({ speaker: this.persona(v.id as VillagerId), partner: this.partnerPlayer(v), turn: sess.turn, lastOptionId: sess.lastOptionId, seed, situation: this.situation(v.id as VillagerId) }).slice(0, 3);
     } catch { return [{ id: 'bye', text: 'Довиждане.' }]; }
   }
 

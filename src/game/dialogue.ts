@@ -19,6 +19,7 @@ export class DialogueController {
     this.active = id;
     this.gen++;
     g.openModal('dialogue');
+    g.resetDialogueCamera();
     const v = g.sim.villager(id);
     const prof = VILLAGERS[id];
     g.ui.dialogue.open({ id, name: prof.name, job: prof.job, mood: v.mood });
