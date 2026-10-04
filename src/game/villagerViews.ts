@@ -30,9 +30,9 @@ function animFor(v: VillagerState, speed: number): AnimName {
   switch (v.activity) {
     case 'work': return 'work';
     case 'talk': case 'gossip': case 'argue': return 'talk';
-    case 'sit': case 'eat': return 'sit';
+    case 'sit': case 'eat': return 'idle';
     case 'sleep': return 'sleep';
-    case 'mourn': return 'sit';
+    case 'mourn': return 'idle';
     case 'vote': return 'idle';
     default: return 'idle';
   }

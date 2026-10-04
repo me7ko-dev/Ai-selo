@@ -15,7 +15,7 @@ export function wireUi(g: Game): void {
 
   // диалог
   ui.dialogue.onOption = (id) => {
-    const text = ui.dialogue.lastOptionText?.(id) ?? '';
+    const text = g.dialogue.optionText(id);
     void g.dialogue.choose(id, text);
   };
   ui.dialogue.onFreeText = (text) => { void g.dialogue.free(text); };

@@ -8,6 +8,9 @@ export class DialogueController {
   private busy = false;
   private gen = 0;
   private lastSimOptions: DialogueOption[] = [];
+  private shown: DialogueOption[] = [];
+
+  optionText(id: string): string { return this.shown.find((o) => o.id === id)?.text ?? ''; }
 
   constructor(private g: Game) {}
 
@@ -47,9 +50,11 @@ export class DialogueController {
     if (!this.active) return;
     g.ui.dialogue.setThinking(false);
     g.ui.dialogue.say(reply.say, { ai: reply.ai, mood: reply.mood });
-    g.ui.dialogue.setOptions(this.options(reply.options));
+    this.setOpts(this.options(reply.options));
     if (reply.end) setTimeout(() => { if (this.active && g.modal === 'dialogue') g.closeModal(); }, 2200);
   }
+
+  private setOpts(o: DialogueOption[]): void { this.shown = o; this.g.ui.dialogue.setOptions(o); }
 
   async choose(optionId: string, text: string): Promise<void> {
     const g = this.g;
@@ -59,7 +64,7 @@ export class DialogueController {
       const r = g.rpg.questChoose(id, optionId);
       if (r) {
         g.ui.dialogue.say(r.say, { ai: false });
-        g.ui.dialogue.setOptions(r.options ?? this.options(this.lastSimOptions));
+        this.setOpts(r.options ?? this.options(this.lastSimOptions));
         g.refreshInventory();
         if (r.end) setTimeout(() => { if (this.active === id && g.modal === 'dialogue') g.closeModal(); }, 2400);
         return;
