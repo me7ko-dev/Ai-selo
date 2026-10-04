@@ -37,6 +37,9 @@ export function relationWords(name: string, r?: Relation, female = false): strin
   return `${name}: ${aff}; ${tr} (симпатия ${r.affinity}, доверие ${r.trust}).`;
 }
 
+/** „с Иван“, но „със странника“, „със Стоян“. */
+function withS(name: string): string { return /^[сзСЗ]/.test(name) ? `със ${name}` : `с ${name}`; }
+
 function genderNote(p: Persona): string {
   return isFemale(p) ? 'Ти си жена — говори за себе си в женски род.' : 'Ти си мъж — говори за себе си в мъжки род.';
 }
@@ -57,7 +60,7 @@ export function systemPrompt(p: Persona, partner: Partner | null, extra = ''): s
     `Как говориш: ${p.speech || prof?.speech || ''}`,
     genderNote(p),
     WORLD,
-    partner ? `Говориш с ${partner.isPlayer ? 'странника Стоян (дошъл отдалеч, с кафяво наметало и сабя)' : nameOf(partner.id, partner.name)}. ${relationWords(partner.isPlayer ? 'Странникът' : nameOf(partner.id, partner.name), partner.relation, !partner.isPlayer && isFemale(partner))}` : '',
+    partner ? `Говориш ${withS(partner.isPlayer ? 'странника Стоян (дошъл отдалеч, с кафяво наметало и сабя)' : nameOf(partner.id, partner.name))}. ${relationWords(partner.isPlayer ? 'Странникът' : nameOf(partner.id, partner.name), partner.relation, !partner.isPlayer && isFemale(partner))}` : '',
     p.beliefs?.length ? `Какво мислиш: ${p.beliefs.slice(0, 5).join(' ')}` : '',
     `Настроение: ${p.mood || 'спокойно'}.`,
     partner ? secretNote(p, trust) : '',
