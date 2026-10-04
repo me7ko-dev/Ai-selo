@@ -203,9 +203,11 @@ export class OllamaBrain implements Brain {
       const say = cleanLine(o.say);
       if (!say) return null;
       const r: BrainReply = { say, ai: true };
+      // задачите се дават по правилата на сценария (за да е предвидима играта); ИИ може само да приключи разговора
+      const scriptedAction = this.fallback.talkNow(req).action;
       const action = typeof o.action === 'string' ? o.action : 'none';
-      if (['end', 'give_quest', 'walk_away'].includes(action)) r.action = action;
-      if (req.optionId === 'bye') r.action = 'end';
+      if (action === 'end' || action === 'walk_away') r.action = action;
+      if (scriptedAction === 'give_quest' || scriptedAction === 'end') r.action = scriptedAction;
       const mood = cleanMood(o.mood);
       if (mood) r.mood = mood;
       const rem = cleanLine(o.remember, { maxSentences: 2, maxLen: 160 });

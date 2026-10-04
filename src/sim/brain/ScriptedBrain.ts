@@ -9,13 +9,13 @@ import type {
 } from './Brain';
 import {
   cap, ensurePeriod, eligible, fill, hasFresh, isFemale, isVillagerId, join, lcFirst, makeCtx, nameOf, parseSituation,
-  pickFresh, pickMemory, relLevel, sentences, tidy, weaveMemory, type Ctx, type RelLevel,
+  pickFresh, pickMemory, relLevel, sentences, shortOf, tidy, weaveMemory, type Ctx, type RelLevel,
 } from './context';
 import { detectIntent, type Intent } from './intent';
 import { GENERIC, TALK, WEATHER_LINES, type Bank, type TalkCat } from './lines';
 import { CHAT_EXTRA, EXTRA } from './lines-extra';
 import {
-  ABOUT, ABOUT_KALIN_FORGET, ABOUT_OPEN, CHAT, FACTS, JOB_LINES, PAIR_CHAT, PLANS, REACT, REACT_GENERIC, VOICE_PREFIX,
+  ABOUT, ABOUT_KALIN_FORGET, ABOUT_OPEN, CHAT, CHAT_PREFIX, FACTS, JOB_LINES, PAIR_CHAT, PLANS, REACT, REACT_GENERIC, VOICE_PREFIX,
   VOTE_LINES, type ChatDialog, type EventKind,
 } from './lines-world';
 
@@ -93,10 +93,10 @@ function closeBit(c: Ctx): string | undefined {
   const t = fill(c.rng.pick(l), c);
   return c.used.includes(t) ? undefined : t;
 }
-function voice(c: Ctx | { vid?: VillagerId }, rng: Rng, text: string, p = 0.35): string {
+function voice(c: Ctx | { vid?: VillagerId }, rng: Rng, text: string, p = 0.35, table: Record<VillagerId, string[]> = VOICE_PREFIX): string {
   const vid = c.vid;
   if (!vid || !rng.chance(p)) return text;
-  const pre = rng.pick(VOICE_PREFIX[vid]);
+  const pre = rng.pick(table[vid]);
   const head = pre.replace(/[,—….\s]+$/, '').toLowerCase();
   if (text.toLowerCase().startsWith(head)) return text;
   if (pre.endsWith('.') || pre.endsWith('…')) return `${pre} ${text}`;
@@ -340,7 +340,7 @@ export class ScriptedBrain implements Brain, SyncBrain {
       const sub: Ctx = { ...c, partnerFemale: tProf.gender === 'f' };
       const open = fill(c.rng.pick(ABOUT_OPEN[lvl]), sub, { T: tProf.name.split(' ').length > 1 ? tProf.name : tProf.short });
       const fact = c.rng.pick(FACTS[target]);
-      core = c.vid === 'ivan' ? `${tProf.short}. Хм.` : join([cap(open), fact], 2);
+      core = c.vid === 'ivan' ? `${tProf.short}. Хм.` : `${cap(open)} ${fact}`;
     }
     // клюка/спомен за този човек
     const m = pickMemory(c, { about: target, avoidPlayer: c.partner.isPlayer });
@@ -358,6 +358,12 @@ export class ScriptedBrain implements Brain, SyncBrain {
 
   // ——————————————— Двама жители си говорят ———————————————
   chatNow(req: ChatRequest): ChatReply {
+    try { return this.chatImpl(req); } catch {
+      return { lines: [{ who: req.a.id, text: 'Как си?' }, { who: req.b.id, text: 'Горе-долу. Ти?' }], summary: `${cap(nameOf(req.a.id, req.a.name))} и ${nameOf(req.b.id, req.b.name)} си размениха по някоя дума.`, affinityDelta: 0, ai: false };
+    }
+  }
+
+  private chatImpl(req: ChatRequest): ChatReply {
     const rng = new Rng((req.seed ^ 0x2c1b3c6d) >>> 0);
     const sit = parseSituation(req.situation);
     const a = req.a, b = req.b;
@@ -398,7 +404,9 @@ export class ScriptedBrain implements Brain, SyncBrain {
     if (relLevel(req.relationAB) === 'hostile' && (t === 'greeting' || t === 'weather' || t === 'work') && rng.chance(0.6)) t = 'cold';
     const pool = (CHATS[t] ?? CHATS.greeting).filter((d: ChatDialog) => !d.cond || ctxOk(d.cond, ctxA));
     const dialog = rng.pick(pool.length ? pool : CHATS.greeting);
-    const rumorText = ensurePeriod((req.rumor && req.rumor.trim()) || rng.pick(STOCK_RUMORS));
+    const shortA = shortOf(a.id, a.name), shortB = shortOf(b.id, b.name);
+    const stock = STOCK_RUMORS.filter((r) => !r.includes(shortA) && !r.includes(shortB));
+    const rumorText = ensurePeriod((req.rumor && req.rumor.trim()) || rng.pick(stock.length ? stock : STOCK_RUMORS));
     const opA = this.opinionOfPlayer(ctxA, req.memoriesA, rng);
     const opB = this.opinionOfPlayer(ctxB, req.memoriesB, rng);
     const extra = (sc: Ctx): Record<string, string> => ({
@@ -414,8 +422,8 @@ export class ScriptedBrain implements Brain, SyncBrain {
       const sc = role === 'a' ? ctxA : ctxB;
       let text = fill(tpl, sc, extra(sc));
       const plain = !/\{(job|vote|opinion|rumor)/.test(tpl);
-      if (plain && !voiced.has(role) && /\.$/.test(text) && text.split(/\s+/).length >= 5) {
-        const v = voice(sc, rng, text, 0.35);
+      if (plain && role === 'a' && !voiced.has(role) && /\.$/.test(text) && text.split(/\s+/).length >= 4) {
+        const v = voice(sc, rng, text, 0.3, CHAT_PREFIX);
         if (v !== text) voiced.add(role);
         text = v;
       }
@@ -456,12 +464,16 @@ export class ScriptedBrain implements Brain, SyncBrain {
     let out = fill(text, c);
     if (m && rng.chance(0.6)) out = `${out} ${rng.pick(['Ще ти кажа само това —', 'Знаеш ли —'])} ${lcFirst(ensurePeriod(m.text.trim()))}`;
     if (c.vid === 'ivan') out = out.split(/(?<=[.!?])\s/)[0];
-    else out = voice(c, rng, out, 0.3);
+    else out = voice(c, rng, out, 0.3, CHAT_PREFIX);
     return { text: tidy(out), score };
   }
 
   // ——————————————— Реакция на случка ———————————————
   reactNow(req: ReactRequest): BrainReply {
+    try { return this.reactImpl(req); } catch { return { say: 'Ох, какво стана?!', ai: false }; }
+  }
+
+  private reactImpl(req: ReactRequest): BrainReply {
     const c = makeCtx(req.speaker, { id: 'all', name: 'селото', isPlayer: false }, req.situation, req.memories, [], req.seed);
     const kind = classifyEvent(req.event);
     let text: string;
@@ -508,6 +520,10 @@ export class ScriptedBrain implements Brain, SyncBrain {
 
   // ——————————————— План за деня ———————————————
   planNow(req: PlanRequest): PlanReply {
+    try { return this.planImpl(req); } catch { return { plan: 'Ще си гледам работата.', ai: false }; }
+  }
+
+  private planImpl(req: PlanRequest): PlanReply {
     const c = makeCtx(req.speaker, { id: 'all', name: 'селото', isPlayer: false }, req.situation, req.memories, [], (req.seed ^ (parseSituation(req.situation).day * 7919)) >>> 0);
     const pool = c.vid ? eligible(PLANS[c.vid], c) : ['Ще си гледам работата.', 'Ще мина през мегдана да чуя какво ново.'];
     let plan = fill(c.rng.pick(pool.length ? pool : ['Ще си гледам работата.']), c);
@@ -528,6 +544,10 @@ export class ScriptedBrain implements Brain, SyncBrain {
 
   // ——————————————— Вечерен размисъл ———————————————
   reflectNow(req: ReflectRequest): ReflectReply {
+    try { return this.reflectImpl(req); } catch { return { beliefs: (req.beliefs ?? []).slice(0, 5), ai: false }; }
+  }
+
+  private reflectImpl(req: ReflectRequest): ReflectReply {
     const rng = new Rng((req.seed ^ 0x7f4a7c15) >>> 0);
     const female = isFemale(req.speaker);
     const self = req.speaker.id;
