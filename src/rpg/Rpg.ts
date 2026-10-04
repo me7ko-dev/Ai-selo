@@ -379,6 +379,11 @@ export class Rpg {
       this.bus.emit('pickup', { item: id, count: got, name: d.name, icon: d.icon });
       this.notify(id === 'coin' ? `+${got} гроша` : `+ ${d.name}${got > 1 ? ` ×${got}` : ''}`, 'item');
       this.sfx(id === 'coin' ? 'coin' : 'pickup');
+      // нова отвара/храна → сама отива в първата празна клетка на бързата лента (за боя с Ламята)
+      if (d.kind === 'consumable' && !this.inv.hotbar.includes(id)) {
+        const k = this.inv.hotbar.indexOf(null);
+        if (k >= 0) { this.inv.hotbar[k] = id; this.notify(`${d.name} — на клавиш ${k + 1}`, 'info'); }
+      }
       this.quests.onItem(id);
     }
     if (left > 0) {
