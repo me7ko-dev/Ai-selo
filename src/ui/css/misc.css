@@ -7,8 +7,9 @@
 .bl-ui .death-btn { font-size: 1.15em; padding: 0.6em 2em; opacity: 0; animation: bl-pop 0.5s ease-out 1.2s forwards; }
 
 /* голямо съобщение */
-.bl-ui .banner { position: absolute; left: 50%; top: 26%; transform: translateX(-50%); pointer-events: none; }
-.bl-ui .banner-box { min-width: 30em; max-width: 80vw; text-align: center; background: radial-gradient(closest-side, rgba(30, 22, 14, 0.92), rgba(20, 16, 12, 0.8) 60%, rgba(20, 16, 12, 0)); padding: 0 4em; }
+/* width: max-content — иначе left:50% оставя на заглавието само половината екран и то се пречупва на два реда */
+.bl-ui .banner { position: absolute; left: 50%; top: 26%; transform: translateX(-50%); pointer-events: none; width: max-content; max-width: 96vw; }
+.bl-ui .banner-box { min-width: min(30em, 90vw); max-width: 90vw; text-align: center; background: radial-gradient(closest-side, rgba(30, 22, 14, 0.92), rgba(20, 16, 12, 0.8) 60%, rgba(20, 16, 12, 0)); padding: 0 4em; }
 .bl-ui .banner .orn-strip { height: 0.8em; margin: 0 3em; }
 .bl-ui .banner-in { padding: 0.8em 0 0.9em; }
 .bl-ui .banner-t { display: flex; align-items: center; justify-content: center; gap: 0.5em; font-family: var(--f-title); font-size: 2.4em; letter-spacing: 0.05em; color: var(--gold); text-shadow: 0 0 0.6em rgba(232, 194, 122, 0.45), 0 0.06em 0 #2a1a0e; }

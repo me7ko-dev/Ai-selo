@@ -1,6 +1,7 @@
 // Имена над главите на жителите + балончета с реплики. Елементите се преизползват (без нов DOM всеки кадър).
 import { h, setText } from './dom';
 import { sparkle } from './icons';
+import { rectsOverlap, type Box } from './logic';
 import './css/nametags.css';
 
 export interface NameTag {
@@ -24,10 +25,28 @@ export class NameTags {
   bubbleDist = 30;
   private tags = new Map<string, TagEl>();
   private frame = 0;
+  private avoidFn: (() => HTMLElement[]) | null = null;
+  private avoid: Box[] = [];
+  private avoidAt = -999; private avoidW = 0; private avoidH = 0;
 
   constructor(root: HTMLElement) {
     this.el = h('div.nametags');
     root.append(this.el);
+  }
+
+  /** Панели, които етикетите не бива да покриват (ъглите на HUD, прозорецът с разговора). Проверяват се на ~15 кадъра. */
+  setAvoid(fn: () => HTMLElement[]): void { this.avoidFn = fn; this.avoidAt = -999; }
+
+  private refreshAvoid(): void {
+    const W = window.innerWidth, H = window.innerHeight;
+    if (this.frame - this.avoidAt < 15 && W === this.avoidW && H === this.avoidH) return;
+    this.avoidAt = this.frame; this.avoidW = W; this.avoidH = H;
+    this.avoid = [];
+    for (const el of this.avoidFn?.() ?? []) {
+      const r = el.getBoundingClientRect();
+      if (r.width < 1 || r.height < 1) continue; // скрит
+      this.avoid.push({ l: r.left - 6, t: r.top - 6, r: r.right + 6, b: r.bottom + 6 });
+    }
   }
 
   show(): void { this.el.classList.remove('hidden'); this.isOpen = true; }
@@ -59,7 +78,9 @@ export class NameTags {
     }
     // разреждане: по-близките остават на място, по-далечните, които се застъпват с тях, се качват нагоре
     shown.sort((a, b) => a.t.dist - b.t.dist);
-    const placed: { l: number; r: number; top: number; bot: number }[] = [];
+    if (shown.length) this.refreshAvoid();
+    // панелите на HUD са „заети места“ — етикетът се отмества встрани/нагоре, а ако не може — се скрива
+    const placed: { l: number; r: number; top: number; bot: number }[] = this.avoid.map((a) => ({ l: a.l, r: a.r, top: a.t, bot: a.b }));
     for (const it of shown) {
       const { t, e, scale } = it;
       const lw = e.label.offsetWidth, lh = e.label.offsetHeight;
@@ -69,7 +90,9 @@ export class NameTags {
       const stack = (x: number, w: number, hgt: number): Fit => {
         let y = t.y;
         for (let k = 0; k < 8; k++) { const hit = hitAt(x, y, w, hgt); if (!hit) break; y = hit.top - 1; }
-        return { x, y, w, hgt, cost: Math.abs(x - t.x) * 0.8 + (t.y - y) };
+        // вън от екрана (напр. отместен вдясно от мини-картата) — не става
+        const off = x - w / 2 < 2 || x + w / 2 > window.innerWidth - 2 || y - hgt < 2;
+        return { x, y, w, hgt, cost: off ? 1e6 : Math.abs(x - t.x) * 0.8 + (t.y - y) };
       };
       const fit = (withBubble: boolean): Fit => {
         const bw = withBubble ? e.bubble.offsetWidth : 0, bh = withBubble ? e.bubble.offsetHeight + 11 : 0;
@@ -88,8 +111,9 @@ export class NameTags {
       if (withBubble && f.cost > 60) { f = fit(false); withBubble = false; }
       e.bubble.classList.toggle('in', withBubble);
       // етикет, изместен много далеч от човека, само обърква — скрий го
-      const lost = f.cost > 110;
       const { x, y, w, hgt } = f;
+      const box: Box = { l: x - w / 2, t: y - hgt, r: x + w / 2, b: y };
+      const lost = f.cost > 110 || this.avoid.some((a) => rectsOverlap(box, a));
       if (!lost) placed.push({ l: x - w / 2, r: x + w / 2, top: y - hgt, bot: y });
       const op = lost ? 0 : t.dist > this.maxDist - 8 ? (this.maxDist - t.dist) / 8 : 1;
       e.el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) translate(-50%, -100%) scale(${scale.toFixed(3)})`;

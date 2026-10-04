@@ -57,6 +57,10 @@ export class DialogueView {
         close,
       ));
     root.append(this.el);
+    // височината на прозореца → --dlg-h на корена: известията се качват точно над него (виж dialogue.css)
+    if (typeof ResizeObserver !== 'undefined') {
+      new ResizeObserver(() => { const hh = this.el.offsetHeight; if (hh) root.style.setProperty('--dlg-h', `${hh}px`); }).observe(this.el);
+    }
   }
 
   open(v: DialogueVillager): void {

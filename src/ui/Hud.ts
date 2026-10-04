@@ -55,6 +55,9 @@ export class Hud {
   private vignette: HTMLElement; private hitEl: HTMLElement; private pausedEl: HTMLElement;
   private mm: HTMLCanvasElement; private mmCtx: CanvasRenderingContext2D; private mmBase: HTMLCanvasElement | HTMLImageElement | null = null;
   private mmSize = 0; private lastPhase: string = '';
+  /** Колоната долу в средата (подсказка → подкана → бърза лента). Тук HintView слага табелката си. */
+  readonly bottomEl: HTMLElement;
+  private corners: HTMLElement[];
   /** Радиус на мини-картата в метри. */
   minimapRadius = 60;
 
@@ -102,12 +105,17 @@ export class Hud {
       h('div.hud-paused-t', { text: 'Кликни, за да играеш' }),
       h('div.hint', { html: '<kbd>Esc</kbd> меню · <kbd>Tab</kbd> раница · <kbd>M</kbd> карта · <kbd>J</kbd> летопис · <kbd>T</kbd> машина на времето' })));
 
-    this.el.append(this.vignette, hero, right, this.bossEl, h('div.hud-bottom', null, this.promptEl, hot), clock, this.toasts, this.hitEl, this.pausedEl);
+    this.bottomEl = h('div.hud-bottom', null, this.promptEl, hot);
+    this.corners = [hero, right, clock, this.bottomEl, this.bossEl];
+    this.el.append(this.vignette, hero, right, this.bossEl, this.bottomEl, clock, this.toasts, this.hitEl, this.pausedEl);
     root.append(this.el);
   }
 
   show(): void { this.el.classList.remove('hidden'); this.isOpen = true; }
   hide(): void { this.el.classList.add('hidden'); this.isOpen = false; }
+
+  /** Панелите на HUD (герой, мини-карта и задачи, часовник, бърза лента, бос) — етикетите над главите ги заобикалят. */
+  cornerEls(): HTMLElement[] { return this.corners; }
 
   /** ~10×/с. Пипа DOM само при промяна. */
   update(d: HudData): void {

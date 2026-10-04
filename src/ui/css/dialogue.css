@@ -34,3 +34,14 @@
 .bl-ui .dl-keys { text-align: right; font-size: 0.72em; opacity: 0.8; }
 .bl-ui .dl-close { position: absolute; top: 0.6em; right: 0.6em; }
 .bl-ui .dialogue .orn-c { opacity: 0.6; }
+
+/* Докато трае разговорът: часовникът, бързата лента и чатът се скриват (на тесен екран прозорецът ги застъпва),
+   известията се качват над прозореца, най-много 3 наведнъж. На нисък екран се скриват и задачите. */
+.bl-ui:has(> .dialogue:not(.hidden)) .hud-clock,
+.bl-ui:has(> .dialogue:not(.hidden)) .hud-bottom,
+.bl-ui:has(> .dialogue:not(.hidden)) .lv-chat { visibility: hidden; }
+.bl-ui:has(> .dialogue:not(.hidden)) .hud-toasts { bottom: calc(var(--dlg-h, 17em) + 2em); }
+.bl-ui:has(> .dialogue:not(.hidden)) .hud-toasts .toast:nth-last-child(n+4) { display: none; }
+@media (max-height: 640px) {
+  .bl-ui:has(> .dialogue:not(.hidden)) .hud-quests { display: none; }
+}

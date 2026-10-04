@@ -155,5 +155,22 @@ export function showExtra(ui: Ui, key: string, sceneBg: (k: 'day' | 'dusk' | 'ni
     case 'loading': ui.loading.show('Селото се събужда…', 0.62); break;
     case 'confirm': showHud(); void ui.confirm.ask({ title: 'Към началото?', text: 'Играта е запазена. Ще се върнеш на началния екран.', ok: 'Към началото' }); break;
     case 'pause': showHud(); ui.pause.show(); ui.hud.setPaused(true); break;
+    case 'intro': {
+      const page = Number(location.hash.match(/page=(\d)/)?.[1] ?? 1) - 1;
+      ui.intro.show(() => { ui.hud.toast('Въведението свърши — към селото!', 'info'); showHud(); });
+      if (page > 0) ui.intro.goTo(page);
+      break;
+    }
+    case 'hint': {
+      showHud();
+      ui.hud.prompt('Говори с баба Гена');
+      const steps = ['[W] [A] [S] [D] — вървиш · мишката — оглеждаш се (кликни в играта)', '[Shift] — бягаш · [Space] — скачаш', 'Иди при *баба Гена* в селото — следвай златния ◆ на картата горе вдясно', '[Tab] раница · [M] карта · [J] летопис · [T] машина на времето'];
+      const i = Number(location.hash.match(/step=(\d)/)?.[1] ?? 1) - 1;
+      ui.hint.show(steps[i] ?? steps[0], `Съвет ${i + 1} от 6`);
+      ui.hud.toast('Нова задача: „Три стръка росен“', 'quest', 600000);
+      ui.hud.toast('Здрачава се. В Тъмната гора излизат таласъми.', 'warn', 600000);
+      if (location.hash.includes('ok')) setTimeout(() => ui.hint.done(60000), 600);
+      break;
+    }
   }
 }
