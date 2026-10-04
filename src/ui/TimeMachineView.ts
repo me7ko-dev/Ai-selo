@@ -293,8 +293,18 @@ export class TimeMachineView extends ModalView {
     const yes = h('button.btn.gold', { text: 'Да, зареди' }), no = h('button.btn', { text: 'Откажи' });
     yes.addEventListener('click', () => { this.confirmEl.classList.add('hidden'); this.onLoadFrom(t, br); });
     no.addEventListener('click', () => this.confirmEl.classList.add('hidden'));
+    // светът се зарежда от най-близкия запис преди избрания момент (както в Timeline.nearestSnapshot) — кажи от кога
+    let snap = -1;
+    for (let id: string | null = br, until = Infinity; id;) {
+      const b = this.branchById(id);
+      for (const s of this.d.snapshots) if (s.branchId === id && s.time <= until && s.time <= t && s.time > snap) snap = s.time;
+      if (!b || !b.parentId) break;
+      until = b.forkTime; id = b.parentId;
+    }
+    const from = snap >= 0 && t - snap > 30 ? ` Най-близкият запис на света е от ${dayTimeLabel(snap)} — оттам ще тръгне новият път.` : '';
     this.confirmEl.append(
       h('div.tm-confirm-t', { text: `Да се върнем ли към ${dayTimeLabel(t)}?` }),
+      ...(from ? [h('p', { text: from.trim() })] : []),
       h('p', { text: 'Светът ще продължи оттам по нов път — ще се създаде нов клон на историята. Сегашната история не се трие: остава запазена и можеш да се върнеш към нея по всяко време.' }),
       h('div.tm-row', null, yes, no));
     this.confirmEl.classList.remove('hidden');

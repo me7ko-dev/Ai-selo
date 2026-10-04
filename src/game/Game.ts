@@ -203,6 +203,7 @@ export class Game {
     // превъртяно през полунощ — запис за новия ден (машината на времето да има откъде да гледа)
     if (dayOf(this.sim.state.time) > dayBefore) void this.makeSnapshot('day');
     this.villagers.update(0.016, this.sim.state, true);
+    this.updateHud(); // часовникът — след превъртането
     if (cards.length) {
       this.openAway(cards);
       // с ИИ: трите най-важни случки се преразказват (картичките се показват веднага, после се подменят)
@@ -233,6 +234,7 @@ export class Game {
     this.rpg.setControlsEnabled(true);
     this.villagers.update(0.016, this.sim.state, true);
     this.hudAcc = 1;
+    this.updateHud(); // веднага — иначе зад „Докато те нямаше…“ се виждат празни ленти и „Ниво 1“
     this.audio.setMusic('village');
     if (lock) this.lockPointer();
   }
@@ -448,7 +450,7 @@ export class Game {
     return this.sim.state.villagers.filter((v) => this.villagers.isVisible(v.id)).map((v) => ({ x: v.pos.x, z: v.pos.z }));
   }
 
-  private updateHud(timeShown?: number): void {
+  updateHud(timeShown?: number): void {
     const h = this.rpg.hud();
     const t = timeShown ?? this.sim.state.time;
     this.ui.hud.update({
@@ -512,6 +514,9 @@ export class Game {
     canvas.addEventListener('click', () => { if (this.mode === 'play' && this.modal === null && !this.rpg.dead) this.lockPointer(); });
     document.addEventListener('pointerlockchange', () => {
       const locked = document.pointerLockElement === canvas;
+      // заявката за мишката е закъсняла, а междувременно се е отворил прозорец („Докато те нямаше…“, смърт…) — пусни я,
+      // иначе курсорът е скрит и бутоните не могат да се натиснат
+      if (locked && (this.mode !== 'play' || this.modal !== null || this.rpg.dead)) { this.unlockPointer(); return; }
       this.ui.hud.setPaused(!locked && this.mode === 'play' && this.modal === null && !this.rpg.dead);
       if (!locked && !this.expectUnlock && this.mode === 'play' && this.modal === null && !this.rpg.dead && performance.now() >= this.suppressKeysUntil) {
         // Esc освободи мишката → менюто
