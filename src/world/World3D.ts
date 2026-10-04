@@ -6,6 +6,7 @@ import type { WorldQuery } from '../core/world-query';
 import type { Weather } from '../sim/types';
 import { heightAt, riverInfo, riverWaterHeight, terrainHeight, POND_WATER_HEIGHT } from './height';
 import { getPlan, type WorldPlan, GLADE, POND, SWAMP } from './plan';
+import { CameraBlockers } from './cameraBlock';
 import { Batch, vertexColorMaterial } from './geom';
 import { buildHouse, buildProp } from './buildings';
 import { buildFences, buildRuins, buildSigns, buildSignPosts } from './extras';
@@ -245,6 +246,8 @@ export class World3D implements WorldQuery {
   heightAt(x: number, z: number): number { return heightAt(x, z); }
   collide(x: number, z: number, radius: number): { x: number; z: number } { return this.plan.colliders.collide(x, z, radius); }
   lockedAt(x: number, z: number): string | null { return this.plan.colliders.lockedAt(x, z); }
+  private camBlock: CameraBlockers | null = null;
+  cameraHit(x: number, y: number, z: number): boolean { return (this.camBlock ??= new CameraBlockers(this.plan)).hit(x, y, z); }
   waterAt(x: number, z: number): boolean {
     if (Math.hypot(x - POND.x, z - POND.z) < 16 && terrainHeight(x, z) < POND_WATER_HEIGHT) return true;
     if (this.riverOn) {
