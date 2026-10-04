@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="bg">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Светът — проба</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #14100c; font-family: Philosopher, Georgia, serif; }
+    #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+    #panel { position: fixed; top: 10px; left: 10px; width: 250px; padding: 10px 12px; background: rgba(20,16,12,0.72); border: 1px solid rgba(232,194,122,0.35); border-radius: 10px; color: #f3ead7; font-size: 13px; }
+    #panel label { display: flex; justify-content: space-between; align-items: center; margin: 5px 0; gap: 8px; }
+    #panel select, #panel input[type=range] { flex: 1; }
+    #panel .row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+    #panel button { background: rgba(232,194,122,0.15); color: #f3ead7; border: 1px solid rgba(232,194,122,0.35); border-radius: 6px; padding: 3px 6px; cursor: pointer; font: inherit; font-size: 12px; }
+    #stats { color: #e8c27a; margin-top: 6px; font-size: 12px; }
+    #map { position: fixed; right: 10px; bottom: 10px; width: 320px; height: 320px; border-radius: 10px; border: 1px solid rgba(232,194,122,0.35); display: none; }
+    #hint { color: #c9bfa8; font-size: 11px; margin-top: 6px; }
+  </style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div id="panel">
+    <b>Светът — проба</b>
+    <label>Час <input id="time" type="range" min="0" max="1439" value="600" /> <span id="clock">10:00</span></label>
+    <label>Време <select id="weather"><option value="clear">ясно</option><option value="cloudy">облачно</option><option value="rain">дъжд</option><option value="storm">буря</option><option value="fog">мъгла</option></select></label>
+    <label>Качество <select id="quality"><option value="low">ниско</option><option value="medium">средно</option><option value="high" selected>високо</option></select></label>
+    <label><span>Реката тече</span> <input id="river" type="checkbox" /></label>
+    <label><span>Сбор (празник)</span> <input id="festival" type="checkbox" /></label>
+    <label><span>Часът тече</span> <input id="run" type="checkbox" /></label>
+    <label><span>Картата</span> <input id="showmap" type="checkbox" /></label>
+    <div class="row" id="views"></div>
+    <div id="stats"></div>
+    <div id="hint">WASD — летене, мишка (влачене) — поглед, Shift — бързо, Q/E — долу/горе</div>
+  </div>
+  <canvas id="map" width="1024" height="1024"></canvas>
+  <script type="module" src="../src/dev/world.ts"></script>
+</body>
+</html>
