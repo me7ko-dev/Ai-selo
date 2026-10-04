@@ -164,7 +164,7 @@ export class SkySystem {
     this.u.uMoonVis.value = sstep(-0.05, 0.1, this.moonDir.y) * (1 - dk * 0.9) * (0.3 + nightW * 0.7);
 
     // мъглата е с цвета на хоризонта
-    this.fog.color.copy(hor).lerp(mid, 0.15);
+    this.fog.color.copy(hor).lerp(mid, 0.3);
     const lf = this.localFog;
     this.fog.near = w.fogNear * (1 - lf * 0.9);
     this.fog.far = w.fogFar * (1 - lf * 0.75);

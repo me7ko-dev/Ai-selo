@@ -409,11 +409,13 @@ function buildPlan(): WorldPlan {
   const rocks: TreeInst[] = [];
   {
     const dx = PEAK.x - PLATEAU.x, dz = PEAK.z - PLATEAU.z, l = Math.hypot(dx, dz), ux = dx / l, uz = dz / l;
-    const cx = PLATEAU.x + ux * (ARENA_RADIUS + 4), cz = PLATEAU.z + uz * (ARENA_RADIUS + 4);
-    props.push({ type: 'cave', x: cx, z: cz, rot: Math.atan2(-ux, -uz), s: 1 });
-    col.circle(cx + ux * 4, cz + uz * 4, 6.5);
-    col.circle(cx - uz * 7 + ux * 1, cz + ux * 7 + uz * 1, 3.5);
-    col.circle(cx + uz * 7 + ux * 1, cz - ux * 7 + uz * 1, 3.5);
+    const cx = PLATEAU.x + ux * (ARENA_RADIUS + 1.5), cz = PLATEAU.z + uz * (ARENA_RADIUS + 1.5);
+    // пещерата стои на склона: основата е на височината на точката пред входа (откъм арената)
+    const caveY = Math.min(heightAt(cx, cz), heightAt(cx - ux * 1, cz - uz * 1)) - 0.3;
+    props.push({ type: 'cave', x: cx, z: cz, rot: Math.atan2(-ux, -uz), s: 1.45, y: caveY });
+    col.circle(cx + ux * 7.5, cz + uz * 7.5, 6);
+    col.circle(cx - uz * 9.5 + ux * 1.5, cz + ux * 9.5 + uz * 1.5, 3.8);
+    col.circle(cx + uz * 9.5 + ux * 1.5, cz - ux * 9.5 + uz * 1.5, 3.8);
     for (let k = 0; k < 18; k++) {
       const a = rng.next() * 6.28, rr = 6 + rng.next() * 18;
       props.push({ type: rng.next() < 0.6 ? 'bones' : 'skull', x: PLATEAU.x + Math.sin(a) * rr, z: PLATEAU.z + Math.cos(a) * rr, rot: rng.next() * 6.28, s: 0.7 + rng.next() * 0.6 });
@@ -487,7 +489,7 @@ function buildPlan(): WorldPlan {
     }
     if (nearPeak < 95 && Math.hypot(x - PLATEAU.x, z - PLATEAU.z) > 36) {
       if (r0 < 0.05 && h < 48 && clearOf(x, z, 3)) { const s = 0.8 + r1 * 0.6; pines.push({ x, z, s, rot: r2 * 6.28, tint: r1 }); col.circle(x, z, 0.3 * s + 0.08); continue; }
-      if (r0 > 0.93 && clearOf(x, z, 2.5)) { const s = 0.8 + r1 * 2.4; rocks.push({ x, z, s, rot: r2 * 6.28, tint: r1 }); col.circle(x, z, s * 0.75); continue; }
+      if (r0 > (h > 34 ? 0.8 : 0.93) && clearOf(x, z, 2.5)) { const s = 0.8 + r1 * (h > 34 ? 3.2 : 2.4); rocks.push({ x, z, s, rot: r2 * 6.28, tint: r1 }); col.circle(x, z, s * 0.75); continue; }
     }
     // поляните: широколистни дървета и храсти на групи, цветя
     const grove = fbm(x * 0.025 + 11, z * 0.025 - 5, 3);
@@ -535,7 +537,6 @@ function buildPlan(): WorldPlan {
     swampPools.push({ x, z, r, y: Math.min(lo, terrainHeight(x, z)) + 0.35 });
   }
 
-  void heightAt;
   return { houses, props, fences: cutFences, pines, oaks, bushes, rocks, deadTrees, ferns, mushrooms, logs, flowers, swampPools, signs, colliders: col, footprints, ruins };
 }
 

@@ -176,7 +176,7 @@ export class World3D implements WorldQuery {
 
     // прозорците светят нощем, огнището гори винаги
     const lit = Math.min(1, night + this.sky.twilight * 0.6 + this.wp.dark * 0.4);
-    this.windowMat.color.setRGB(0.16 + lit * 0.95, 0.15 + lit * 0.72, 0.15 + lit * 0.42);
+    this.windowMat.color.setRGB(0.03 + lit * 1.0, 0.03 + lit * 0.75, 0.035 + lit * 0.45);
     const flick = 0.8 + 0.12 * Math.sin(t * 9.3) + 0.08 * Math.sin(t * 17.1 + 2);
     this.hotMat.color.setScalar(0.85 + 0.15 * flick);
     this.forgeLight.intensity = (3 + night * 9) * flick;
