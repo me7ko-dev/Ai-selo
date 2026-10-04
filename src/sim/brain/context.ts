@@ -299,6 +299,9 @@ export function memoryDay(m: Memory): number { return dayOf(m.time); }
 
 export function pickMemory(c: Ctx, opts: { avoidPlayer?: boolean; about?: string; kinds?: Memory['kind'][] } = {}): Memory | undefined {
   let ms = c.memories.filter((m) => m && typeof m.text === 'string' && m.text.trim().length > 3 && m.kind !== 'plan' && m.kind !== 'belief');
+  // тайните не се разказват на всеки срещнат, а „говорих с Х за времето“ не е новина
+  if (c.trust < 70) ms = ms.filter((m) => !m.about?.includes('secret'));
+  ms = ms.filter((m) => !(m.kind === 'talk' && m.importance <= 2));
   if (opts.avoidPlayer) ms = ms.filter((m) => !m.about?.includes('player') && !/странник/i.test(m.text));
   if (opts.about) ms = ms.filter((m) => m.about?.includes(opts.about!) || m.text.toLowerCase().includes(opts.about!.toLowerCase()));
   if (opts.kinds) ms = ms.filter((m) => opts.kinds!.includes(m.kind));
@@ -313,7 +316,7 @@ export function pickMemory(c: Ctx, opts: { avoidPlayer?: boolean; about?: string
 export function ensurePeriod(t: string): string {
   const s = t.trim();
   if (!s) return s;
-  return /[.!?…]$/.test(s) ? s : s + '.';
+  return /[.!?…][“"»)]*$/.test(s) ? s : s + '.';
 }
 
 /** Как говорещият въвежда спомен в разказа. */
@@ -332,6 +335,13 @@ export function weaveMemory(m: Memory, c: Ctx, style: 'eager' | 'plain' | 'terse
     lead = style === 'eager' ? ['Ох, вчера, да знаеш —', 'Вчера, представи си —'] : style === 'terse' ? ['Вчера —'] : ['Вчера —', 'Още мисля за вчера —'];
   } else {
     lead = style === 'terse' ? ['Беше преди време —'] : ['Не мога да забравя —', 'Отпреди няколко дни ми е на ума —'];
+  }
+  // „Дядо Пею ми каза: „…““ → „Дядо Пею ми каза, че …“ (без „Чух, че дядо Пею ми каза“)
+  const told = m.kind === 'rumor' ? /^(.+?) ми (каза|разказа|пошепна|каза под секрет): „(.+?)[.!?…]?“\.?$/u.exec(text) : null;
+  if (told) {
+    const said = `${told[1]} ми ${told[2]}, че ${lcFirst(told[3].trim())}.`;
+    if (style === 'eager') return `${c.rng.pick(['Ама да си остане между нас —', 'Само на теб го казвам —'])} ${lcFirst(said)}`;
+    return said;
   }
   if (already) return text;
   const l = c.rng.pick(lead);

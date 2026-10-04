@@ -416,3 +416,34 @@ test('Ollama: преразказ за „Докато те нямаше…“ �
   assert.deepEqual(off, { texts: [null], ai: false });
   ob.dispose(); await srv.close();
 });
+
+test('ScriptedBrain: свободни въпроси — кметът, „обичаш ли…“, къде е Ламята, без издадени тайни', () => {
+  const sb = new ScriptedBrain();
+  const ask = (id: VillagerId, input: string, situation = SITS[0], extra: Partial<TalkRequest> = {}) => sb.talkNow(talkReq(id, { input, optionId: undefined, situation, ...extra })).say;
+  // кметът за самия себе си
+  assert.match(ask('peyu', 'Какво мислиш за кмета?'), /Аз съм/);
+  // друг кмет (от ситуацията)
+  assert.match(ask('radka', 'Какво мислиш за кмета?', SITS[0] + ' Кмет е Радка.'), /кметът/i);
+  assert.doesNotMatch(ask('maria', 'Какво мислиш за кмета?', SITS[0] + ' Кмет е Радка.'), /Пею/);
+  // „обичаш ли Мария“ към самата Мария — не „Мария съм, тъкачката“
+  assert.match(ask('maria', 'Обичаш ли Мария?'), /Себе си/);
+  assert.match(ask('maria', 'Обичаш ли Иван?'), /Иван/);
+  for (const id of VILLAGER_IDS) {
+    const t = ask(id, 'Обичаш ли баба Гена?');
+    assertGood(t, `${id} / обичаш ли`);
+    assert.doesNotMatch(t, /(^|[.!?] )баба/, `${id}: малка буква в началото на изречение: ${t}`);
+    assert.match(ask(id, 'Къде спи Ламята?'), /Ламин връх|върха/, `${id}: къде е Ламята`);
+  }
+  // тайните не излизат в „какво ново“ при малко доверие
+  const secretMem: Memory = { id: 1, time: 1500, text: 'Пуснах козите в нивата на Иван. Да види и той как е.', importance: 9, about: ['ivan', 'goats', 'secret'], kind: 'event' };
+  for (let seed = 0; seed < 20; seed++) {
+    const t = sb.talkNow(talkReq('petko', { input: 'Какво ново?', optionId: undefined, memories: [secretMem], seed })).say;
+    assert.doesNotMatch(t, /Пуснах козите/, t);
+  }
+  // слух в спомен → „Х ми каза, че …“, без „Чух, че Х ми каза“ и без „.“.“
+  const rumorMem: Memory = { id: 2, time: 1500, text: 'Дядо Пею ми каза: „Петко нарочно пуска козите в нивата на Иван!“', importance: 9, about: ['peyu', 'petko', 'goats'], kind: 'rumor' };
+  for (let seed = 0; seed < 20; seed++) {
+    const t = sb.talkNow(talkReq('maria', { input: 'Какво ново?', optionId: undefined, memories: [rumorMem], seed })).say;
+    assert.doesNotMatch(t, /Чух, че дядо Пею ми каза|“\./, t);
+  }
+});
