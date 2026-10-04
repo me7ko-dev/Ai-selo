@@ -1,0 +1,51 @@
+# Играта в браузъра (GitHub Pages) — сглобява се тук, в облака, при всеки push в main.
+# Докато няма package.json, само минава без да прави нищо.
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Има ли игра?
+        id: check
+        run: if [ -f package.json ]; then echo "ok=true" >> "$GITHUB_OUTPUT"; else echo "Още няма package.json — пропускам."; fi
+      - uses: actions/setup-node@v5
+        if: steps.check.outputs.ok == 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - name: Пакети
+        if: steps.check.outputs.ok == 'true'
+        run: npm ci
+      - name: Играта
+        if: steps.check.outputs.ok == 'true'
+        run: npm run build
+      - uses: actions/configure-pages@v5
+        if: steps.check.outputs.ok == 'true'
+      - uses: actions/upload-pages-artifact@v4
+        if: steps.check.outputs.ok == 'true'
+        with:
+          path: dist
+      - name: Публикуване
+        id: deployment
+        if: steps.check.outputs.ok == 'true'
+        uses: actions/deploy-pages@v4

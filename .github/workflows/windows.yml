@@ -1,0 +1,59 @@
+# Windows програма (.exe) — сглобява се тук, в облака, не на лаптопа.
+# Резултатът е в Releases → latest → BalkanskiLegendi-windows.zip
+# Чака desktop/build.mjs (като в https://github.com/me7ko-dev/orda), който прави release/BalkanskiLegendi-win32-x64/BalkanskiLegendi.exe
+name: Windows
+
+on:
+  push:
+    branches: [main]
+    paths: ['src/**', 'public/**', 'index.html', 'desktop/**', 'package.json']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: windows
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - name: Готово ли е за .exe?
+        id: check
+        shell: bash
+        run: if [ -f package.json ] && [ -f desktop/build.mjs ]; then echo "ok=true" >> "$GITHUB_OUTPUT"; else echo "Още няма desktop/build.mjs — пропускам."; fi
+      - uses: actions/setup-node@v5
+        if: steps.check.outputs.ok == 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - name: Пакети
+        if: steps.check.outputs.ok == 'true'
+        run: npm ci
+      - name: Electron (самата програма)
+        if: steps.check.outputs.ok == 'true'
+        run: node node_modules/electron/install.js
+      - name: Играта
+        if: steps.check.outputs.ok == 'true'
+        run: npm run build
+      - name: Windows програмата
+        if: steps.check.outputs.ok == 'true'
+        run: node desktop/build.mjs
+      - name: Архив
+        if: steps.check.outputs.ok == 'true'
+        shell: pwsh
+        run: Compress-Archive -Path release/BalkanskiLegendi-win32-x64 -DestinationPath BalkanskiLegendi-windows.zip
+      - name: Издание „latest“
+        if: steps.check.outputs.ok == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete latest -y --cleanup-tag || true
+          gh release create latest BalkanskiLegendi-windows.zip \
+            --title "Балкански легенди — Windows" \
+            --notes "Свали BalkanskiLegendi-windows.zip, разархивирай и пусни BalkanskiLegendi.exe. С инсталиран Ollama жителите стават живи ИИ. В браузъра: https://me7ko-dev.github.io/Ai-selo/"
