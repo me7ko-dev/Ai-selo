@@ -213,7 +213,7 @@ export class Rpg {
     };
     const L = this.lamia;
     const nearBoss = L.active && Math.hypot(L.pos.x - this.hero.pos.x, L.pos.z - this.hero.pos.z) < 22;
-    this.cam.update(dt, this.hero.pos, this.world, look, L.state === 'dead' ? [] : [{ x: L.pos.x, z: L.pos.z, r: LAMIA.bodyR + 0.8, h: 7 }], nearBoss ? 1.6 : 0);
+    this.cam.update(dt, this.hero.pos, this.world, look, L.state === 'dead' ? [] : [{ x: L.pos.x, z: L.pos.z, r: LAMIA.bodyR + 0.8, h: 7 }], nearBoss ? 1.3 : 0);
   }
 
   // ---------------- бой ----------------
