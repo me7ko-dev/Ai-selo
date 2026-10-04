@@ -318,3 +318,47 @@ test('„Докато те нямаше…“ с ИИ: светът е същи�
   // по подразбиране — мозъкът на симулацията; кратко отсъствие → нищо
   assert.deepEqual(await catchUpAsync(new VillageSim({ seed: 1, brain: fake('ok') }), 1000), []);
 });
+
+test('Караконджул и буря: който е навън, веднага тича към къщи; нощта има свои истории и утрото говори за нея', () => {
+  for (const kind of ['karakondzhul', 'storm'] as const) {
+    const sim = new VillageSim({ seed: 2024 });
+    const log: ChronicleEntry[] = [];
+    sim.bus.on('chronicle', e => log.push(e));
+    sim.advance(1440 + 10 * 60 + 45); // Ден 2, следобед — хората са навън, някои вървят
+    sim.inject({ type: kind });
+    const out = sim.state.villagers.filter(v => !v.indoors && v.activity !== 'sleep');
+    assert.ok(out.length > 0);
+    for (const v of out) {
+      assert.equal(v.talkingWith, null, `${kind}: ${v.id} още си говори`);
+      if (v.path.length) assert.equal(v.activity, 'flee', `${kind}: ${v.id} върви, вместо да тича`);
+    }
+    // по пътя си всички тичат (не вървят), докато не се приберат
+    for (let i = 0; i < 20; i++) {
+      sim.advance(0.5);
+      for (const v of sim.state.villagers) if (v.path.length && !v.talkingWith) assert.notEqual(v.activity, 'walk', `${kind}: ${v.id} ходи бавно`);
+    }
+    if (kind === 'karakondzhul') {
+      const tags = log.map(e => e.tag);
+      assert.ok(tags.includes('karakondzhul') && tags.includes('karakondzhul_brave') && tags.includes('karakondzhul_hide'), tags.join(','));
+      for (const v of sim.state.villagers) assert.ok(v.memories.some(m => m.about.includes('karakondzhul') && m.about.includes('fear')) || v.memories.some(m => m.about.includes('brave')), `${v.id} не помни страха`);
+      sim.advance(1440);
+      assert.ok(log.some(e => e.tag === 'karakondzhul_morning'), 'на сутринта селото говори за Караконджула');
+    }
+  }
+});
+
+test('ежедневието: мили дребни случки и разумен брой записи на ден', () => {
+  const sim = new VillageSim({ seed: 2024 });
+  const log: ChronicleEntry[] = [];
+  sim.bus.on('chronicle', e => log.push(e));
+  for (let d = 0; d < 6; d++) sim.advance(1440);
+  const tags = new Set(log.map(e => e.tag));
+  for (const t of ['kalin_toy', 'gena_tale', 'petko_kaval', 'radka_recipe', 'peyu_river']) assert.ok(tags.has(t), `няма „${t}“`);
+  const perDay = new Map<number, number>();
+  for (const e of log) { const d = Math.floor(e.time / 1440); perDay.set(d, (perDay.get(d) ?? 0) + 1); }
+  for (const [d, n] of perDay) if (d < 6) assert.ok(n >= 8 && n <= 25, `ден ${d + 1}: ${n} записа`);
+  // един и същ текст не се повтаря в два поредни дни
+  const byText = new Map<string, number[]>();
+  for (const e of log) byText.set(e.text, [...(byText.get(e.text) ?? []), Math.floor(e.time / 1440)]);
+  for (const [t, days] of byText) for (let i = 1; i < days.length; i++) assert.ok(days[i] - days[i - 1] !== 1 || /поговориха|говориха/.test(t), `повтаря се в поредни дни: ${t}`);
+});

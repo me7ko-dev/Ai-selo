@@ -6,9 +6,19 @@ import { VILLAGER_IDS, VILLAGERS, type VillagerId } from '../data/villagers';
 import type { InjectedEvent, Rumor, VillagerState, Weather, WorldState } from './types';
 import type { VillageSim } from './VillageSim';
 import { addMemory } from './memory';
-import { LOC, Name, cap, g, hpick, joinNames, nameOf } from './text';
+import { LOC, Name, cap, g, hash, hpick, joinNames, nameOf } from './text';
 
 const H = (h: number, m = 0) => h * 60 + m;
+
+/** Като hpick, но не повтаря последния избран вариант за същия ключ (помни го в s.flags → влиза в записите). */
+export function pickNew<T>(s: WorldState, key: string, arr: readonly T[], ...salt: (string | number)[]): T {
+  const k = 'pick_' + key, n = arr.length;
+  if (n <= 1) return arr[0];
+  let i = hash(key, ...salt) % n;
+  if (s.flags[k] === i) i = (i + 1 + (hash(key, 'skip', ...salt) % (n - 1))) % n;
+  s.flags[k] = i;
+  return arr[i];
+}
 
 // ───────────────────────── слухове в началото ─────────────────────────
 
@@ -81,13 +91,19 @@ export function worldTick(sim: VillageSim) {
     case H(6, 40): ivanGift(sim); break;
     case H(7): genaClue(sim); break;
     case H(7, 30): radkaFurious(sim); break;
+    case H(8): karakondzhulMorning(sim); break;
     case H(10): goatsRoll(sim); errand(sim); break;
     case H(15): case H(8, 30): errand(sim); break;
     case H(11): goatsReport(sim); break;
     case H(12): if (s.nextElectionDay === day) election(sim); else ivanLearnsGoats(sim); break;
     case H(12, 40): peyuOnCredit(sim); break;
     case H(14): if (s.nextElectionDay === day + 1) preElection(sim); break;
+    case H(12, 15): radkaRecipe(sim); break;
+    case H(15, 30): kalinToy(sim); break;
     case H(17): workResults(sim); break;
+    case H(17, 15): petkoKaval(sim); break;
+    case H(17, 40): genaTale(sim, 0.45); break;
+    case H(20, 15): genaTale(sim, 0.35); break;
     case H(18): ivanSeeksMaria(sim); saborStarts(sim); break;
     case H(19, 30): eveningGathering(sim); break;
     case H(20, 30): if (f.lamia_dead && day > Number(f.lamia_news) && sim.r.chance(0.25)) riverJoy(sim); break;
@@ -101,13 +117,17 @@ function chickenTheft(sim: VillageSim) {
   if (f.fox_caught || !sim.r.chance(0.4)) return;
   const n = Number(f.chickens_lost ?? 3) + 1;
   f.chickens_lost = n; f.last_theft_day = sim.day;
-  sim.chronicle('theft', hpick([
+  sim.chronicle('theft', pickNew(s, 'theft', [
     `Нощес от кокошарника на Радка изчезна още една кокошка — вече ${n}. До оградата остана само перушина и странни малки следи.`,
-    `Посред нощ кокошките на Радка изпищяха, после настана тишина. Сутринта липсваше още една — ${n}-та поред.`,
-    `Някой пак е бил в кокошарника на Радка. Заключено, оградата цяла, а кокошките — с една по-малко. Общо ${n}.`,
-  ], sim.day, 'theft'), ['radka'], 5, 'chicken_theft');
+    `Посред нощ кокошките на Радка изпищяха, после настана тишина. Сутринта липсваше още една — ${ordinalF(n)} поред.`,
+    `Някой пак е бил в кокошарника на Радка. Вратата — залостена, оградата — цяла, а кокошките — с една по-малко. Общо ${n}.`,
+  ], sim.day), ['radka'], 5, 'chicken_theft');
   addMemory(s, sim.v('radka')!, 'Нощес пак изчезна кокошка. Пак видях онези светещи очи откъм гората…', 6, ['chickens', 'fox']);
 }
+
+const ORD_F = ['', 'първата', 'втората', 'третата', 'четвъртата', 'петата', 'шестата', 'седмата', 'осмата', 'деветата', 'десетата', 'единайсетата', 'дванайсетата'];
+/** „четвъртата“ (за кокошка — женски род). */
+export function ordinalF(n: number): string { return ORD_F[n] ?? `${n}-ата`; }
 
 function radkaFurious(sim: VillageSim) {
   const s = sim.s, f = s.flags;
@@ -160,11 +180,11 @@ function kalinLight(sim: VillageSim) {
 
 function genaHerbs(sim: VillageSim) {
   if (!sim.r.chance(0.2)) return;
-  sim.chronicle('work', hpick([
+  sim.chronicle('work', pickNew(sim.s, 'herbs', [
     'Баба Гена излезе преди зазоряване да бере билки в края на гората. Върна се с пълна кошница и мокри от росата цървули.',
     'Още по тъмно баба Гена тръгна към гората с кошницата си. „Билката се бере, докато спи“, казва тя.',
     'Баба Гена набра риган и жълт кантарион в края на гората и си тананикаше стара песен за самодиви.',
-  ], sim.day, 'herbs'), ['gena'], 1, 'gena_herbs');
+  ], sim.day), ['gena'], 1, 'gena_herbs');
 }
 
 function weather(sim: VillageSim) {
@@ -234,11 +254,11 @@ function goatsRoll(sim: VillageSim) {
 function goatsReport(sim: VillageSim) {
   const s = sim.s;
   if (s.flags.goats_day !== sim.day) return;
-  sim.chronicle('theft', hpick([
+  sim.chronicle('theft', pickNew(s, 'goats', [
     'Козите на Петко пак се озоваха в нивата на Иван и изпасаха половината ечемик. Петко седеше на синора и свиреше с кавала, сякаш нищо не вижда.',
     'Цяла сутрин козите на Петко пасоха в нивата на Иван. „Сами са дошли“, каза Петко на всеки, който попита.',
     'Пак кози в нивата на Иван! Вредата е голяма, а Петко само сви рамене.',
-  ], sim.day, 'goats'), ['petko', 'ivan'], 4, 'goats');
+  ], sim.day), ['petko', 'ivan'], 4, 'goats');
   addMemory(s, sim.v('petko')!, 'Пуснах козите в нивата на Иван. Да види и той как е.', 5, ['ivan', 'goats', 'secret']);
 }
 
@@ -286,10 +306,101 @@ function workResults(sim: VillageSim) {
       'Калин издяла дървена лъжица с шарки и я остави на масата в хана. Никой не попита кой я е направил.',
     ],
   };
-  const txt = hpick(T[who], day, who);
+  const txt = pickNew(s, 'work_' + who, T[who], day);
   sim.chronicle('work', txt, [who], 2, 'work_' + who);
   sim.feel(who, 8, who === 'kalin' ? undefined : 'proud', 120);
   addMemory(s, sim.v(who)!, who === 'kalin' ? 'Свърших хубава работа. Пак никой не каза нищо.' : 'Днес свърших хубава работа.', 2, ['work']);
+}
+
+// ───────────────────────── мили дребни случки от всекидневието ─────────────────────────
+
+const free = (v: VillagerState) => !v.talkingWith && !v.indoors && v.activity !== 'sleep' && v.activity !== 'flee';
+const calm = (s: WorldState, t: number) => !(Number(s.flags.karakondzhul_until ?? 0) > t || Number(s.flags.storm_until ?? 0) > t);
+
+const TOYS: [string, 'го' | 'я'][] = [
+  ['дървено конче на колелца', 'го'], ['птичка-свирка от явор', 'я'], ['малка люлка за кукла', 'я'], ['пумпал с червени ивици', 'го'],
+  ['мече от липово дърво', 'го'], ['дървена кукла с плетени коси', 'я'],
+];
+/** Калин прави играчка — за никого. */
+function kalinToy(sim: VillageSim) {
+  const s = sim.s, k = sim.v('kalin')!;
+  if (k.place !== 'workshop_kalin' || !free(k) || !calm(s, s.time) || !sim.r.chance(0.25)) return;
+  const [toy, it] = pickNew(s, 'toy', TOYS, sim.day);
+  sim.chronicle('mood', pickNew(s, 'toy_text', [
+    `Калин цял следобед дялка ${toy} и ${it} остави на перваза на дърводелницата. За кого е — не каза. Може би за никого.`,
+    `От стружките в дърводелницата се роди ${toy}. Калин ${it} повъртя в ръце, усмихна се и ${it} прибра в сандъка при другите — играчки за деца, каквито в селото отдавна няма.`,
+    `Калин направи ${toy} и ${it} сложи на прага на хана. На сутринта ${it === 'го' ? 'го нямаше' : 'я нямаше'} — дали някой ${it} взе, или вятърът, никой не знае.`,
+  ], sim.day), ['kalin'], 2, 'kalin_toy');
+  addMemory(s, k, `Направих ${toy}. Не знам за кого. Просто ръцете ми искаха.`, 2, ['work', 'kalin']);
+  sim.feel('kalin', 6, 'content', 120);
+}
+
+const DISHES = ['баница с тиква и орехи', 'пита с мащерка и сирене', 'чорба от коприва с кисело мляко', 'гювеч с гъби от гората', 'сладко от шипки', 'зелник с праз и мед'];
+/** Радка опитва нова рецепта. */
+function radkaRecipe(sim: VillageSim) {
+  const s = sim.s, radka = sim.v('radka')!;
+  if (radka.place !== 'inn' || !calm(s, s.time) || !sim.r.chance(0.3)) return;
+  const dish = pickNew(s, 'dish', DISHES, sim.day);
+  const near = s.villagers.filter(v => v !== radka && free(v) && dist(v.pos, radka.pos) < 14);
+  const taster = near.length ? near[0].id as VillagerId : null;
+  const text = taster
+    ? `Радка опита нова рецепта — ${dish}. ${Name(taster)} ${g(taster, 'я опита първа', 'я опита пръв')} и ${hpick([
+      'си поиска още едно парче', 'обра чинията до троха', `кимна мълчаливо — а от ${nameOf(taster)} това е голяма похвала`,
+    ], sim.day, taster, 'taste')}. Радка сияеше.`
+    : `Радка опита нова рецепта — ${dish}. Опита сама, кимна доволно и обяви на празния хан, че от утре влиза в менюто.`;
+  sim.chronicle('mood', text, taster ? ['radka', taster] : ['radka'], 2, 'radka_recipe');
+  addMemory(s, radka, `Сготвих нещо ново — ${dish}. ${taster ? `${Name(taster)} поиска още!` : 'Хубаво стана.'}`, 3, ['work', 'inn']);
+  if (taster) { addMemory(s, sim.v(taster)!, `Опитах новото ястие на Радка — ${dish}. Хубаво беше.`, 2, ['radka', 'inn']); sim.adjustRelation(taster, 'radka', 2, 0); }
+  sim.feel('radka', 8, 'proud', 120);
+  sim.say('radka', 'Опитайте, опитайте! Ново е!');
+}
+
+/** Петко свири на кавал при кошарата. */
+function petkoKaval(sim: VillageSim) {
+  const s = sim.s, petko = sim.v('petko')!;
+  if (petko.place !== 'sheepfold' || !free(petko) || !calm(s, s.time) || !sim.r.chance(0.35)) return;
+  const near = s.villagers.filter(v => v !== petko && free(v) && dist(v.pos, petko.pos) < 30);
+  const lis = near.length ? near[0].id as VillagerId : null;
+  sim.chronicle('mood', lis
+    ? `Привечер откъм кошарата се чу кавал. ${Name(lis)} спря да послуша. Петко се намуси, като ${g(lis, 'я', 'го')} видя — но не спря да свири.`
+    : pickNew(s, 'kaval', [
+      'Привечер откъм кошарата се чу кавал. Петко свиреше на овцете — тъжна, протяжна мелодия, която никой не подозираше, че знае.',
+      'Петко седна на камъка пред кошарата и засвири на кавала. Овцете спряха да блеят и сякаш слушаха.',
+      'Докато прибираше стадото, Петко свиреше на кавала. Звукът се носеше чак до мегдана, а някой там въздъхна: „Кой би казал, че Петко има такава душа.“',
+    ], sim.day), lis ? ['petko', lis] : ['petko'], 2, 'petko_kaval');
+  addMemory(s, petko, 'Свирих на кавала при кошарата. Само овцете ме разбират.', 2, ['kaval', 'sheep']);
+  if (lis) { addMemory(s, sim.v(lis)!, 'Чух Петко да свири на кавал. Кой би помислил — хубаво свири.', 3, ['petko', 'kaval']); sim.adjustRelation(lis, 'petko', 3, 1); }
+  sim.feel('petko', 10, 'calm', 90);
+}
+
+const TALES = [
+  'за самодивата, която изгубила ризата си край езерцето',
+  'за юнака, който надхитрил Ламята с три гатанки',
+  'за таласъма, който се страхувал от петли',
+  'за момата, която изтъкала пътя си чак до морето',
+  'за времето, когато Бистрица пеела песни на ковачите',
+  'за Караконджула, който се заплел в сол и чакал до зори',
+];
+/** Баба Гена разказва приказка под ореха (или вечер, където е). */
+function genaTale(sim: VillageSim, p: number) {
+  const s = sim.s, gena = sim.v('gena')!, f = s.flags;
+  if (f.gena_tale_day === sim.day || !free(gena) || !calm(s, s.time) || !gena.place) return;
+  const lis = s.villagers.filter(v => v !== gena && free(v) && dist(v.pos, gena.pos) < 12);
+  if (!lis.length || !sim.r.chance(p)) return;
+  f.gena_tale_day = sim.day;
+  const ids = lis.map(v => v.id as VillagerId);
+  const tale = pickNew(s, 'tale', TALES, sim.day);
+  const where = gena.place === 'walnut' || gena.place === 'square' ? 'Под стария орех' : cap(LOC[gena.place]);
+  const tail = ids.includes('maria') && tale.includes('морето') ? 'Мария слушаше със светнали очи и не мигаше.'
+    : ids.includes('ivan') && /таласъм|Караконджул/.test(tale) ? 'Иван се правеше, че не го е страх, но седна по-близо до баба Гена.'
+    : ids.includes('kalin') ? 'Калин седеше най-отзад, както винаги, и пръв попита: „А после?“'
+    : ids.length > 1 ? 'Слушаха я, без да мигнат.' : `${Name(ids[0])} слушаше като дете.`;
+  sim.chronicle('mood', `${where} баба Гена разказа на ${joinNames(ids)} приказка ${tale}. ${tail}`, ['gena', ...ids], 2, 'gena_tale');
+  for (const v of lis) addMemory(s, v, `Баба Гена разказа приказка ${tale}.`, 2, ['gena', 'tale']);
+  addMemory(s, gena, `Разказах приказка ${tale}. Младите още обичат приказките.`, 2, ['tale']);
+  sim.feel('gena', 8, 'cheerful', 120);
+  for (const v of lis) sim.feel(v.id, 4);
+  sim.say('gena', 'Имало едно време, чеда…');
 }
 
 function eveningGathering(sim: VillageSim) {
@@ -300,8 +411,16 @@ function eveningGathering(sim: VillageSim) {
     if (here.length < 3) continue;
     const ids = here.map(v => v.id);
     const txt = place === 'inn'
-      ? hpick([`Вечерта в хана седяха ${joinNames(ids)}. Радка разнасяше боб и билков чай — и клюки, разбира се.`, `В хана беше пълно: ${joinNames(ids)}. Над масите миришеше на мащерка и на топъл хляб.`], sim.day, 'ev_inn')
-      : hpick([`Вечерта на мегдана под стария орех се събраха ${joinNames(ids)}. Говориха си до здрач.`, `${cap(joinNames(ids))} седнаха на пейките под ореха и гледаха как слънцето залязва зад Ламин връх.`], sim.day, 'ev_sq');
+      ? pickNew(s, 'ev_inn', [
+        `Вечерта в хана седяха ${joinNames(ids)}. Радка разнасяше боб и билков чай — и клюки, разбира се.`,
+        `В хана беше пълно: ${joinNames(ids)}. Над масите миришеше на мащерка и на топъл хляб.`,
+        `Вечерта пред хана ${joinNames(ids)} пиха билков чай и се смяха на нещо, което Радка разказа шепнешком.`,
+      ], sim.day)
+      : pickNew(s, 'ev_sq', [
+        `Вечерта на мегдана под стария орех се събраха ${joinNames(ids)}. Говориха си до здрач.`,
+        `${cap(joinNames(ids))} седнаха на пейките под ореха и гледаха как слънцето залязва зад Ламин връх.`,
+        `Под стария орех ${joinNames(ids)} чакаха първата звезда. Който я види пръв, щял да има късмет цяла година.`,
+      ], sim.day);
     sim.chronicle('talk', txt, ids, 1, 'evening');
     return;
   }
@@ -381,6 +500,77 @@ function saborStarts(sim: VillageSim) {
   sim.chronicle('festival', 'Вечерта на мегдана запалиха голям огън и хорото се изви около него. Дори Иван дойде — огънят светеше толкова силно, че тъмното не го плашеше.', [...VILLAGER_IDS], 5, 'sabor_dance');
 }
 
+// ───────────────────────── Караконджулът ─────────────────────────
+
+const KARA_FEAR: Record<VillagerId, string> = {
+  gena: 'Караконджулът дойде в селото. Чух копитата му по покривите — като едно време, когато бях малка.',
+  peyu: 'Караконджулът тропаше по покривите, а аз, кметът, треперех зад залостената врата. Срамота.',
+  petko: 'Караконджулът дойде! Овцете блееха като луди в кошарата, а аз стисках гегата.',
+  ivan: 'Караконджулът дойде, а наоколо беше тъмно. Не помня кога съм се страхувал повече.',
+  maria: 'Караконджулът мина под прозореца ми. Чух смеха му — още ми е студено.',
+  radka: 'Караконджулът дойде! Залостих вратата и дълго слушах тропота.',
+  kalin: 'Караконджулът дойде в селото. Чух копитата му точно пред дърводелницата.',
+};
+
+/** Кой къде се скри: [заварен навън, …, у дома]. */
+const KARA_HID: Record<VillagerId, string[]> = {
+  gena: ['Баба Гена залости вратата и шепнеше над огнището стари думи против нечисти сили, докато тропотът не утихна.'],
+  peyu: [
+    'Дядо Пею понечи да въдвори ред с тоягата си, но като чу копитата, захвърли калпака и се шмугна в хана при Радка.',
+    'Дядо Пею се скри под масата у дома и после се кълнеше, че само търсел калпака си.',
+  ],
+  petko: ['Петко се затвори в кошарата при овцете — „да не ги е страх сами“, обясни после той.'],
+  ivan: [
+    'Иван се скри в ковачницата и през цялото време стискаше чука, а огнището гореше с всичка сила, за да не е тъмно.',
+    'Иван се завря в най-далечния ъгъл на къщата си и запали всички борини, които имаше.',
+  ],
+  maria: ['Мария се скри зад стана и броеше нишките на глас, за да не чува тропота.', 'Мария се сви под стана и стискаше совалката като нож.'],
+  radka: ['Радка залости хана с пейките и пускаше вътре всеки, който почука. Дори от страх не спря да говори нито за миг.'],
+  kalin: ['Калин се скри в дърводелницата между дъските. Никой не се сети да провери къде е — както винаги.'],
+};
+/** Кой беше смел. */
+const KARA_BRAVE: Partial<Record<VillagerId, string>> = {
+  gena: 'Само баба Гена не се изплаши: посипа сол на прага си и седна да чака. „Караконджулът сол не прекрачва, чедо“, каза тя на сутринта.',
+  kalin: 'Калин единствен не побягна — застана с брадвата пред вратата на баба Гена, докато тропотът не утихна. На сутринта никой не разбра кой я е пазил.',
+  petko: 'Петко не остави стадото: стоеше пред кошарата с горяща главня и гегата, докато Караконджулът не се отказа. Овцете оцеляха до една.',
+  radka: 'Радка излезе на прага на хана с метлата и така се развика, че тропотът се отдалечи. „Мен и Караконджулът ме слуша“, хвалеше се тя после.',
+};
+
+function karakondzhulStories(sim: VillageSim, wasOut: VillagerId[], radkaInn: boolean) {
+  const s = sim.s, day = sim.day;
+  // смелият (Радка — само ако е била в хана)
+  const braveIds = (Object.keys(KARA_BRAVE) as VillagerId[]).filter(id => id !== 'radka' || radkaInn);
+  const brave = hpick(braveIds, day, s.time, 'kbrave');
+  sim.chronicle('monster', KARA_BRAVE[brave]!, [brave], 5, 'karakondzhul_brave');
+  addMemory(s, sim.v(brave)!, 'Когато дойде Караконджулът, не побягнах. Сърцето ми биеше, но устоях.', 8, ['karakondzhul', 'brave']);
+  sim.feel(brave, 25, 'proud', 600);
+  sim.addRumor({ topic: 'karakondzhul', tag: 'brave', text: `${Name(brave)} не се уплаши от Караконджула!`, about: [brave, 'karakondzhul'], truth: true, origin: brave, sentiment: 1 },
+    [[brave, 1], ...(brave === 'kalin' ? [['gena', 0.9] as [string, number]] : [['radka', 0.8] as [string, number]])]);
+  // кой къде се скри — най-напред някой, който беше навън
+  const others = VILLAGER_IDS.filter(id => id !== brave);
+  const out = wasOut.filter(id => id !== brave);
+  const hid = out.length ? hpick(out, day, s.time, 'khid') : hpick(others, day, 'khid');
+  // първият вариант е за някой, заварен навън; последният — за някой, който си беше у дома
+  const list = KARA_HID[hid], t = out.includes(hid) ? list[0] : list[list.length - 1];
+  sim.chronicle('monster', t, [hid], 4, 'karakondzhul_hide');
+  addMemory(s, sim.v(hid)!, `Скрих се от Караконджула. ${hid === 'peyu' ? 'Дано никой не е видял.' : 'Не искам да го помня.'}`, 6, ['karakondzhul', 'fear']);
+}
+
+/** Сутринта след Караконджула: следи от копита и приказки при чешмата. */
+function karakondzhulMorning(sim: VillageSim) {
+  const s = sim.s, f = s.flags;
+  if (f.karakondzhul_talk !== sim.day || f.karakondzhul_told === sim.day) return;
+  f.karakondzhul_told = sim.day;
+  sim.chronicle('monster', hpick([
+    'На сутринта половината село се събра при чешмата да оглежда следите от копита в калта. Радка разправяше, че Караконджулът имал три рога, Петко — че имал два, а баба Гена само се усмихваше под забрадката.',
+    'Сутринта никой не говореше за друго. Дядо Пею мери следите от копита с тоягата си и обяви, че „такова чудо едно време нямаше“. Иван се прозяваше — цяла нощ не беше мигнал.',
+    'На сутринта Калин тихо закова наново една откъртена дъска на кокошарника. Хората при чешмата спореха дали Караконджулът ще се върне довечера.',
+  ], sim.day, 'kmorning'), ['radka', 'petko', 'gena', 'peyu'], 4, 'karakondzhul_morning');
+  for (const v of s.villagers) addMemory(s, v, 'Цялото село говори за нощта с Караконджула. Видях следите от копитата му.', 4, ['karakondzhul', 'fear']);
+  sim.say('radka', 'Три рога, ви казвам, три! И очи като въглени!');
+  sim.say('petko', 'Абе, два бяха. Аз го видях.', 'radka', 0.8);
+}
+
 // ───────────────────────── случки отвън ─────────────────────────
 
 const byTxt = (by: string | undefined, phrase: string) => (by ? ` ${phrase.replace('{by}', by)}` : '');
@@ -391,6 +581,7 @@ export function injectEvent(sim: VillageSim, ev: InjectedEvent) {
   switch (ev.type) {
     case 'storm': {
       s.weather = 'storm'; s.flags.storm_until = t + 120;
+      sim.panic();
       sim.chronicle('weather', 'Над Самодивско се изви страшна буря — гръмотевици, вятър и пороен дъжд. Всички се прибраха по къщите, само Радка остана да залоства капаците на хана.' + byTxt(ev.by, 'Говори се, че я е извикал някой на име {by}.'), [], 5, 'storm');
       for (const v of outside()) { addMemory(s, v, 'Изви се страшна буря и тичах да се прибера.', 4, ['storm', 'weather']); sim.feel(v.id, -6); }
       sim.react('Изви се страшна буря с гръмотевици.', 'Бурята! Бягайте да се приберете!');
@@ -399,12 +590,20 @@ export function injectEvent(sim: VillageSim, ev: InjectedEvent) {
     case 'karakondzhul': {
       s.flags.karakondzhul_until = t + 120;
       const night = isDarkish(t);
+      const wasOut = outside().map(v => v.id as VillagerId);
+      // утрото след страшната нощ (или вечерта, ако е било денем) селото ще говори само за това
+      s.flags.karakondzhul_day = day;
+      s.flags.karakondzhul_talk = mod < H(7, 30) ? day : day + 1;
+      const rv = sim.v('radka')!;
+      const radkaInn = !rv.indoors && rv.activity !== 'sleep' && nearestPlace(rv.pos).id === 'inn';
       const txt = night
         ? 'Посред нощ из селото се разнесе тропот на копита и зловещ смях — Караконджулът! Хората залостиха вратите, а Иван цяла нощ не мигна.'
         : 'Посред бял ден небето притъмня и по улиците на Самодивско пробяга рогата сянка — Караконджулът! Всички се изпокриха по къщите.';
+      sim.panic();
       sim.chronicle('monster', txt + byTxt(ev.by, 'Казват, че го е довел {by}.'), [...VILLAGER_IDS], 7, 'karakondzhul');
-      for (const v of s.villagers) { addMemory(s, v, 'Караконджулът дойде в селото! Чух тропота му по покривите.', 7, ['karakondzhul', 'monster', 'fear']); sim.feel(v.id, -30, 'afraid', 300); }
+      for (const v of s.villagers) { addMemory(s, v, KARA_FEAR[v.id as VillagerId], 7, ['karakondzhul', 'monster', 'fear']); sim.feel(v.id, -30, 'afraid', 300); }
       sim.feel('ivan', -15, 'afraid', 600);
+      karakondzhulStories(sim, wasOut, radkaInn);
       sim.react('Караконджулът дойде в селото!', 'Караконджулът! Бягайте!');
       break;
     }
