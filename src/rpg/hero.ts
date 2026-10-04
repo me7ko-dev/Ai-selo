@@ -80,7 +80,10 @@ export class Hero {
     const dx = this.pos.x - fromX, dz = this.pos.z - fromZ, l = Math.hypot(dx, dz) || 1;
     this.knock.set((dx / l) * knockback * (blocked ? 0.35 : 1), (dz / l) * knockback * (blocked ? 0.35 : 1));
     this.invuln = blocked ? 0.25 : 0.5;
-    if (!blocked) {
+    if (!blocked && knockback < 1) {
+      // огън/горяща земя: без зашеметяване — иначе героят замръзва в пламъците и не може да излезе
+      this.model.flash(0xff4433);
+    } else if (!blocked) {
       this.stagger = 0.3;
       this.attackIdx = -1;
       this.model.play('hit');

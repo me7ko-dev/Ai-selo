@@ -30,7 +30,8 @@ const CHESTS: { key: string; x: number; z: number; items: { id: ItemId; count: n
   { key: 'chest_forest', x: -156, z: -106, items: [{ id: 'gloves', count: 1 }, { id: 'coin', count: 20 }] },
   { key: 'chest_glade', x: -158, z: -166, items: [{ id: 'tea', count: 2 }, { id: 'rosen_potion', count: 1 }] },
 ];
-const BELL_POS = { x: PLACES.field_ivan.pos.x + 7, z: PLACES.field_ivan.pos.z - 5 };
+// до оградата на нивата (отвън), за да се вижда и стига — оградата минава на z≈103
+const BELL_POS = { x: PLACES.field_ivan.pos.x + 7, z: PLACES.field_ivan.pos.z - 7.5 };
 const START = { x: PLACES.start.pos.x, z: PLACES.start.pos.z, yaw: Math.PI };
 
 export class Rpg {

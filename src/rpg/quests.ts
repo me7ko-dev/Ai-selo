@@ -209,7 +209,7 @@ export class Quests {
         if (v !== 'gena' || s.rosen !== 'return' || inv.count('rosen') < ROSEN_NEEDED) return null;
         inv.remove('rosen', ROSEN_NEEDED);
         c.give('rosen_potion', 2);
-        c.xp(150);
+        c.xp(200);
         h.deed({ kind: 'quest_done', villager: 'gena', text: 'Странникът донесе три стръка росен на баба Гена от Тъмната гора.', importance: 6, affinity: 20, trust: 20, witnesses: ['gena', 'kalin'] });
         h.chronicle('Странникът донесе на баба Гена три стръка росен от Тъмната гора.', ['player', 'gena'], 5, 'quest');
         this.set('rosen', 'done');
