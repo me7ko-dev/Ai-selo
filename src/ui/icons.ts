@@ -119,6 +119,7 @@ let uid = 0;
 /** SVG портрет (кръгъл медальон) на жител или на героя ('hero' = Стоян). Непознато id → обща фигура. */
 export function portrait(id: VillagerId | 'hero' | string, size: number | string = '3em'): string {
   const s = typeof size === 'number' ? `${size}px` : size;
+  if (id === 'player') id = 'hero';
   const cid = `pc${++uid}`;
   const parts: string[] = [];
   const bgFor: Record<string, string> = { gena: '#3a4a3a', peyu: '#4a3a2a', petko: '#3a3a2a', ivan: '#4a2e26', maria: '#4a2a36', radka: '#46302a', kalin: '#3a3426', hero: '#2a2e3a' };
