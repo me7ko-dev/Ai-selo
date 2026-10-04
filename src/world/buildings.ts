@@ -415,6 +415,15 @@ export function buildProp(b: Batch, glow: Batch, p: Prop): void {
       }
       break;
     }
+    case 'field_gate': {
+      // два каменни стълба от двете страни на отвора в зида на нивата
+      const half = (p.extra ?? 3.5) / 2;
+      for (const x of [-half, half]) {
+        b.box(0.7, 1.25, 0.7, x, 0.5, 0, PAL.stone, 0, 0, 0, 0.06);
+        b.box(0.82, 0.14, 0.82, x, 1.17, 0, PAL.stoneLight, 0, 0, 0, 0.04);
+      }
+      break;
+    }
     case 'fold_shed': {
       for (const [x, z] of [[-2.4, 1.2], [2.4, 1.2]]) b.box(0.18, 2.0, 0.18, x, 1.0, z, PAL.wood);
       b.box(5, 2.0, 0.15, 0, 1.0, -1.25, PAL.woodLight, 0, 0, 0, 0.12);

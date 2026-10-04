@@ -239,8 +239,11 @@ function buildPlan(): WorldPlan {
   }
   // ---- чешмата
   {
-    const pl = PLACES.well, rot = pl.facing ?? 0;
-    const r = placeClear({ x: pl.pos.x, z: pl.pos.z, w: 3.2, d: 1.6, rot }, taken, 0.2);
+    // в клина между пътищата североизточно от мегдана, с лице към ореха (на старото място placeClear я буташе
+    // до (11.9, 39.1) — точно на пътеката от ореха към източния път)
+    void PLACES.well;
+    const rot = -0.72;
+    const r = placeClear({ x: 13.2, z: 25.4, w: 3.2, d: 2.2, rot }, taken, 0.2);
     takeRect(r, 'fountain');
     props.push({ type: 'fountain', x: r.x, z: r.z, rot, s: 1 });
   }
@@ -271,13 +274,26 @@ function buildPlan(): WorldPlan {
     footprints.push({ ...r, kind: 'field' }); taken.push(r);
     props.push({ type: 'field', x: r.x, z: r.z, rot: r.rot, s: 1, extra: r.w * 100 + r.d });
     const [sx, sz] = L(r, 2, 1); props.push({ type: 'scarecrow', x: sx, z: sz, rot: 0.5, s: 1 }); col.circle(sx, sz, 0.3);
-    // ниска каменна ограда около нивата (без страната към пътя)
+    // ниска каменна ограда около нивата с портичка на север (до хлопатаря/камбаната на Иван, откъм пътя)
     const c = (lx: number, lz: number) => L(r, lx, lz);
-    fences.push({ type: 'wall', pts: [c(-12.8, -10.8), c(12.8, -10.8), c(12.8, 10.8), c(-12.8, 10.8), c(-12.8, -10.8)], h: 0.8 });
+    const g0 = -2.6, g1 = 0.9;
+    fences.push({ type: 'wall', pts: [c(g1, -10.8), c(12.8, -10.8), c(12.8, 10.8), c(-12.8, 10.8), c(-12.8, -10.8), c(g0, -10.8)], h: 0.8 });
+    const [gx, gz] = c((g0 + g1) / 2, -10.8);
+    props.push({ type: 'field_gate', x: gx, z: gz, rot: r.rot, s: 1, extra: g1 - g0 });
+    for (const lx of [g0, g1]) { const [px, pz] = c(lx, -10.8); col.circle(px, pz, 0.45); }
     for (let k = 0; k < 3; k++) {
       const [hx, hz] = c(16 + k * 0.5, -6 + k * 5.5);
       if (roadDist(hx, hz) > 4) { props.push({ type: 'haystack', x: hx, z: hz, rot: k, s: 0.9 + k * 0.1 }); col.circle(hx, hz, 1.5); }
     }
+  }
+
+  // ---- стълбите към чардаците (стърчат извън отпечатъка на къщата) — да не се минава през тях
+  for (const h of houses) {
+    const rr = { x: h.x, z: h.z, rot: h.rot };
+    const [sx, sz] = h.chardak === 'front'
+      ? L(rr, h.w / 2 + 0.6, h.d / 2 + h.chardakW - 1.52)
+      : L(rr, (h.chardak === 'left' ? -1 : 1) * (h.w / 2 + h.chardakW - 0.6), h.d / 2 + 0.55 + 1.23);
+    if (roadDist(sx, sz) > roadHalfWidth(sx, sz) + 1.0) col.box(sx, sz, 1.0, h.chardak === 'front' ? 2.5 : 2.3, h.rot);
   }
 
   // ---- дворове: дървени огради зад къщите, дърва за огрев, плодни дървета
