@@ -27,7 +27,7 @@ export class StartScreen {
       b.addEventListener('click', () => fn());
       return b;
     };
-    this.btnCont = mk('Продължи', 'cont', () => this.onContinue());
+    this.btnCont = mk('Продължи', 'start-contbtn', () => this.onContinue());
     this.contHint = h('div.start-hint');
     this.aiDot = h('span.dot');
     this.aiEl = h('span');
@@ -43,8 +43,8 @@ export class StartScreen {
         h('div.start-menu', null,
           mk('Нова игра', 'primary', () => this.onNew()),
           h('div.start-cont', null, this.btnCont, this.contHint),
-          mk('Лайв режим', 'live', () => this.onLive()),
-          mk('Настройки', 'set', () => this.onSettings()),
+          mk('Лайв режим', 'start-live', () => this.onLive()),
+          mk('Настройки', 'start-set', () => this.onSettings()),
         ),
       ),
       h('div.start-foot', null, h('span.start-ai', null, this.aiDot, this.aiEl), this.verEl),
