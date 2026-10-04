@@ -18,7 +18,7 @@ const skyFrag = /* glsl */`
 uniform vec3 uTop; uniform vec3 uMid; uniform vec3 uHorizon; uniform vec3 uGround;
 uniform vec3 uSunDir; uniform vec3 uMoonDir; uniform vec3 uSunColor; uniform vec3 uGlow;
 uniform float uStars; uniform float uTime; uniform float uCloud; uniform vec3 uCloudLit; uniform vec3 uCloudShade;
-uniform float uFlash; uniform float uSunVis; uniform float uMoonVis;
+uniform float uFlash; uniform float uSunVis; uniform float uMoonVis; uniform vec3 uFogColor; uniform float uFogMix;
 varying vec3 vDir;
 float hash3(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
 float hash2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -66,6 +66,8 @@ void main() {
   gl_FragColor = vec4(col, 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
+  // мъглата се смесва след преобразуването (както в материалите на three) — затова цветът ѝ е вече в sRGB
+  gl_FragColor.rgb = mix(gl_FragColor.rgb, uFogColor, uFogMix * (1.0 - smoothstep(0.0, 0.9, h) * 0.3));
 }`;
 
 export interface SkyWeather { cloud: number; dark: number; fogNear: number; fogFar: number; flash: number }
@@ -94,7 +96,7 @@ export class SkySystem {
       uTop: { value: new THREE.Color() }, uMid: { value: new THREE.Color() }, uHorizon: { value: new THREE.Color() }, uGround: { value: new THREE.Color() },
       uSunDir: { value: this.sunDir }, uMoonDir: { value: this.moonDir }, uSunColor: { value: new THREE.Color() }, uGlow: { value: new THREE.Color() },
       uStars: { value: 0 }, uTime: { value: 0 }, uCloud: { value: 0.3 }, uCloudLit: { value: new THREE.Color() }, uCloudShade: { value: new THREE.Color() },
-      uFlash: { value: 0 }, uSunVis: { value: 1 }, uMoonVis: { value: 0 },
+      uFlash: { value: 0 }, uSunVis: { value: 1 }, uMoonVis: { value: 0 }, uFogColor: { value: new THREE.Color() }, uFogMix: { value: 0 },
     };
     const mat = new THREE.ShaderMaterial({ uniforms: this.u, vertexShader: skyVert, fragmentShader: skyFrag, side: THREE.BackSide, depthWrite: false, depthTest: false, fog: false });
     this.dome = new THREE.Mesh(new THREE.SphereGeometry(1000, 32, 16), mat);
@@ -164,10 +166,14 @@ export class SkySystem {
     this.u.uMoonVis.value = sstep(-0.05, 0.1, this.moonDir.y) * (1 - dk * 0.9) * (0.3 + nightW * 0.7);
 
     // мъглата е с цвета на хоризонта
-    this.fog.color.copy(hor).lerp(mid, 0.3);
+    // three смесва мъглата след tone mapping и sRGB → подаваме я вече кодирана, за да съвпада с хоризонта на небето
+    this.fog.color.copy(hor).lerp(mid, 0.25).convertLinearToSRGB();
     const lf = this.localFog;
     this.fog.near = w.fogNear * (1 - lf * 0.9);
     this.fog.far = w.fogFar * (1 - lf * 0.75);
+    // при гъста мъгла и небето се губи в нея
+    (this.u.uFogColor.value as THREE.Color).copy(this.fog.color);
+    this.u.uFogMix.value = Math.min(1, Math.max(0, (480 - this.fog.far) / 380));
 
     // светлина: слънцето денем, луната нощем (по-слаба, синкава)
     const useMoon = e < -0.02;

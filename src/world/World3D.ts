@@ -220,7 +220,8 @@ export class World3D implements WorldQuery {
 
   setFestival(on: boolean): void { this.festival.set(on); }
 
-  setWeather(w: Weather): void { this.weatherName = w; }
+  /** Сменя времето плавно (~5 с); instant — веднага (напр. при зареждане на запис). */
+  setWeather(w: Weather, instant = false): void { this.weatherName = w; if (instant) this.wp = { ...WEATHER[w] }; }
   get weather(): Weather { return this.weatherName; }
 
   setQuality(q: Quality): void {
