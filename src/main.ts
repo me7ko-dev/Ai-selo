@@ -14,7 +14,8 @@ function progress(p: number, text?: string): void {
 
 Game.create(canvas, uiRoot, progress)
   .then((game) => {
-    (window as unknown as { game: Game }).game = game;
+    (window as unknown as { game: Game; __ready: boolean }).game = game;
+    (window as unknown as { __ready: boolean }).__ready = true;
     loading?.classList.add('done');
     setTimeout(() => loading?.remove(), 700);
   })
