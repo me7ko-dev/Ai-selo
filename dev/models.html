@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="bg">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Модели — преглед</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #9cc7e8; font-family: sans-serif; }
+    canvas { display: block; }
+    #ui { position: fixed; left: 8px; top: 8px; display: flex; flex-wrap: wrap; gap: 4px; max-width: 70vw; }
+    #ui button { background: rgba(20,16,12,0.72); color: #f3ead7; border: 1px solid rgba(232,194,122,0.35); border-radius: 6px; padding: 4px 8px; cursor: pointer; }
+    #ui button.on { background: #e8c27a; color: #14100c; }
+    #info { position: fixed; right: 8px; bottom: 8px; color: #14100c; background: rgba(255,255,255,0.6); padding: 4px 8px; border-radius: 6px; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div id="ui"></div>
+  <div id="info"></div>
+  <script type="module" src="/src/dev/models.ts"></script>
+</body>
+</html>
