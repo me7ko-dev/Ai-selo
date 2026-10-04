@@ -6,7 +6,34 @@
 - **За Windows:** [Releases → latest](https://github.com/me7ko-dev/Ai-selo/releases/tag/latest) → свали `BalkanskiLegendi-windows.zip`, разархивирай и пусни `BalkanskiLegendi.exe`
 - Планът и решенията: [PLAN.md](PLAN.md) · Благодарности и лицензи: [CREDITS.md](CREDITS.md)
 
-<!-- СНИМКИ -->
+## Снимки
+
+<p><img src="docs/screenshots/title.jpg" width="49%" alt="Начален екран"> <img src="docs/screenshots/village-day.jpg" width="49%" alt="Самодивско денем"></p>
+<p><em>Начален екран</em> · <em>Самодивско денем</em></p>
+
+<p><img src="docs/screenshots/square-gossip.jpg" width="49%" alt="Клюки на мегдана"> <img src="docs/screenshots/dialogue.jpg" width="49%" alt="Разговор с Радка"></p>
+<p><em>Клюки на мегдана</em> · <em>Разговор с Радка</em></p>
+
+<p><img src="docs/screenshots/village-sunset.jpg" width="49%" alt="Залез над селото"> <img src="docs/screenshots/village-night.jpg" width="49%" alt="Селото нощем"></p>
+<p><em>Залез над селото</em> · <em>Селото нощем</em></p>
+
+<p><img src="docs/screenshots/forest.jpg" width="49%" alt="Тъмната гора по здрач"> <img src="docs/screenshots/samodivi.jpg" width="49%" alt="Поляната на самодивите"></p>
+<p><em>Тъмната гора по здрач</em> · <em>Поляната на самодивите</em></p>
+
+<p><img src="docs/screenshots/lamia-fight.jpg" width="49%" alt="Ламята на Ламин връх"> <img src="docs/screenshots/sabor.jpg" width="49%" alt="Сборът след победата"></p>
+<p><em>Ламята на Ламин връх</em> · <em>Сборът след победата</em></p>
+
+<p><img src="docs/screenshots/inventory.jpg" width="49%" alt="Герой и раница"> <img src="docs/screenshots/map.jpg" width="49%" alt="Картата на света"></p>
+<p><em>Герой и раница</em> · <em>Картата на света</em></p>
+
+<p><img src="docs/screenshots/chronicle.jpg" width="49%" alt="Летописът"> <img src="docs/screenshots/time-machine.jpg" width="49%" alt="Машината на времето"></p>
+<p><em>Летописът</em> · <em>Машината на времето</em></p>
+
+<p><img src="docs/screenshots/while-away.jpg" width="49%" alt="„Докато те нямаше…“"> <img src="docs/screenshots/live.jpg" width="49%" alt="Лайв режим — гласуване"></p>
+<p><em>„Докато те нямаше…“</em> · <em>Лайв режим — гласуване</em></p>
+
+Снимките са направени от робот (`npm run shot`) в браузър без видеокарта.
+
 
 ## Историята
 Ламята пресуши река Бистрица и нивите умират. Ти си Стоян — странник с кафяво наметало и сабя на гърба. Помогни на хората от Самодивско, разбери им тайните и тръгни към Ламин връх.
