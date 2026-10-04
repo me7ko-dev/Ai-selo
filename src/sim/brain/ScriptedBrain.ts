@@ -5,7 +5,7 @@ import { VILLAGERS, type VillagerId } from '../../data/villagers';
 import type { Memory, Relation } from '../types';
 import type {
   Brain, BrainReply, BrainStatus, ChatReply, ChatRequest, Partner, Persona, PlanReply, PlanRequest, ReactRequest,
-  ReflectReply, ReflectRequest, SyncBrain, TalkRequest,
+  ReflectReply, ReflectRequest, RetellReply, RetellRequest, SyncBrain, TalkRequest,
 } from './Brain';
 import {
   cap, ensurePeriod, eligible, fill, hasFresh, isFemale, isVillagerId, join, lcFirst, makeCtx, nameOf, parseSituation,
@@ -118,6 +118,10 @@ interface Out { say: string; action?: string; mood?: string; remember?: string }
 
 export class ScriptedBrain implements Brain, SyncBrain {
   status(): BrainStatus { return { connected: false, model: '', label: SCRIPTED_LABEL, busy: false, queue: 0 }; }
+
+  /** Без ИИ преразказът е самият текст от летописа (null = остави го). */
+  retellNow(req: RetellRequest): RetellReply { return { texts: req.events.map(() => null), ai: false }; }
+  retell(req: RetellRequest): Promise<RetellReply> { return Promise.resolve(this.retellNow(req)); }
 
   // ——————————————— Разговор с играча ———————————————
   talkNow(req: TalkRequest): BrainReply {

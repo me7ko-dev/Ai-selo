@@ -3,7 +3,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { VillageSim } from '../src/sim/VillageSim';
 import { Timeline, MemorySnapshotStore } from '../src/sim/timeline';
-import { catchUp, pickCards } from '../src/sim/away';
+import { catchUp, catchUpAsync, pickCards, AWAY_AI_CARDS } from '../src/sim/away';
+import type { Brain, RetellRequest } from '../src/sim/brain/Brain';
 import { ScriptedBrain } from '../src/sim/brain/ScriptedBrain';
 import { PLACES, dist } from '../src/data/layout';
 import { BONFIRE } from '../src/sim/schedules';
@@ -280,4 +281,40 @@ test('ИИ мозък: допълнителни реплики, без да сп
   const r = await sim.playerSay('radka', { text: 'Как си?' });
   assert.equal(r.ai, true); assert.equal(talks, 1);
   assert.ok(sim.villager('radka').memories.some(m => m.text === 'Странникът ме заговори.'));
+});
+
+test('„Докато те нямаше…“ с ИИ: светът е същият, ИИ преразказва до 3 картички, таван на чакането', async () => {
+  const sb = new ScriptedBrain();
+  let asked: RetellRequest | null = null;
+  const fake = (mode: 'ok' | 'hang' | 'off'): Brain => ({
+    status: () => ({ ...sb.status(), connected: mode !== 'off' }),
+    talk: r => sb.talk(r), chat: r => sb.chat(r), react: r => sb.react(r), plan: r => sb.plan(r), reflect: r => sb.reflect(r),
+    retell: (req) => { asked = req; return mode === 'hang' ? new Promise(() => {}) : Promise.resolve({ texts: req.events.map((e, i) => `Разказвачът казва (${i + 1}): ${e.title}.`), ai: true }); },
+  });
+  const ref = new VillageSim({ seed: 77 });
+  const refCards = catchUp(ref, 3 * 3600 * 1000);
+  const sim = new VillageSim({ seed: 77 });
+  const cards = await catchUpAsync(sim, 3 * 3600 * 1000, fake('ok'));
+  assert.deepEqual(sim.snapshot(), ref.snapshot(), 'превъртането е детерминирано, както без ИИ');
+  assert.equal(cards.length, refCards.length);
+  const ai = cards.filter(c => c.ai);
+  assert.equal(ai.length, Math.min(AWAY_AI_CARDS, cards.length));
+  assert.equal(asked!.events.length, ai.length);
+  for (const c of ai) assert.match(c.text, /^Разказвачът казва/);
+  // избрани са най-важните
+  const minAi = Math.min(...ai.map(c => c.score ?? 0)), maxRest = Math.max(-99, ...cards.filter(c => !c.ai).map(c => c.score ?? 0));
+  assert.ok(minAi >= maxRest, 'ИИ преразказва най-важните картички');
+  for (let i = 1; i < cards.length; i++) assert.ok(cards[i - 1].time <= cards[i].time, 'редът по време се пази');
+  // ИИ мълчи → след тавана остават картичките по сценарий
+  const sim2 = new VillageSim({ seed: 77 });
+  const t0 = Date.now();
+  const c2 = await catchUpAsync(sim2, 3 * 3600 * 1000, fake('hang'), { timeoutMs: 60 });
+  assert.ok(Date.now() - t0 < 3000);
+  assert.deepEqual(c2.map(c => c.text), refCards.map(c => c.text));
+  assert.ok(c2.every(c => !c.ai));
+  // няма връзка → без ИИ
+  const c3 = await catchUpAsync(new VillageSim({ seed: 77 }), 3 * 3600 * 1000, fake('off'));
+  assert.ok(c3.every(c => !c.ai));
+  // по подразбиране — мозъкът на симулацията; кратко отсъствие → нищо
+  assert.deepEqual(await catchUpAsync(new VillageSim({ seed: 1, brain: fake('ok') }), 1000), []);
 });

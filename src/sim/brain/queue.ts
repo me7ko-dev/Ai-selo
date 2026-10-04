@@ -3,7 +3,7 @@
 // Ако опашката стане по-дълга от maxLen, най-старите заявки с най-нисък приоритет се махат
 // и веднага получават резервния отговор (по сценарий).
 
-export const PRIORITY = { talk: 0, react: 1, chat: 1, plan: 2, reflect: 3 } as const;
+export const PRIORITY = { talk: 0, retell: 0, react: 1, chat: 1, plan: 2, reflect: 3 } as const;
 
 interface Item {
   priority: number;

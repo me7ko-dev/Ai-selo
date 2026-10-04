@@ -3,11 +3,11 @@
 // се връща отговорът на мозъка по сценарий за същата заявка (ai: false).
 import type {
   AiSettings, Brain, BrainReply, BrainStatus, ChatReply, ChatRequest, PlanReply, PlanRequest, ReactRequest, ReflectReply,
-  ReflectRequest, TalkRequest,
+  ReflectRequest, RetellReply, RetellRequest, TalkRequest,
 } from './Brain';
 import { DEFAULT_AI } from './Brain';
 import { BrainQueue, PRIORITY } from './queue';
-import { chatPrompt, planPrompt, reactPrompt, reflectPrompt, talkPrompt, type Prompt } from './prompt';
+import { chatPrompt, planPrompt, reactPrompt, reflectPrompt, retellPrompt, talkPrompt, type Prompt } from './prompt';
 import type { ScriptedBrain } from './ScriptedBrain';
 import { SCRIPTED_LABEL } from './ScriptedBrain';
 import { cleanLine, cleanMood, parseJsonObject } from './validate';
@@ -258,6 +258,11 @@ export class OllamaBrain implements Brain {
     }, () => this.fallback.planNow(req));
   }
 
+  retell(req: RetellRequest): Promise<RetellReply> {
+    if (!req.events.length) return Promise.resolve(this.fallback.retellNow(req));
+    return this.run(PRIORITY.retell, () => retellPrompt(req), (o) => parseRetell(o, req), () => this.fallback.retellNow(req));
+  }
+
   reflect(req: ReflectRequest): Promise<ReflectReply> {
     return this.run(PRIORITY.reflect, () => reflectPrompt(req), (o) => {
       if (!Array.isArray(o.beliefs)) return null;
@@ -270,6 +275,20 @@ export class OllamaBrain implements Brain {
       return out.length ? { beliefs: out, ai: true } : null;
     }, () => this.fallback.reflectNow(req));
   }
+}
+
+/** Проверява преразказа: всеки текст поотделно (лошият остава null → текстът по сценарий). */
+export function parseRetell(o: Record<string, unknown>, req: RetellRequest): RetellReply | null {
+  const arr = o.texts;
+  if (!Array.isArray(arr)) return null;
+  const texts = req.events.map((e, i) => {
+    const t = cleanLine(arr[i], { maxSentences: 3, maxLen: 280, minCyr: 12 });
+    if (!t || t.length < 25) return null;
+    // да не е просто преписан текстът по сценарий
+    if (t.replace(/\s+/g, ' ') === e.text.replace(/\s+/g, ' ')) return null;
+    return t;
+  });
+  return texts.some(Boolean) ? { texts, ai: true } : null;
 }
 
 function isAbort(e: unknown): boolean {

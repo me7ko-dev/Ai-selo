@@ -1,8 +1,21 @@
 // „Докато те нямаше…“ — светът превърта изминалото реално време и връща до 6 картички с най-интересното.
 import type { ChronicleEntry, ChronicleType } from './types';
 import type { VillageSim } from './VillageSim';
+import type { Brain } from './brain/Brain';
+import { dayOf, formatClock } from '../core/time';
+import { WEATHER_TEXT } from './text';
 
-export interface AwayCard { title: string; text: string; time: number; type: ChronicleType; participants: string[] }
+export interface AwayCard {
+  title: string; text: string; time: number; type: ChronicleType; participants: string[];
+  /** Колко е важна случката (важност + вид) — по нея се избират картичките за ИИ. */
+  score?: number;
+  /** Текстът е преразказан от ИИ. */
+  ai?: boolean;
+}
+
+/** Колко картички преразказва ИИ и колко най-много чака играчът. */
+export const AWAY_AI_CARDS = 3;
+export const AWAY_AI_TIMEOUT_MS = 15_000;
 
 /** 1 реална минута = 15 игрови. */
 export const AWAY_GAME_MIN_PER_REAL_MS = 15 / 60000;
@@ -57,7 +70,73 @@ export function pickCards(entries: ChronicleEntry[], max = 6): AwayCard[] {
     typeCount.set(best.e.type, (typeCount.get(best.e.type) ?? 0) + 1);
     if (best.e.tag) tagSeen.add(best.e.tag);
   }
-  return chosen.sort((a, b) => a.time - b.time || a.id - b.id).map(e => ({ title: cardTitle(e), text: e.text, time: e.time, type: e.type, participants: [...e.participants] }));
+  return chosen.sort((a, b) => a.time - b.time || a.id - b.id).map(e => ({
+    title: cardTitle(e), text: e.text, time: e.time, type: e.type, participants: [...e.participants], score: e.importance + (TYPE_BONUS[e.type] ?? 0),
+  }));
+}
+
+export interface AwayAiOptions {
+  /** Колко най-много да се чака ИИ (по подразбиране 15 с). */
+  timeoutMs?: number;
+  /** По желание: свързване с ИИ преди преразказа (напр. () => brainHandle.connect()); влиза в същия таван. */
+  connect?: () => Promise<unknown>;
+  /** „Сега: …“ за подканата. */
+  situation?: string;
+}
+
+function connectedBrain(brain: Brain | null | undefined): Brain | null {
+  try { return brain && typeof brain.retell === 'function' && brain.status().connected ? brain : null; } catch { return null; }
+}
+
+/**
+ * „Докато те нямаше…“ с ИИ: първо светът се превърта детерминирано (както catchUp — по сценарий),
+ * после, ако има връзка с ИИ, той преразказва трите най-важни картички (ai: true). Каквото не стигне
+ * за timeoutMs или не мине проверката — остава с текста по сценарий. Никога не хвърля.
+ * brain по подразбиране е мозъкът на симулацията (sim.brain).
+ */
+export async function catchUpAsync(sim: VillageSim, realMsAway: number, brain?: Brain | null, opts: AwayAiOptions = {}): Promise<AwayCard[]> {
+  const b = brain === undefined ? sim.brain : brain;
+  const cards = catchUp(sim, realMsAway);
+  if (!cards.length || !b) return cards;
+  const s = sim.state;
+  const situation = opts.situation ?? `Ден ${dayOf(s.time)}, ${formatClock(s.time)}. ${WEATHER_TEXT[s.weather]} ${s.flags.river_flowing || s.flags.lamia_dead ? 'Реката Бистрица отново тече.' : 'Реката Бистрица е пресъхнала.'}`;
+  return retellCards(cards, b, { ...opts, situation, seed: s.rng });
+}
+
+/**
+ * Само преразказът (ако картичките вече са показани по сценарий и искаш да ги смениш после).
+ * Връща нов масив; картичките без ИИ текст са непроменени.
+ */
+export async function retellCards(cards: AwayCard[], brain: Brain | null | undefined, opts: AwayAiOptions & { seed?: number } = {}): Promise<AwayCard[]> {
+  const out = cards.map(c => ({ ...c, participants: [...c.participants] }));
+  if (!out.length || !brain) return out;
+  const limit = Math.max(0, opts.timeoutMs ?? AWAY_AI_TIMEOUT_MS);
+  const deadline = Date.now() + limit;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  // таймерът не е unref — винаги се чисти във finally
+  const timeout = new Promise<null>(res => { timer = setTimeout(() => res(null), limit); });
+  try {
+    if (opts.connect && !connectedBrain(brain)) await Promise.race([opts.connect().catch(() => null), timeout]);
+    const b = connectedBrain(brain);
+    if (!b || Date.now() >= deadline) return out;
+    const top = out.map((c, i) => ({ c, i })).sort((x, y) => (y.c.score ?? 0) - (x.c.score ?? 0) || y.c.time - x.c.time).slice(0, AWAY_AI_CARDS).sort((x, y) => x.i - y.i);
+    const req = {
+      events: top.map(({ c }) => ({ title: c.title, text: c.text, time: c.time, participants: [...c.participants] })),
+      situation: opts.situation ?? '',
+      seed: opts.seed ?? 1,
+    };
+    const rep = await Promise.race([b.retell!(req).catch(() => null), timeout]);
+    if (!rep || !rep.ai || !Array.isArray(rep.texts)) return out;
+    top.forEach(({ i }, k) => {
+      const t = rep.texts[k];
+      if (typeof t === 'string' && t.trim()) { out[i].text = t.trim(); out[i].ai = true; }
+    });
+    return out;
+  } catch {
+    return out;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 const TAG_TITLE: Record<string, string> = {

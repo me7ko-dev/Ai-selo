@@ -386,3 +386,33 @@ test('Ollama: чат, план, размисъл с валиден ИИ', async 
   assert.equal(re.ai, true); assert.equal(re.mood, 'уплашен');
   ob.dispose(); await srv.close();
 });
+
+test('Ollama: преразказ за „Докато те нямаше…“ — добрите текстове с ИИ, лошите остават по сценарий', async () => {
+  let asked = '';
+  const srv = await fakeOllama((req, body, res) => {
+    if (req.url === '/api/tags') return json(res, tags(['qwen3.5:4b']));
+    const b = JSON.parse(body) as { messages: { content: string }[]; format: { properties: Record<string, unknown> } };
+    asked = b.messages.map((m) => m.content).join('\n');
+    assert.ok(Object.keys(b.format.properties).includes('texts'));
+    json(res, chatContent(JSON.stringify({ texts: [
+      'Под стария орех Иван събра смелост и каза на Мария, че я обича — а тя се усмихна и не си тръгна.',
+      'As an AI I cannot do this.',
+      'Посред нощ Караконджулът тропаше по покривите, а хората шепнеха зад залостените врати до първи петли.',
+    ] })));
+  });
+  const ob = new OllamaBrain(settings(srv.url), new ScriptedBrain());
+  await ob.connect();
+  const ev = (text: string) => ({ title: 'Случка', text, time: 2000, participants: ['ivan', 'maria'] });
+  const r = await ob.retell({ events: [ev('Иван каза на Мария, че я обича.'), ev('Радка продаде боб.'), ev('Караконджулът дойде.')], situation: 'Ден 3, 08:00.', seed: 1 });
+  assert.equal(r.ai, true);
+  assert.equal(r.texts.length, 3);
+  assert.ok(r.texts[0]?.includes('Мария'));
+  assert.equal(r.texts[1], null);
+  assert.ok(r.texts[2]?.includes('Караконджулът'));
+  assert.match(asked, /Иван \(ковач\)/);
+  assert.match(asked, /участници: Иван, Мария/);
+  // без връзка → всичко null, ai:false
+  const off = await new OllamaBrain(settings('http://127.0.0.1:9'), new ScriptedBrain()).retell({ events: [ev('x y z')], situation: '', seed: 1 });
+  assert.deepEqual(off, { texts: [null], ai: false });
+  ob.dispose(); await srv.close();
+});

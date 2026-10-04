@@ -1,7 +1,7 @@
 // Подкани (prompts) към локалния ИИ — на български, кратки (num_ctx 4096).
 import { dayOf, formatClock } from '../../core/time';
 import type { Memory, Relation } from '../types';
-import type { ChatRequest, Partner, Persona, PlanRequest, ReactRequest, ReflectRequest, TalkRequest } from './Brain';
+import type { ChatRequest, Partner, Persona, PlanRequest, ReactRequest, ReflectRequest, RetellRequest, TalkRequest } from './Brain';
 import { isFemale, nameOf, profileOf } from './context';
 
 export interface Prompt { system: string; user: string; format: Record<string, unknown> }
@@ -198,4 +198,38 @@ export function reflectPrompt(req: ReflectRequest): Prompt {
     'Вечер е. Помисли над деня. Свий спомените до най-много 5 кратки убеждения от първо лице — за странника, за другите жители, за реката и Ламята (например „Странникът ми помогна. Може би на него може да се вярва.“). Запази най-важните стари убеждения, ако още са верни. Върни JSON: {"beliefs": ["...", "..."]}',
   ].join('\n');
   return { system: systemPrompt(req.speaker, null), user, format: REFLECT_SCHEMA };
+}
+
+export function retellSchema(n: number) {
+  return {
+    type: 'object',
+    properties: { texts: { type: 'array', minItems: n, maxItems: n, items: { type: 'string' } } },
+    required: ['texts'],
+  };
+}
+
+/** „Докато те нямаше…“: преразказ на най-важните случки като в книжка с приказки. */
+export function retellPrompt(req: RetellRequest): Prompt {
+  const n = req.events.length;
+  const system = [
+    'Ти си стар разказвач от село Самодивско. Странникът Стоян се връща в селото след отсъствие и ти му разказваш накратко какво е станало, докато го е нямало.',
+    WORLD,
+    'Жителите: баба Гена (билкарка), дядо Пею (кмет), Петко (овчар), Иван (ковач), Мария (тъкачка), Радка (стопанка на хана), Калин (дърводелец).',
+    'Правила:',
+    'Пиши САМО на български език, с правилен род и падеж.',
+    'Всяка случка — 1 или 2 кратки, живи изречения в минало време, в трето лице, като в книжка с приказки: топло, с малка подробност (звук, светлина, жест).',
+    'Пази фактите: същите хора, същото място, същият изход. Не измисляй нови жители, места или случки.',
+    'Без модерни неща, без религия, църкви и кръстове, без алкохол. Никога не споменавай, че си изкуствен интелект.',
+  ].join('\n');
+  const list = req.events.map((e, i) => {
+    const who = e.participants.filter((p) => p !== 'player').map((p) => nameOf(p)).join(', ');
+    return `${i + 1}. (Ден ${dayOf(e.time)}, ${formatClock(e.time)}) ${e.title}: ${e.text}${who ? ` [участници: ${who}]` : ''}`;
+  }).join('\n');
+  const user = [
+    `Сега: ${req.situation}`,
+    `Случките (${n}):`,
+    list,
+    `Преразкажи всяка случка поотделно, в същия ред. Върни JSON: {"texts": [${Array.from({ length: n }, (_, i) => `"разказ за случка ${i + 1}"`).join(', ')}]}`,
+  ].join('\n');
+  return { system, user, format: retellSchema(n) };
 }
