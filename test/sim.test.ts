@@ -112,7 +112,7 @@ test('машината на времето: клон от минал момен�
   const st = loaded!.state as WorldState;
   st.branchId = br.id;
   sim.load(st);
-  sim.advance(600);
+  sim.advance(1440); // цял ден: нощем може и нищо да не стане
   const forkEntries = tl.entriesFor(br.id);
   const parentBefore = mainEntries.filter(e => e.time <= near.time);
   const parentAfter = mainEntries.filter(e => e.time > near.time);

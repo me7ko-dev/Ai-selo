@@ -28,6 +28,8 @@ import { heightAt } from '../world/height';
 import type { IconKey } from '../data/icons';
 import type { EquipSlot } from '../ui/InventoryView';
 import { wireUi } from './uiWire';
+import { buildSpotTable } from './spots';
+import { setSpotTable } from '../sim/schedules';
 
 export type Modal = null | 'dialogue' | 'inventory' | 'map' | 'chronicle' | 'time' | 'settings' | 'away' | 'dead' | 'watch';
 
@@ -102,6 +104,8 @@ export class Game {
     this.vote = new LiveVote({ voteSeconds: this.settings.live.voteSeconds, onResult: (type, by) => this.onLiveResult(type, by) });
     progress(0.8, 'Летописецът точи перото…');
     await tick();
+    // жителите стоят пред истинските сгради (светът ги мести встрани от пътищата)
+    setSpotTable(buildSpotTable(this.world.plan));
     // меню: селото живее зад заглавието
     this.sim = new VillageSim({ seed: 7 });
     this.timeline = Timeline.create();

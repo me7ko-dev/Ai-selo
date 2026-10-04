@@ -12,7 +12,7 @@ import type {
   Activity, ChronicleEntry, ChronicleType, DialogueReply, InjectedEvent, Memory, PlayerDeed, Relation, Rumor,
   SimEvents, VillagerState, WorldState,
 } from './types';
-import { scheduleFor, spotFor, horoSpot, gatherSpot, type Goal } from './schedules';
+import { scheduleFor, spotFor, horoSpot, gatherSpot, placeCenter, type Goal } from './schedules';
 import { clueText, beliefIn, type ClueTopic } from './clues';
 import { LOC, Name, WEATHER_TEXT, cap, g, hash, hpick, isVillager, moodScore, moodWord, nameOf, type MoodKey } from './text';
 import { addMemory, pruneMemories, retrieve } from './memory';
@@ -60,7 +60,7 @@ export class VillageSim {
       const relations: Record<string, Relation> = {};
       for (const o of VILLAGER_IDS) if (o !== id) relations[o] = { ...(p.relations[o] ?? { affinity: 0, trust: 0 }) };
       relations.player = { ...PLAYER_START[id] };
-      const pos = { ...PLACES[p.home].pos };
+      const pos = spotFor(p.home, id, true);
       return {
         id, pos, facing: PLACES[p.home].facing ?? 0, activity: 'sleep' as Activity, place: p.home, target: null, path: [],
         needs: { hunger: 70, energy: 85, social: 60, fun: 60 }, mood: moodWord(id, 'calm'), moodValue: 10,
@@ -186,9 +186,9 @@ export class VillageSim {
     v.indoors = !!v.flags.gIn;
     delete v.flags.hurry;
     if (!place) return;
-    const pl = PLACES[place];
-    if (place === 'square' || place === 'walnut') v.facing = Math.atan2(pl.pos.x - v.pos.x, pl.pos.z - v.pos.z);
-    else if (pl.facing !== undefined && !v.indoors) v.facing = act === 'work' ? Math.atan2(pl.pos.x - v.pos.x, pl.pos.z - v.pos.z) : pl.facing;
+    const pl = PLACES[place], c = placeCenter(place);
+    if (place === 'square' || place === 'walnut') v.facing = Math.atan2(c.x - v.pos.x, c.z - v.pos.z);
+    else if (pl.facing !== undefined && !v.indoors) v.facing = act === 'work' ? Math.atan2(c.x - v.pos.x, c.z - v.pos.z) : pl.facing;
     this.onArrive(v, place);
   }
 
