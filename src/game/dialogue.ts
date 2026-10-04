@@ -48,21 +48,20 @@ export class DialogueController {
     g.ui.dialogue.setThinking(false);
     g.ui.dialogue.say(reply.say, { ai: reply.ai, mood: reply.mood });
     g.ui.dialogue.setOptions(this.options(reply.options));
-    if (reply.end) setTimeout(() => { if (this.active && g.modal === 'dialogue') g.closeModal(true); }, 1800);
+    if (reply.end) setTimeout(() => { if (this.active && g.modal === 'dialogue') g.closeModal(); }, 2200);
   }
 
   async choose(optionId: string, text: string): Promise<void> {
     const g = this.g;
     const id = this.active;
     if (!id || this.busy) return;
-    g.ui.dialogue.addPlayerLine?.(text);
     if (optionId.startsWith('q:')) {
       const r = g.rpg.questChoose(id, optionId);
       if (r) {
         g.ui.dialogue.say(r.say, { ai: false });
         g.ui.dialogue.setOptions(r.options ?? this.options(this.lastSimOptions));
         g.refreshInventory();
-        if (r.end) setTimeout(() => { if (this.active === id && g.modal === 'dialogue') g.closeModal(true); }, 2200);
+        if (r.end) setTimeout(() => { if (this.active === id && g.modal === 'dialogue') g.closeModal(); }, 2400);
         return;
       }
     }
@@ -75,7 +74,6 @@ export class DialogueController {
   async free(text: string): Promise<void> {
     const id = this.active;
     if (!id || this.busy || !text.trim()) return;
-    this.g.ui.dialogue.addPlayerLine?.(text);
     await this.ask(id, { text: text.trim() });
   }
 

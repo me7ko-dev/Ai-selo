@@ -25,11 +25,11 @@ export class TimeMachine {
   open(): void {
     const g = this.g;
     g.openModal('time');
-    g.ui.timeMachine.show(this.data());
+    g.ui.time.show(this.data());
     g.sfx('page');
   }
 
-  refresh(): void { if (this.g.modal === 'time') this.g.ui.timeMachine.update(this.data()); }
+  refresh(): void { if (this.g.modal === 'time') this.g.ui.time.update(this.data()); }
 
   viewState(): WorldState { return this.viewer ? this.viewer.state : this.g.sim.state; }
 
@@ -51,9 +51,8 @@ export class TimeMachine {
     this.entries = g.timeline.entriesFor(g.timeline.currentBranch).filter((e) => e.time >= time);
     this.nextEntry = 0;
     g.modal = 'watch';
-    g.ui.timeMachine.hide();
-    g.ui.timeMachine.showPlayback?.(true, speed);
-    g.villagers.update(0.016, this.viewer.state, true);
+    g.ui.time.hide();
+        g.villagers.update(0.016, this.viewer.state, true);
     g.toast(`Гледаш историята от ${formatDayClock(time)} (×${speed}). Esc — назад в настоящето.`, 'info');
   }
 
@@ -66,9 +65,9 @@ export class TimeMachine {
     const t = v.state.time;
     while (this.nextEntry < this.entries.length && this.entries[this.nextEntry].time <= t) {
       const e = this.entries[this.nextEntry++];
-      if (e.importance >= 3 || e.ai) g.ui.timeMachine.ticker?.(e) ?? g.toast(`${formatDayClock(e.time)} — ${e.text}`, 'info');
+      if (e.importance >= 4 || e.ai) g.toast(`${formatDayClock(e.time)} — ${e.text}`, 'info');
     }
-    g.ui.timeMachine.setPlayhead?.(t);
+    g.ui.time.setPlayhead(t);
     // камерата бавно обикаля селото
     this.camT += dt * 0.04;
     const cam = g.engine.camera;
@@ -83,10 +82,10 @@ export class TimeMachine {
   stopWatching(): void {
     const g = this.g;
     this.viewer = null;
-    g.ui.timeMachine.showPlayback?.(false, 1);
+    g.ui.time.setPlayhead(null);
     g.villagers.update(0.016, g.sim.state, true);
     g.modal = 'time';
-    g.ui.timeMachine.show(this.data());
+    g.ui.time.show(this.data());
   }
 
   /** „Зареди оттук“ — нов клон на историята от най-близкия запис преди този момент. */

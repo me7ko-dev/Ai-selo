@@ -12,7 +12,7 @@ import { Rpg } from '../rpg/Rpg';
 import { SaveManager, type MainSave } from '../save/SaveManager';
 import { loadSettings, saveSettings, type Settings } from '../save/settings';
 import { TwitchChat } from '../live/TwitchChat';
-import { LiveVote } from '../live/LiveVote';
+import { LiveVote, liveAnnouncement } from '../live/LiveVote';
 import { Audio } from '../audio/Sfx';
 import { mountUi, type Ui } from '../ui';
 import { VillagerViews } from './villagerViews';
@@ -25,6 +25,9 @@ import { GAME_MINUTES_PER_REAL_SECOND, dayOf, dayPhase, formatDayClock, minuteOf
 import { PLACES } from '../data/layout';
 import { VILLAGERS, type VillagerId } from '../data/villagers';
 import { heightAt } from '../world/height';
+import type { IconKey } from '../data/icons';
+import type { EquipSlot } from '../ui/InventoryView';
+import { wireUi } from './uiWire';
 
 export type Modal = null | 'dialogue' | 'inventory' | 'map' | 'chronicle' | 'time' | 'settings' | 'away' | 'dead' | 'watch';
 
@@ -55,6 +58,7 @@ export class Game {
   private audioAcc = 0;
   private menuT = 0;
   private expectUnlock = false;
+  private suppressKeysUntil = 0;
   private snapshotSeq = 0;
   private flagsSeen = { river: false, festival: false, weather: '' };
   private unsubSim: (() => void)[] = [];
@@ -88,7 +92,7 @@ export class Game {
     this.audio = new Audio();
     this.audio.setVolumes(this.settings.audio);
     this.brainKit = createBrain(this.settings.ai);
-    this.brainKit.onStatus((s) => this.onAiStatus(s));
+    this.brainKit.onStatus((s: BrainStatus) => this.onAiStatus(s));
     this.villagers = new VillagerViews(this.engine.scene);
     this.ambient = new Ambient(this.engine.scene);
     this.dialogue = new DialogueController(this);
@@ -125,7 +129,7 @@ export class Game {
     this.modal = null;
     this.rpg.setControlsEnabled(false);
     this.ui.hud.hide();
-    this.ui.start.show({ canContinue, aiLabel: this.aiStatus.label });
+    this.ui.start.show({ hasSave: canContinue, ai: { connected: this.aiStatus.connected, label: this.aiStatus.label } });
     this.audio.setMusic('village');
   }
 
@@ -207,8 +211,8 @@ export class Game {
     rpg.bus.on('levelup', (e) => { this.ui.banner.show(`Ниво ${e.level}`, e.title); this.sfx('levelup'); });
     rpg.bus.on('questDone', (e) => { this.ui.banner.show('Задачата е изпълнена', e.title); this.sfx('quest'); });
     rpg.bus.on('lamiaDefeated', () => { this.ui.banner.show('Ламята е победена!', 'Бистрица тече отново. Тази вечер селото вдига сбор.'); this.sfx('victory'); });
-    rpg.bus.on('died', () => { this.sfx('death'); this.ui.death?.show?.(() => this.rpg.respawn()); });
-    rpg.bus.on('respawn', () => { this.ui.death?.hide?.(); });
+    rpg.bus.on('died', () => { this.sfx('death'); this.ui.death.show(); });
+    rpg.bus.on('respawn', () => { this.ui.death.hide(); });
     rpg.bus.on('pickup', () => this.refreshInventory());
     return rpg;
   }
@@ -261,6 +265,7 @@ export class Game {
     this.syncWorldFlags();
     this.saveAcc += dt;
     if (this.saveAcc > 30) { this.saveAcc = 0; void this.saveMain(); }
+    if (this.liveOn) this.vote.tick();
     this.audioAcc += dt;
     if (this.audioAcc > 1) { this.audioAcc = 0; this.updateAudio(); }
     void input;
@@ -271,7 +276,7 @@ export class Game {
     const state = this.modal === 'watch' ? this.timeMachine.viewState() : this.sim.state;
     this.updateTags(state.villagers, state.time);
     if (this.modal === 'watch') return;
-    this.ui.hud.minimap(this.rpg.heroPos.x, this.rpg.heroPos.z, this.rpg.heroYaw, this.rpg.markers(), this.villagerDots());
+    this.ui.hud.minimap(this.rpg.heroPos.x, this.rpg.heroPos.z, this.rpg.heroYaw, this.mapMarkers(), this.villagerDots());
     this.hudAcc += dt;
     if (this.hudAcc > 0.1) { this.hudAcc = 0; this.updateHud(); }
   }
@@ -346,23 +351,28 @@ export class Game {
     const h = this.rpg.hud();
     const t = this.sim.state.time;
     this.ui.hud.update({
-      ...h,
-      name: 'Стоян',
-      title: 'Странник',
-      clock: formatDayClock(t),
-      phase: dayPhase(t),
+      name: 'Стоян', level: h.level, title: h.title,
+      hp: h.hp, hpMax: h.maxHp, stamina: h.stamina, staminaMax: h.maxStamina, xp: h.xp, xpMax: h.xpNext,
+      time: t, phase: dayPhase(t),
+      ai: { connected: this.aiStatus.connected, label: this.aiStatus.label, busy: this.aiStatus.busy },
       quests: this.rpg.questLog(),
-      ai: { connected: this.aiStatus.connected, label: this.aiStatus.label },
+      hotbar: h.hotbar.map((c) => (c ? { icon: c.icon, count: c.count, name: c.name } : null)),
+      selected: -1,
     });
-    this.ui.hud.boss(h.boss);
+    this.ui.hud.boss(h.boss ? { name: h.boss.name, heads: h.boss.heads, phase: ['', 'Фаза 1 — Трите глави', 'Фаза 2 — Огнен дъх', 'Фаза 3 — Яростта'][h.boss.phase] ?? `Фаза ${h.boss.phase}` } : null);
     // подсказка за [E]
     let prompt: string | null = null;
-    if (this.modal === null) {
+    if (this.modal === null && !this.rpg.dead) {
       const nv = this.nearVillager();
-      if (nv) prompt = `[E] Говори с ${VILLAGERS[nv].name}`;
-      else { const hint = this.rpg.interactHint(); if (hint) prompt = `[E] ${hint.label}`; }
+      if (nv) prompt = `Говори с ${VILLAGERS[nv].name}`;
+      else { const hint = this.rpg.interactHint(); if (hint) prompt = hint.label; }
     }
     this.ui.hud.prompt(prompt);
+    if (this.liveOn) this.updateLive();
+  }
+
+  mapMarkers(): { x: number; z: number; kind: 'quest' | 'boss' | 'place' }[] {
+    return this.rpg.markers().map((m) => ({ x: m.x, z: m.z, kind: m.kind === 'boss' ? 'boss' : 'quest' }));
   }
 
   nearVillager(): VillagerId | null {
@@ -382,19 +392,14 @@ export class Game {
       if (inp.pressedRaw('Escape') || inp.pressedRaw('KeyT')) this.timeMachine.stopWatching();
       return;
     }
-    const toggle = (m: Exclude<Modal, null>, open: () => void) => {
-      if (this.modal === m) this.closeModal(true);
-      else if (this.modal === null) { open(); }
-    };
-    if (inp.pressedRaw('Tab')) toggle('inventory', () => this.openInventory());
-    if (inp.pressedRaw('KeyM')) toggle('map', () => this.openMap());
-    if (inp.pressedRaw('KeyJ')) toggle('chronicle', () => this.openChronicle());
-    if (inp.pressedRaw('KeyT')) toggle('time', () => this.timeMachine.open());
-    if (inp.pressedRaw('Escape')) {
-      if (this.modal && this.modal !== 'dead' && this.modal !== 'away') this.closeModal(false);
-      else if (this.modal === null) this.openSettings();
-    }
-    if (this.modal === null && inp.pressed('KeyE')) {
+    // прозорците сами се затварят със своя клавиш/Esc; тук само ги отваряме
+    if (this.modal !== null || performance.now() < this.suppressKeysUntil || this.rpg.dead) return;
+    if (inp.pressedRaw('Tab')) this.openInventory();
+    else if (inp.pressedRaw('KeyM')) this.openMap();
+    else if (inp.pressedRaw('KeyJ')) this.openChronicle();
+    else if (inp.pressedRaw('KeyT')) this.timeMachine.open();
+    else if (inp.pressedRaw('Escape')) this.openSettings();
+    else if (inp.pressed('KeyE')) {
       const nv = this.nearVillager();
       if (nv) this.dialogue.open(nv);
       else this.rpg.interact();
@@ -407,7 +412,7 @@ export class Game {
     document.addEventListener('pointerlockchange', () => {
       const locked = document.pointerLockElement === canvas;
       this.ui.hud.setPaused(!locked && this.mode === 'play' && this.modal === null);
-      if (!locked && !this.expectUnlock && this.mode === 'play' && this.modal === null) {
+      if (!locked && !this.expectUnlock && this.mode === 'play' && this.modal === null && performance.now() >= this.suppressKeysUntil) {
         // Esc освободи мишката → менюто
         this.openSettings();
       }
@@ -424,66 +429,97 @@ export class Game {
     this.modal = m;
     this.unlockPointer();
     this.rpg.setControlsEnabled(false);
+    this.engine.input.enabled = false;
     this.ui.hud.prompt(null);
   }
 
-  /** relock = затворено с клавиш (Tab/M/J/T) → веднага обратно в играта; с Esc — трябва клик. */
-  closeModal(relock: boolean): void {
+  /** Прозорецът е затворен (от играча чрез самия прозорец или от играта). */
+  onModalClosed(m: Exclude<Modal, null>): void {
+    if (this.modal !== m) return;
+    this.modal = null;
+    if (m === 'dialogue') this.dialogue.close();
+    this.suppressKeysUntil = performance.now() + 150;
+    this.rpg.setControlsEnabled(true);
+    this.engine.input.enabled = true;
+    if (this.mode === 'play') {
+      this.lockPointer(); // с Tab/M/J/T успява веднага; след Esc — „Кликни, за да играеш“
+      setTimeout(() => this.ui.hud.setPaused(this.mode === 'play' && this.modal === null && document.pointerLockElement !== this.engine.canvas), 120);
+    }
+  }
+
+  /** Играта затваря текущия прозорец (без onClose на изгледа). */
+  closeModal(relock = true): void {
     const m = this.modal;
     if (!m) return;
-    this.modal = null;
     switch (m) {
-      case 'dialogue': this.dialogue.close(); break;
+      case 'dialogue': this.ui.dialogue.close(); break;
       case 'inventory': this.ui.inventory.hide(); break;
       case 'map': this.ui.map.hide(); break;
       case 'chronicle': this.ui.chronicle.hide(); break;
-      case 'time': this.ui.timeMachine.hide(); break;
+      case 'time': this.ui.time.hide(); break;
       case 'settings': this.ui.settings.hide(); break;
       case 'away': this.ui.away.hide(); break;
       default: break;
     }
-    this.rpg.setControlsEnabled(true);
-    if (relock) this.lockPointer();
-    else this.ui.hud.setPaused(document.pointerLockElement !== this.engine.canvas);
+    this.onModalClosed(m);
+    void relock;
   }
 
   // ───────────────────────── прозорци ─────────────────────────
 
   openInventory(): void {
     this.openModal('inventory');
-    this.ui.inventory.show(this.inventoryData());
+    this.ui.inventory.open(this.inventoryData());
     this.sfx('page');
   }
   inventoryData() {
     const inv = this.rpg.inventory();
-    return { ...inv, hotbar: this.rpg.hud().hotbar, stats: { ...inv.stats, ...this.rpg.hud() } };
+    const h = this.rpg.hud();
+    const view = (it: { id: string; name: string; icon: IconKey; count: number; desc: string; kind: string; slot?: string; stats?: string } | null) =>
+      it ? { id: it.id, name: it.name, icon: it.icon, count: it.count, desc: it.desc, kind: it.kind, equip: it.slot as EquipSlot | undefined, stats: it.stats ? [{ label: it.stats, value: '' }] : undefined } : null;
+    const equipment = {} as Record<EquipSlot, ReturnType<typeof view>>;
+    for (const k of Object.keys(inv.equipment) as EquipSlot[]) equipment[k] = view(inv.equipment[k]);
+    return {
+      slots: inv.slots.map(view), equipment,
+      hotbar: h.hotbar.map((c) => (c ? { id: c.id, name: c.name, icon: c.icon, count: c.count, desc: '', kind: 'misc' } : null)),
+      stats: { level: inv.stats.level, title: inv.stats.title, xp: inv.stats.xp, xpMax: inv.stats.xpNext, hp: h.hp, hpMax: h.maxHp, stamina: h.stamina, staminaMax: h.maxStamina, damage: inv.stats.damage, armor: inv.stats.armor, gold: inv.stats.gold },
+    };
   }
   refreshInventory(): void { if (this.modal === 'inventory') this.ui.inventory.update(this.inventoryData()); }
 
   openMap(): void {
     this.openModal('map');
-    this.ui.map.show({
+    this.ui.map.open({
       base: this.world.mapCanvas(), explored: this.rpg.explored(),
-      player: { x: this.rpg.heroPos.x, z: this.rpg.heroPos.z, yaw: this.rpg.heroYaw }, markers: this.rpg.markers(),
+      player: { x: this.rpg.heroPos.x, z: this.rpg.heroPos.z, yaw: this.rpg.heroYaw }, markers: this.mapMarkers(), dots: this.villagerDots(),
     });
     this.sfx('page');
   }
 
   openChronicle(): void {
     this.openModal('chronicle');
-    this.ui.chronicle.show(this.timeline.entriesFor(this.timeline.currentBranch));
+    this.ui.chronicle.open({ entries: this.timeline.entriesFor(this.timeline.currentBranch) });
     this.sfx('page');
+  }
+
+  settingsStatus() {
+    return {
+      ai: { connected: this.aiStatus.connected, label: this.aiStatus.label, reason: this.aiStatus.reason },
+      browser: location.protocol === 'https:',
+      inGame: this.mode === 'play',
+      live: { running: this.liveOn, label: this.liveOn ? (this.twitch ? `Канал: ${this.settings.live.channel}` : 'Пробен чат') : undefined },
+    };
   }
 
   openSettings(): void {
     if (this.modal) this.closeModal(false);
     this.openModal('settings');
-    this.ui.settings.open(this.settings, this.aiStatus);
+    this.ui.settings.open(this.settings, this.settingsStatus());
   }
 
   openAway(cards: AwayCard[]): void {
     this.openModal('away');
-    this.ui.away.show(cards, () => this.closeModal(false));
+    this.ui.away.show(cards, () => this.onModalClosed('away'));
   }
 
   // ───────────────────────── летопис, записи ─────────────────────────
@@ -492,7 +528,8 @@ export class Game {
     this.timeline.add(e);
     if (this.mode !== 'play') return;
     if (e.importance >= 7 && e.type !== 'player' && e.type !== 'quest') this.toast(e.text, 'info');
-    if (this.modal === 'chronicle') this.ui.chronicle.update(this.timeline.entriesFor(this.timeline.currentBranch));
+    if (this.modal === 'chronicle') this.ui.chronicle.update({ entries: this.timeline.entriesFor(this.timeline.currentBranch) });
+    this.timeMachine.refresh();
   }
 
   gameState(): GameState {
@@ -530,8 +567,8 @@ export class Game {
 
   private onAiStatus(s: BrainStatus): void {
     this.aiStatus = s;
-    if (this.mode === 'menu') this.ui.start.setAi(s.label);
-    if (this.modal === 'settings') this.ui.settings.setStatus(s);
+    if (this.mode === 'menu') this.ui.start.update({ ai: { connected: s.connected, label: s.label } });
+    if (this.modal === 'settings') this.ui.settings.setStatus(this.settingsStatus());
   }
 
   applySettings(s: Settings): void {
@@ -544,42 +581,49 @@ export class Game {
     this.engine.renderer.shadowMap.enabled = s.graphics.shadows;
     this.audio.setVolumes(s.audio);
     if (JSON.stringify(s.ai) !== JSON.stringify(prev.ai)) { this.brainKit.setSettings(s.ai); void this.brainKit.connect(); }
-    this.vote.setVoteSeconds?.(s.live.voteSeconds);
+    (this.vote as unknown as { voteSeconds: number }).voteSeconds = s.live.voteSeconds;
   }
 
   startLive(): void {
     this.liveOn = true;
-    this.ui.live.show();
     const ch = this.settings.live.channel.trim();
+    this.ui.live.setLive(true, ch);
+    this.twitch?.disconnect(); this.twitch = null;
+    this.vote.stopDemo();
     if (ch) {
-      this.twitch?.disconnect();
       this.twitch = new TwitchChat(ch);
-      this.twitch.on('message', (m) => { this.vote.feed(m.user, m.text); this.ui.live.chat(m.user, m.text); });
-      this.twitch.on('status', (st) => this.ui.live.status(st));
+      this.twitch.on('message', (m) => { this.vote.feed(m.user, m.text); this.ui.live.chat(m.user, m.text, m.color); });
+      this.twitch.on('status', (st) => { if (st === 'connected') this.toast(`Лайв: свързан с канала ${ch}`, 'info'); if (st === 'error') this.toast('Лайв: няма връзка с чата.', 'warn'); });
       this.twitch.connect();
     } else {
       this.toast('Лайв режим: няма канал в настройките — пускам пробен чат.', 'warn');
-      this.vote.startDemo();
+      this.vote.startDemo((m) => this.ui.live.chat(m.user, m.text));
     }
   }
   stopLive(): void {
     this.liveOn = false;
     this.twitch?.disconnect(); this.twitch = null;
     this.vote.stopDemo();
-    this.ui.live.hide();
+    this.ui.live.setLive(false);
+    this.ui.live.setVote(null);
+  }
+  private liveSig = '';
+  private updateLive(): void {
+    const st = this.vote.state();
+    if (!st.active) { if (this.liveSig !== '') { this.liveSig = ''; this.ui.live.setVote(null); } return; }
+    const sig = st.endsAt + ':' + st.options.map((o) => o.votes).join(',');
+    if (sig === this.liveSig) return;
+    this.liveSig = sig;
+    this.ui.live.setVote({ options: st.options.map((o) => ({ cmd: o.cmd, label: o.label, count: o.votes })), endsAt: st.endsAt, duration: this.settings.live.voteSeconds * 1000 });
   }
   private onLiveResult(type: 'karakondzhul' | 'samodivi' | 'storm' | 'sabor' | 'theft', by: string): void {
     this.sim.inject({ type, by } as Parameters<VillageSim['inject']>[0]);
-    const label: Record<string, string> = { karakondzhul: 'пусна Караконджула в селото', samodivi: 'извика самодивите', storm: 'извика буря над селото', sabor: 'вдигна сбор на мегдана', theft: 'подшушна за кражба' };
-    this.ui.live.result(`${by} ${label[type] ?? type}!`);
+    this.ui.live.result(liveAnnouncement(type, by));
     this.sfx(type === 'storm' ? 'thunder' : 'vote');
   }
 
   toast(text: string, kind: string = 'info'): void { this.ui.hud.toast(text, kind as never); }
   sfx(name: string): void { try { this.audio.play(name as never); } catch { /* без звук */ } }
 
-  private wireUi(): void {
-    // свързва се в uiWire.ts (след като интерфейсът е готов)
-    void import('./uiWire').then((m) => m.wireUi(this));
-  }
+  private wireUi(): void { wireUi(this); }
 }
