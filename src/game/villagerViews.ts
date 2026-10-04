@@ -72,7 +72,7 @@ export class VillagerViews {
       const moved = Math.hypot(view.pos.x - px, view.pos.z - pz) / Math.max(dt, 1e-4);
       view.speed += (moved - view.speed) * Math.min(1, dt * 6);
       // спи вкъщи → не се вижда
-      const hidden = v.activity === 'sleep' && !!v.place && v.place.startsWith('house_');
+      const hidden = !!v.indoors || (v.activity === 'sleep' && !!v.place && v.place.startsWith('house_'));
       if (hidden !== !view.visible) { view.model.root.visible = !hidden; view.visible = !hidden; }
       if (hidden) continue;
       // посока: когато говори с играча — към играча
