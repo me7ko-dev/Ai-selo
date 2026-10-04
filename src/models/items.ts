@@ -140,13 +140,13 @@ export function buildRosen(): THREE.Group {
     const a = i * 1.26;
     part(g, sphGeo(0), leaf, 0.09, 0.012, 0.035, Math.cos(a) * 0.08, 0.02, Math.sin(a) * 0.08, 0, -a, 0.15, false);
   }
-  const halo = haloSprite('#8fd0ff', 0.9, 0.55);
+  const halo = haloSprite('#8fd0ff', 1.3, 0.6);
   halo.position.y = 0.42; g.add(halo);
-  const core = haloSprite('#e8fbff', 0.35, 0.8);
+  const core = haloSprite('#e8fbff', 0.5, 0.85);
   core.position.y = 0.42; g.add(core);
   // леко пулсиране без кадрови заделяния
   const ph = Math.random() * 6;
-  halo.onBeforeRender = () => { const k = 0.85 + 0.15 * Math.sin(performance.now() * 0.002 + ph); halo.scale.set(0.9 * k, 0.9 * k, 1); };
+  halo.onBeforeRender = () => { const k = 0.85 + 0.15 * Math.sin(performance.now() * 0.002 + ph); halo.scale.set(1.3 * k, 1.3 * k, 1); };
   return g;
 }
 

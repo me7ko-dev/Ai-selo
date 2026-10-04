@@ -47,6 +47,7 @@ export class Lamia extends RigModel implements LamiaModel {
   private hs: HeadState[] = [];
   private eyeMeshes: THREE.Mesh[][] = [];
   private mouthGlow: THREE.Mesh[] = [];
+  private mouthHalo: THREE.Sprite[] = [];
   private headMeshes: THREE.Mesh[][] = [];
   private scratch = new Float32Array(0);
   private bodyY = 1.95;
@@ -111,10 +112,9 @@ export class Lamia extends RigModel implements LamiaModel {
     const wingM = mat('#8a5a36', { side: THREE.DoubleSide });
     for (const sx of [1, -1]) {
       const w = joint(body, sx * 0.9, 1.0, 0.7);
-      w.rotation.set(0, sx > 0 ? -1.05 : Math.PI + 1.05, sx * 0.25);
+      w.rotation.set(0, sx > 0 ? 1.15 : Math.PI - 1.15, 0.35);
       this.addJoint(w);
       const wm = new THREE.Mesh(wingGeo, wingM); wm.castShadow = true; w.add(wm);
-      part(w, cylGeo(0.4, 4), dark, 0.05, 1.85, 0.05, 0, 0, 0, 0, 0, -1.05, false);
     }
     // шии и глави
     const xs = [-0.75, 0, 0.75];
@@ -166,6 +166,7 @@ export class Lamia extends RigModel implements LamiaModel {
       // огън в устата
       const mg = part(head, sphGeo(1), glow('#ff8a2a', 0.9), 0.16, 0.42, 0.12, 0, 0.62, 0.08, 0, 0, 0, false);
       mg.visible = false; this.mouthGlow.push(mg);
+      const mh = haloSprite('#ff7a1a', 2.2, 0.8); mh.position.set(0, 0.9, 0.1); mh.visible = false; head.add(mh); this.mouthHalo.push(mh);
       const mouth = new THREE.Object3D(); mouth.position.set(0, 1.1, 0.06); head.add(mouth); this.mouths.push(mouth);
       this.headMeshes.push(hm);
       this.hs.push({ mode: 'idle', t: 0, kind: 'bite', alive: true, deadW: 0, wb: 0, ws: 0, jaw: 0, fire: 0 });
@@ -253,7 +254,8 @@ export class Lamia extends RigModel implements LamiaModel {
       }
       const mg = this.mouthGlow[i];
       mg.visible = h.fire > 0.02;
-      if (mg.visible) { const k = h.fire * (0.85 + 0.15 * s(this.time * 30 + i)); mg.scale.set(0.16 * k, 0.42 * k, 0.12 * k); }
+      this.mouthHalo[i].visible = mg.visible;
+      if (mg.visible) { const k = h.fire * (0.85 + 0.15 * s(this.time * 30 + i)); mg.scale.set(0.2 * k, 0.5 * k, 0.15 * k); this.mouthHalo[i].scale.set(2.2 * k, 2.2 * k, 1); }
     }
   }
 
@@ -306,7 +308,7 @@ export class Lamia extends RigModel implements LamiaModel {
       case 'die': {
         const e = sm(t / 1.6);
         o[P + 1] = -(this.bodyY - 1.15) * e; o[B + 2] = 0.22 * e; o[C] = 0.15 * e;
-        for (let i = 0; i < 4; i++) { const sx = i % 2 ? -1 : 1; o[(L + i * 2) * 3 + 2] = sx * 0.9 * e; o[(L + i * 2 + 1) * 3 + 2] = -sx * 0.4 * e; }
+        for (let i = 0; i < 4; i++) { const sx = i % 2 ? -1 : 1; o[(L + i * 2) * 3 + 2] = sx * 0.55 * e; o[(L + i * 2) * 3] = (i < 2 ? -0.5 : 0.4) * e; o[(L + i * 2 + 1) * 3] = (i < 2 ? 1.1 : 0.9) * e; }
         for (let k = 0; k < TS; k++) o[(this.iTail + k) * 3 + 2] = 0.12 * e * (k + 1) * 0.3;
         o[W + 2] = -0.5 * e; o[W + 5] = 0.5 * e;
         break;
