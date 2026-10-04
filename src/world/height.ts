@@ -56,25 +56,30 @@ export const FORTRESS_HEIGHT = 15;
 function baseHeight(x: number, z: number): number {
   // меки хълмове
   let h = (fbm(x * 0.0075, z * 0.0075) - 0.5) * 16 + (fbm(x * 0.03, z * 0.03, 2) - 0.5) * 2.2 + 3;
-  // Ламин връх + платото пред бърлогата
-  h += 58 * gauss(x, z, PEAK, 42) + 26 * gauss(x, z, PLATEAU, 40);
+  // Ламин връх (остър) + широко рамо към селото; платото е тераса на рамото (зад нея се издига върхът)
+  h += 62 * gauss(x, z, PEAK, 30) + 20 * gauss(x, z, PLATEAU, 55);
+  h += (fbm(x * 0.05 + 3, z * 0.05 - 8, 3) - 0.5) * 10 * gauss(x, z, PEAK, 45);
   const dPl = Math.hypot(x - PLATEAU.x, z - PLATEAU.z);
-  h = h + (PLATEAU_HEIGHT - h) * (1 - smoothstep(18, 32, dPl));
+  h = h + (PLATEAU_HEIGHT - h) * (1 - smoothstep(26, 40, dPl));
   // хълмът на крепостта (плосък отгоре)
   h += 13 * gauss(x, z, FORT, 34);
   const dF = Math.hypot(x - FORT.x, z - FORT.z);
   h = h + (FORTRESS_HEIGHT - h) * (1 - smoothstep(16, 26, dF));
-  // планини по края, за да е затворен светът
-  const edge = Math.max(Math.abs(x), Math.abs(z));
-  if (edge > WORLD_HALF - 60) h += Math.pow(edge - (WORLD_HALF - 60), 2) * 0.03 + (fbm(x * 0.02, z * 0.02) - 0.3) * 6 * smoothstep(WORLD_HALF - 60, WORLD_HALF, edge);
+  // планини по края (с неравен, назъбен ръб), за да е затворен светът
+  const edge = Math.max(Math.abs(x), Math.abs(z)) * 0.7 + Math.hypot(x, z) * 0.3 * 0.78 + (fbm(x * 0.012 + 50, z * 0.012 - 20, 3) - 0.5) * 50;
+  const e0 = WORLD_HALF - 75;
+  if (edge > e0) {
+    const k = edge - e0;
+    h += k * k * 0.022 * (0.7 + fbm(x * 0.03, z * 0.03, 3) * 0.6) + (fbm(x * 0.045, z * 0.045, 2) - 0.4) * 9 * smoothstep(e0, e0 + 40, edge);
+  }
   // селото е на равно
   const dV = Math.hypot(x - VILLAGE_CENTER.x, z - VILLAGE_CENTER.z);
   h = h + (VILLAGE_GROUND - h) * (1 - smoothstep(62, 92, dV));
   return h;
 }
 
-/** Височината на терена в точка (x, z). */
-export function heightAt(x: number, z: number): number {
+/** Височината на самия терен (без моста) — от нея се строи мрежата на терена. */
+export function terrainHeight(x: number, z: number): number {
   let h = baseHeight(x, z);
   // коритото на реката: канал, дълбок ~3 м, с меки брегове
   const r = riverInfo(x, z);
@@ -88,9 +93,27 @@ export function heightAt(x: number, z: number): number {
   return h;
 }
 
+/** Каменният мост над коритото: по x от BRIDGE.x0 до BRIDGE.x1, ширина 2*BRIDGE.halfW по z. */
+export const BRIDGE = { x0: 74, x1: 100, z: PLACES.bridge.pos.z, halfW: 2.3 };
+let _bridgeEnds: [number, number] | null = null;
+/** Височината на настилката на моста при x (или null извън моста). */
+export function bridgeDeckHeight(x: number, z: number): number | null {
+  if (x < BRIDGE.x0 || x > BRIDGE.x1 || Math.abs(z - BRIDGE.z) > BRIDGE.halfW) return null;
+  if (!_bridgeEnds) _bridgeEnds = [terrainHeight(BRIDGE.x0, BRIDGE.z), terrainHeight(BRIDGE.x1, BRIDGE.z)];
+  const u = (x - BRIDGE.x0) / (BRIDGE.x1 - BRIDGE.x0);
+  return _bridgeEnds[0] + (_bridgeEnds[1] - _bridgeEnds[0]) * u + 0.9 * Math.sin(Math.PI * u);
+}
+
+/** Височината на терена в точка (x, z) — вкл. моста (по него се ходи). */
+export function heightAt(x: number, z: number): number {
+  const h = terrainHeight(x, z);
+  const b = bridgeDeckHeight(x, z);
+  return b !== null && b > h ? b : h;
+}
+
 /** Височина на водата в коритото (когато реката тръгне) — малко под бреговете. */
 export function riverWaterHeight(x: number, z: number): number {
-  return heightAt(x, z) + 0.9;
+  return terrainHeight(x, z) + 0.9;
 }
 export const POND_WATER_HEIGHT = (() => baseHeight(POND.x, POND.z) - 1.2)();
 
