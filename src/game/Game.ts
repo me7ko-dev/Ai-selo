@@ -281,9 +281,10 @@ export class Game {
   private lateUpdate(dt: number): void {
     if (this.mode !== 'play') { this.ui.tags.update([]); return; }
     const state = this.modal === 'watch' ? this.timeMachine.viewState() : this.sim.state;
+    // камерата за разговора — преди етикетите, за да са над главите в същия кадър
+    if (this.modal === 'dialogue' && this.dialogue.active) this.dialogueCamera(dt, this.dialogue.active);
     this.updateTags(state.villagers, state.time);
     if (this.modal === 'watch') return;
-    if (this.modal === 'dialogue' && this.dialogue.active) this.dialogueCamera(dt, this.dialogue.active);
     this.ui.hud.minimap(this.rpg.heroPos.x, this.rpg.heroPos.z, this.rpg.heroYaw, this.mapMarkers(), this.villagerDots());
     this.hudAcc += dt;
     if (this.hudAcc > 0.1) { this.hudAcc = 0; this.updateHud(); }
@@ -298,12 +299,13 @@ export class Game {
     const dx = vp.x - hero.x, dz = vp.z - hero.z, d = Math.max(0.5, Math.hypot(dx, dz));
     const nx = dx / d, nz = dz / d;
     // през рамото на героя, към лицето на жителя
-    const cx = hero.x - nx * 2.6 + nz * 1.1, cz = hero.z - nz * 2.6 - nx * 1.1;
-    const target = this.tmpV.set(cx, Math.max(heightAt(cx, cz), hero.y) + 2.1, cz);
+    const cx = hero.x - nx * 2.2 + nz * 1.55, cz = hero.z - nz * 2.2 - nx * 1.55;
+    const target = this.tmpV.set(cx, Math.max(heightAt(cx, cz), hero.y) + 1.9, cz);
     const k = 1 - Math.exp(-dt * 4);
     if (this.dlgCam.lengthSq() === 0) this.dlgCam.copy(this.engine.camera.position);
     this.dlgCam.lerp(target, k);
-    this.dlgLook.lerp(new THREE.Vector3(vp.x, vp.y + 1.45, vp.z), this.dlgLook.lengthSq() === 0 ? 1 : k);
+    // гледа малко под лицето: лицето остава в горната половина, над прозореца на разговора
+    this.dlgLook.lerp(new THREE.Vector3(vp.x, vp.y + 0.55, vp.z), this.dlgLook.lengthSq() === 0 ? 1 : k);
     this.engine.camera.position.copy(this.dlgCam);
     this.engine.camera.lookAt(this.dlgLook);
   }
@@ -361,7 +363,9 @@ export class Game {
       const head = this.villagers.head(v.id, this.projV);
       const dist = head.distanceTo(cam.position);
       head.project(cam);
-      const onScreen = visible3d && head.z < 1 && head.z > -1 && Math.abs(head.x) < 1.1 && Math.abs(head.y) < 1.1 && dist < 45;
+      // събеседникът в разговора: името и думите му са в прозореца долу
+      const talking = this.modal === 'dialogue' && this.dialogue.active === v.id;
+      const onScreen = !talking && visible3d && head.z < 1 && head.z > -1 && Math.abs(head.x) < 1.1 && Math.abs(head.y) < 1.1 && dist < 45;
       const bubble = v.speech && v.speech.until > time ? { text: v.speech.text, ai: v.speech.ai } : null;
       tags.push({
         id: v.id, name: prof.name, job: v.id === this.sim.state.mayor && v.id !== 'peyu' ? `${prof.job} · кмет` : prof.job,
