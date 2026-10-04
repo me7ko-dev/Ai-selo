@@ -7,6 +7,20 @@
   <meta name="description" content="Балкански легенди — 3D ролева игра в свят от българските митове с живо ИИ село: жители с характер, памет и тайни, летопис и машина на времето." />
   <title>Балкански легенди</title>
   <link rel="icon" href="icon-192.png" />
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #14100c; }
+    #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+    #ui { position: fixed; inset: 0; pointer-events: none; }
+    #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 50;
+      background: radial-gradient(ellipse at 50% 40%, #3a2a1e 0%, #14100c 70%); color: #f3ead7; font-family: Georgia, serif; transition: opacity .6s; }
+    #loading.done { opacity: 0; pointer-events: none; }
+    .load-box { text-align: center; }
+    .load-title { font-size: clamp(34px, 6vw, 72px); color: #e8c27a; letter-spacing: .04em; text-shadow: 0 0 24px rgba(232,194,122,.35); }
+    .load-sub { margin: 12px 0 22px; color: #c9bfa8; font-size: clamp(14px, 1.6vw, 20px); }
+    .load-bar { width: min(420px, 70vw); height: 6px; margin: 0 auto; border-radius: 3px; background: rgba(232,194,122,.15); overflow: hidden; border: 1px solid rgba(232,194,122,.35); }
+    .load-bar i { display: block; height: 100%; width: 3%; background: linear-gradient(90deg, #b3262b, #e8c27a); transition: width .3s; }
+    .load-err { margin-top: 18px; color: #e88a7a; max-width: 640px; font-size: 15px; }
+  </style>
 </head>
 <body>
   <canvas id="game"></canvas>
