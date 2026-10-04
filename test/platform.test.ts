@@ -164,6 +164,19 @@ test('лайв сесия: гласуването става InjectedEvent', () 
   assert.deepEqual(got, [{ e: { type: 'sabor', by: 'Стамен' }, text: 'Стамен свика сбор на мегдана!' }]);
 });
 
+test('звук: без WebAudio (Node) нищо не гърми', async () => {
+  const { Audio, SFX_NAMES } = await import('../src/audio/Sfx');
+  const a = new Audio();
+  a.unlock();
+  assert.equal(a.unlocked, false);
+  a.setVolumes({ master: 2, music: -1 });
+  for (const n of SFX_NAMES) a.play(n);
+  a.ambient('day', true); a.ambient('none', false);
+  a.setMusic('festival'); a.setMusic('none');
+  a.dispose();
+  assert.equal(SFX_NAMES.length, 21);
+});
+
 const meta = (id: string, time: number): SnapshotMeta => ({ id, branchId: 'main', time, kind: 'hour', label: `Ден 1 · ${time}`, realTime: 1000 + time });
 
 test('записи: без IndexedDB → в паметта; put/get/list/delete/износ/внос', async () => {
