@@ -4,14 +4,14 @@ import type { HeroModel } from './types';
 import { HumanoidModel, humanDims, CHEST, NECK, LHAND, RHAND, type HeldWeapon } from './humanoid';
 import { buildBody, buildHead } from './body';
 import { buildSaber, buildScabbard, buildBow } from './items';
-import { mat, part, cylGeo, sphGeo, boxGeo, joint } from './shared';
+import { mat, part, cylGeo, sphGeo, boxGeo, joint, mergeStatic } from './shared';
 
 const CLOAK = '#6b4a2f';
 
 export class Hero extends HumanoidModel implements HeroModel {
   private saber: THREE.Group;
-  private ivan: THREE.Group;
-  private bow: THREE.Group;
+  private ivan?: THREE.Group;
+  private bow?: THREE.Group;
   private backSlot: THREE.Group;
 
   constructor() {
@@ -44,10 +44,9 @@ export class Hero extends HumanoidModel implements HeroModel {
     this.backSlot.rotation.set(0.22, 0, Math.PI + 0.6);
     const sc = buildScabbard(); this.backSlot.add(sc);
     this.saber = buildSaber(false);
-    this.ivan = buildSaber(true);
-    this.bow = buildBow();
-    J[RHAND].add(this.ivan); J[LHAND].add(this.bow);
+    mergeStatic(this.saber);
     this.done();
+    this.trackMesh(this.saber);
     this.setWeapon('saber');
   }
 
@@ -57,9 +56,17 @@ export class Hero extends HumanoidModel implements HeroModel {
     const inHand = (g: THREE.Group) => { hand.add(g); g.position.set(0, -0.032 * this.d.H, 0.012 * this.d.H); g.rotation.set(Math.PI / 2, -Math.PI / 2, 0); g.visible = true; };
     if (kind === 'saber') inHand(this.saber);
     else { this.backSlot.add(this.saber); this.saber.position.set(0, 0, 0); this.saber.rotation.set(0, 0, 0); this.saber.visible = true; }
-    if (kind === 'ivan_saber') inHand(this.ivan); else this.ivan.visible = false;
-    this.bow.visible = kind === 'bow';
-    this.bow.position.set(0, -0.03 * this.d.H, 0.01 * this.d.H);
-    this.bow.rotation.set(1.2, 0, 0);
+    if (kind === 'ivan_saber') {
+      if (!this.ivan) { this.ivan = buildSaber(true); mergeStatic(this.ivan); this.trackMesh(this.ivan); }
+      inHand(this.ivan);
+    } else if (this.ivan) this.ivan.visible = false;
+    if (kind === 'bow' && !this.bow) {
+      // лъкът се прави чак когато потрябва
+      this.bow = buildBow(); mergeStatic(this.bow); this.trackMesh(this.bow);
+      this.j[LHAND].add(this.bow);
+      this.bow.position.set(0, -0.03 * this.d.H, 0.01 * this.d.H);
+      this.bow.rotation.set(1.2, 0, 0);
+    }
+    if (this.bow) this.bow.visible = kind === 'bow';
   }
 }

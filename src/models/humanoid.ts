@@ -426,6 +426,6 @@ export class HumanoidModel extends RigModel {
     }
   }
 
-  addSway(j: THREE.Object3D, amp: number, base = 0): void { this.swayJoints.push({ j, amp, base, a: base, v: 0 }); }
-  addEye(e: THREE.Object3D): void { e.userData.sy = e.scale.y; this.eyes.push(e); }
+  addSway(j: THREE.Object3D, amp: number, base = 0): void { this.swayJoints.push({ j, amp, base, a: base, v: 0 }); this.extraBones.push(j); }
+  addEye(e: THREE.Object3D): void { e.userData.sy = e.scale.y; this.eyes.push(e); this.noMerge.add(e); }
 }

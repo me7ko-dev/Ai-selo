@@ -1,5 +1,6 @@
 // Общи материали, геометрии и текстури за моделите — кеширани и споделени между всички копия.
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 const matCache = new Map<string, THREE.Material>();
 
@@ -229,4 +230,52 @@ export function countTris(o: THREE.Object3D): number {
     }
   });
   return Math.round(n);
+}
+
+// ---------- сливане на мешове (по-малко draw call-ове) ----------
+const _mtx = new THREE.Matrix4();
+
+/** Копие на геометрията на меша, пренесено в пространството toSpace (неиндексирано, само position/normal/uv). */
+export function bakeGeometry(m: THREE.Mesh, toSpace: THREE.Matrix4): THREE.BufferGeometry {
+  const src = m.geometry;
+  const g = src.index ? src.toNonIndexed() : src.clone();
+  for (const name of Object.keys(g.attributes)) if (name !== 'position' && name !== 'normal' && name !== 'uv') g.deleteAttribute(name);
+  if (!g.attributes.normal) g.computeVertexNormals();
+  if (!g.attributes.uv) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2));
+  g.clearGroups();
+  m.updateWorldMatrix(true, false);
+  g.applyMatrix4(_mtx.multiplyMatrices(toSpace, m.matrixWorld));
+  return g;
+}
+
+export function mergeList(geos: THREE.BufferGeometry[]): THREE.BufferGeometry {
+  if (geos.length === 1) return geos[0];
+  const g = mergeGeometries(geos);
+  if (!g) throw new Error('mergeGeometries failed');
+  for (const x of geos) x.dispose();
+  return g;
+}
+
+/** Слива статичните мешове в група: по един меш на материал (спрайтовете остават). За предмети. */
+export function mergeStatic(root: THREE.Object3D, skip?: THREE.Object3D): void {
+  root.updateWorldMatrix(true, true);
+  const inv = root.matrixWorld.clone().invert();
+  const groups = new Map<THREE.Material, { geos: THREE.BufferGeometry[]; cast: boolean }>();
+  const remove: THREE.Mesh[] = [];
+  root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh || Array.isArray(m.material) || m.children.length) return;
+    if (skip) for (let p: THREE.Object3D | null = m; p && p !== root; p = p.parent) if (p === skip) return;
+    let gr = groups.get(m.material);
+    if (!gr) { gr = { geos: [], cast: false }; groups.set(m.material, gr); }
+    gr.geos.push(bakeGeometry(m, inv));
+    gr.cast ||= m.castShadow;
+    remove.push(m);
+  });
+  for (const m of remove) m.removeFromParent();
+  for (const [material, gr] of groups) {
+    const mesh = new THREE.Mesh(mergeList(gr.geos), material);
+    mesh.castShadow = gr.cast;
+    root.add(mesh);
+  }
 }

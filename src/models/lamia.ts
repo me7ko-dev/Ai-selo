@@ -172,6 +172,9 @@ export class Lamia extends RigModel implements LamiaModel {
       this.headMeshes.push(hm);
       this.hs.push({ mode: 'idle', t: 0, kind: 'bite', alive: true, deadW: 0, wb: 0, ws: 0, jaw: 0, fire: 0 });
     }
+    for (const e of this.eyeMeshes) { this.noMerge.add(e[0]); this.noMerge.add(e[1]); }
+    for (const m of this.mouthGlow) this.noMerge.add(m);
+    for (const hm of this.headMeshes) for (const m of hm) this.noMerge.add(m);
     this.finish();
     this.scratch = new Float32Array(this.cur.length);
   }

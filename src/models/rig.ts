@@ -1,7 +1,7 @@
 // Малка система за скелет: стави (THREE.Group), пози като масиви от ъгли, плавно смесване между анимации.
 import * as THREE from 'three';
 import type { AnimName, CharacterModel } from './types';
-import { flashMat } from './shared';
+import { flashMat, bakeGeometry, mergeList } from './shared';
 
 /** Еднократни анимации — след края се връщат към предишната повтаряща се. 'die' остава. */
 export const ONE_SHOT: ReadonlySet<AnimName> = new Set<AnimName>(['attack', 'attack2', 'hit', 'die', 'jump', 'cast', 'wave']);
@@ -68,6 +68,11 @@ export abstract class RigModel implements CharacterModel {
   private mats: (THREE.Material | THREE.Material[])[] = [];
   private flashT = 0;
   private flashing = false;
+  /** Обекти (мешове или групи), които НЕ се сливат в общия скелетен меш (мигащи очи, сменяеми оръжия…). */
+  protected noMerge = new Set<THREE.Object3D>();
+  /** Допълнителни подвижни стави (вторично движение), които стават кости. */
+  protected extraBones: THREE.Object3D[] = [];
+  private skinned: THREE.SkinnedMesh[] = [];
 
   /** Регистрира става и връща индекса ѝ. */
   protected addJoint(o: THREE.Object3D): number { this.joints.push(o); return this.joints.length - 1; }
@@ -79,6 +84,7 @@ export abstract class RigModel implements CharacterModel {
     this.restRot = new Float32Array(n);
     this.joints.forEach((j, i) => { this.restRot[i * 3] = j.rotation.x; this.restRot[i * 3 + 1] = j.rotation.y; this.restRot[i * 3 + 2] = j.rotation.z; });
     this.restPos.copy(this.joints[0].position);
+    this.skinify();
     this.target = new Float32Array(n);
     this.cur = new Float32Array(n);
     this.from = new Float32Array(n);
@@ -89,6 +95,53 @@ export abstract class RigModel implements CharacterModel {
     this.computePose(0);
     this.cur.set(this.target);
     this.apply();
+  }
+
+  /** Слива всички статични мешове в един SkinnedMesh на материал: всяка част следва ставата си (тегло 1). */
+  private skinify(): void {
+    const bones = [...this.joints, ...this.extraBones];
+    const boneIdx = new Map<THREE.Object3D, number>();
+    bones.forEach((b, i) => boneIdx.set(b, i));
+    this.root.updateMatrixWorld(true);
+    const inv = this.root.matrixWorld.clone().invert();
+    const groups = new Map<THREE.Material, { geos: THREE.BufferGeometry[]; cast: boolean }>();
+    const remove: THREE.Mesh[] = [];
+    this.root.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh || Array.isArray(m.material)) return;
+      for (let p: THREE.Object3D | null = m; p && p !== this.root; p = p.parent) if (this.noMerge.has(p)) return;
+      let a: THREE.Object3D | null = m.parent;
+      while (a && !boneIdx.has(a)) a = a.parent;
+      if (!a) return;
+      const bi = boneIdx.get(a)!;
+      const g = bakeGeometry(m, inv);
+      const n = g.attributes.position.count;
+      const si = new Uint16Array(n * 4), sw = new Float32Array(n * 4);
+      for (let i = 0; i < n; i++) { si[i * 4] = bi; sw[i * 4] = 1; }
+      g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4));
+      g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
+      let gr = groups.get(m.material);
+      if (!gr) { gr = { geos: [], cast: false }; groups.set(m.material, gr); }
+      gr.geos.push(g);
+      gr.cast ||= m.castShadow;
+      remove.push(m);
+    });
+    if (!remove.length) return;
+    for (const m of remove) m.removeFromParent();
+    const skeleton = new THREE.Skeleton(bones as THREE.Bone[]);
+    for (const [material, gr] of groups) {
+      const geo = mergeList(gr.geos);
+      const sm = new THREE.SkinnedMesh(geo, material);
+      sm.castShadow = gr.cast;
+      this.root.add(sm);
+      sm.bind(skeleton, new THREE.Matrix4());
+      // широка сфера — позата може да е легнала/протегната, без да се изрязва от камерата
+      geo.computeBoundingSphere();
+      const bs = geo.boundingSphere!.clone();
+      bs.radius = bs.radius * 1.6 + 0.3;
+      sm.boundingSphere = bs;
+      this.skinned.push(sm);
+    }
   }
 
   /** Поза за анимацията в момент t (записва делти спрямо покоя в out, out е нулиран). */
@@ -196,6 +249,8 @@ export abstract class RigModel implements CharacterModel {
   dispose(): void {
     this.flash(null as unknown as number);
     this.root.removeFromParent();
-    // геометриите и материалите са споделени (кеш) — не се освобождават тук
+    // материалите са споделени (кеш); слетите геометрии и скелетът са на това копие
+    for (const sm of this.skinned) sm.geometry.dispose();
+    if (this.skinned.length) this.skinned[0].skeleton.dispose();
   }
 }

@@ -115,3 +115,16 @@ test('предметите се строят', () => {
     assert.ok(countTris(o) > 0, k);
   }
 });
+
+test('мешовете са слети (малко draw call-ове)', () => {
+  const count = (o: THREE.Object3D) => { let n = 0; o.traverse((c) => { if ((c as THREE.Mesh).isMesh || (c as THREE.Sprite).isSprite) n++; }); return n; };
+  for (const [name, m] of allModels()) {
+    const n = count(m.root);
+    const lim = name === 'lamia' ? 60 : ['sheep', 'goat', 'chicken', 'dog', 'cat', 'fox'].includes(name) ? 12 : 25;
+    assert.ok(n <= lim, `${name}: ${n} меша`);
+  }
+  // анимацията продължава да мести слетите части
+  const v = createVillagerModel(VILLAGERS.kalin.look);
+  const sk = v.root.children.find((c) => (c as THREE.SkinnedMesh).isSkinnedMesh) as THREE.SkinnedMesh;
+  assert.ok(sk && sk.skeleton.bones.length >= 17);
+});

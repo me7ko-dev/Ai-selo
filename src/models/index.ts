@@ -12,6 +12,7 @@ import { Lamia } from './lamia';
 import { buildRosen, buildChest, buildSaber, buildBow, buildPotion, buildFeather, buildEgg } from './items';
 export type { AnimName, CharacterModel, HeroModel, LamiaModel, AnimalKind, MonsterKind } from './types';
 export { countTris } from './shared';
+import { mergeStatic } from './shared';
 
 /** Жител по външния му вид (VILLAGERS[id].look). Моделът има и `seatHeight` (за 'sit', по подразбиране 0.45 м). */
 export function createVillagerModel(look: VillagerLook): CharacterModel { return buildVillager(look); }
@@ -51,6 +52,9 @@ export function createPropModel(kind: PropKind): THREE.Object3D {
     case 'feather': g.add(buildFeather()); break;
     case 'egg': g.add(buildEgg()); break;
   }
-  g.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = true; });
+  // сандъкът пази отделен капак (име 'lid'), за да може да се отваря
+  const lid = g.getObjectByName('lid');
+  if (lid) mergeStatic(lid);
+  mergeStatic(g, lid);
   return g;
 }

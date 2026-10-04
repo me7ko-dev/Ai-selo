@@ -101,7 +101,8 @@ if (lamia && lamiaCmd) {
 if (qs.get('weapon')) (window as any).hero?.setWeapon(qs.get('weapon') === 'none' ? null : qs.get('weapon'));
 
 const info = document.getElementById('info')!;
-info.textContent = entries.map((e) => `${e.name}: ${countTris(e.obj)}△`).join(' · ');
+const meshes = (o: THREE.Object3D) => { let n = 0; o.traverse((c) => { if ((c as THREE.Mesh).isMesh || (c as THREE.Sprite).isSprite) n++; }); return n; };
+info.textContent = entries.map((e) => `${e.name}: ${countTris(e.obj)}△ ${meshes(e.obj)}m`).join(' · ');
 
 // детерминирано превъртане за снимки
 const pre = +(qs.get('t') ?? 0);

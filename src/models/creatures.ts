@@ -58,9 +58,10 @@ export class Talasam extends HumanoidModel {
     const d = humanDims(1.7, 'thin', 1.35);
     super(d, { kind: 'talasam' }, 1.5);
     const H = d.H, J = this.j;
-    const skin = '#66745c';
-    buildBody(this, { skin, shirt: '#3c4438', torsoColor: '#353d31', legs: '#30362c', shin: '#465240', shoe: '#3a4436', hands: '#68745c' });
-    buildHead(this, { skin, hair: '#1e221c', hairStyle: 'bald', eyeGlow: '#e0ff5a', ears: 'pointed', noseScale: 1.7, brow: false });
+    const skin = '#76826b';
+    const rim = '#3a4a36'; // слабо сияние — да се вижда силуетът в нощната гора
+    buildBody(this, { skin, shirt: '#56604d', torsoColor: '#4a5343', legs: '#434b3c', shin: '#5a6650', shoe: '#3a4436', hands: '#7a866c', emissive: rim });
+    buildHead(this, { skin, hair: '#1e221c', hairStyle: 'bald', eyeGlow: '#e0ff5a', ears: 'pointed', noseScale: 1.7, brow: false, emissive: rim });
     const R = d.headR;
     // уста — тъмна резка с криви зъбки
     part(J[HEAD], boxGeo(), mat('#141812'), R * 0.7, R * 0.12, R * 0.1, 0, R * 0.55, R * 0.88, 0.1, 0, 0, false);
