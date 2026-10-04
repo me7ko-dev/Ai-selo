@@ -87,9 +87,5 @@ export function iconBoard(): HTMLElement {
   return el;
 }
 
-export function showExtra(ui: Ui, key: string, sceneBg: (k: 'day' | 'dusk' | 'night') => string, scene: HTMLElement, keep: (el: HTMLElement) => void, base: HTMLCanvasElement): void {
-  if (key === 'icons') {
-    const el = iconBoard(); ui.root.append(el); keep(el);
-  }
-  void sceneBg; void scene; void base;
-}
+// сцените са в ui-scenes.ts
+

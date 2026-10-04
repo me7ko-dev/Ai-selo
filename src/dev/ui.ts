@@ -6,6 +6,7 @@ import { VILLAGERS, VILLAGER_IDS } from '../data/villagers';
 import { DEFAULT_AI } from '../sim/brain/Brain';
 import { worldToMap } from '../ui/logic';
 import * as M from './ui-mock';
+import { showExtra } from './ui-scenes';
 
 const scene = document.getElementById('scene')!;
 scene.style.background = sceneBg('day');
@@ -20,8 +21,8 @@ function sceneBg(kind: 'day' | 'dusk' | 'night'): string {
 }
 
 // --------------------------------------------------------------------------------------- превключване
-type ViewKey = 'start' | 'hud' | 'dialogue' | 'inventory' | 'map' | 'chronicle' | 'time' | 'away' | 'settings' | 'live' | 'death' | 'banner' | 'loading' | 'confirm' | 'icons';
-const VIEWS: ViewKey[] = ['start', 'hud', 'dialogue', 'inventory', 'map', 'chronicle', 'time', 'away', 'settings', 'live', 'death', 'banner', 'loading', 'confirm', 'icons'];
+type ViewKey = string;
+const VIEWS: ViewKey[] = ['start', 'hud', 'dialogue', 'inventory', 'map', 'chronicle', 'chronicle-empty', 'time', 'away', 'settings', 'live', 'death', 'banner', 'loading', 'confirm', 'pause', 'icons'];
 
 const clean = location.hash.includes('clean') || location.search.includes('clean');
 const bar = document.createElement('div');
@@ -100,7 +101,7 @@ function route(): void {
       if (location.hash.includes('thinking')) ui.dialogue.setThinking(true);
       break;
     default:
-      M.showExtra(ui, key, sceneBg, scene, (el) => { iconsEl = el; }, base);
+      showExtra(ui, key, sceneBg, scene, (el) => { iconsEl = el; }, base);
   }
 }
 addEventListener('hashchange', route);

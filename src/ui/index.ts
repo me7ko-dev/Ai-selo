@@ -14,29 +14,78 @@ import { StartScreen } from './StartScreen';
 import { Hud } from './Hud';
 import { NameTags } from './NameTags';
 import { DialogueView } from './DialogueView';
+import { InventoryView } from './InventoryView';
+import { MapView } from './MapView';
+import { ChronicleView } from './ChronicleView';
+import { TimeMachineView } from './TimeMachineView';
+import { AwayView } from './AwayView';
+import { SettingsView } from './SettingsView';
+import { LiveOverlay } from './LiveOverlay';
+import { DeathScreen, Banner, LoadingScreen, ConfirmDialog, PauseHint } from './Misc';
 
 export * from './StartScreen';
 export * from './Hud';
 export * from './NameTags';
 export * from './DialogueView';
+export * from './InventoryView';
+export * from './MapView';
+export * from './ChronicleView';
+export * from './TimeMachineView';
+export * from './AwayView';
+export * from './SettingsView';
+export * from './LiveOverlay';
+export * from './Misc';
 export { icon, portrait, typeIcon, sparkle, personName, TYPE_COLORS, TYPE_LABELS, ICON_KEYS } from './icons';
 
 export interface Ui {
   root: HTMLElement;
-  start: StartScreen;
-  hud: Hud;
   tags: NameTags;
+  hud: Hud;
+  live: LiveOverlay;
+  banner: Banner;
+  pause: PauseHint;
   dialogue: DialogueView;
+  inventory: InventoryView;
+  map: MapView;
+  chronicle: ChronicleView;
+  time: TimeMachineView;
+  settings: SettingsView;
+  away: AwayView;
+  death: DeathScreen;
+  start: StartScreen;
+  confirm: ConfirmDialog;
+  loading: LoadingScreen;
+  /** Отворен ли е прозорец, който иска мишката (диалог, раница, карта, летопис, машина, меню, „Докато те нямаше“, смърт, начало, потвърждение). */
+  anyModalOpen(): boolean;
+  /** Затваря всички прозорци (без onClose). */
+  closeAll(): void;
 }
 
 /** Закача целия интерфейс в root (играта подава document.getElementById('ui')). */
 export function mountUi(root: HTMLElement): Ui {
   root.classList.add('bl-ui');
   for (const [k, v] of Object.entries(ornamentVars())) root.style.setProperty(k, v);
-  // ред на слоевете: етикети → HUD → прозорци → екрани най-отгоре
+  // ред на слоевете (по-късно = по-отгоре): етикети → HUD → лайв → съобщения → прозорци → екрани
   const tags = new NameTags(root);
   const hud = new Hud(root);
+  const live = new LiveOverlay(root);
+  const banner = new Banner(root);
+  const pause = new PauseHint(root);
   const dialogue = new DialogueView(root);
+  const inventory = new InventoryView(root);
+  const map = new MapView(root);
+  const chronicle = new ChronicleView(root);
+  const time = new TimeMachineView(root);
+  const settings = new SettingsView(root);
+  const away = new AwayView(root);
+  const death = new DeathScreen(root);
   const start = new StartScreen(root);
-  return { root, start, hud, tags, dialogue };
+  const confirm = new ConfirmDialog(root);
+  const loading = new LoadingScreen(root);
+  const modals = [dialogue, inventory, map, chronicle, time, settings, away, death, start, confirm];
+  return {
+    root, tags, hud, live, banner, pause, dialogue, inventory, map, chronicle, time, settings, away, death, start, confirm, loading,
+    anyModalOpen: () => modals.some((m) => m.isOpen),
+    closeAll: () => { for (const m of [dialogue, inventory, map, chronicle, time, settings]) m.hide(); },
+  };
 }
