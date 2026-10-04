@@ -99,7 +99,7 @@ export class Game {
     // меню: селото живее зад заглавието
     this.sim = new VillageSim({ seed: 7 });
     this.timeline = Timeline.create();
-    this.rpg = new Rpg(this.engine, this.world, createHost(this));
+    this.rpg = this.makeRpg();
     this.rpg.setControlsEnabled(false);
     this.ambient.followPetko(() => this.sim.villager('petko').pos);
     this.wireUi();
@@ -157,7 +157,7 @@ export class Game {
     this.timeline = Timeline.create();
     this.attachSim(sim);
     this.rpg.dispose();
-    this.rpg = new Rpg(this.engine, this.world, createHost(this));
+    this.rpg = this.makeRpg();
     const st = PLACES.start;
     this.rpg.teleport(st.pos.x, st.pos.z, st.facing ?? Math.PI);
     await this.save.wipe();
@@ -176,7 +176,7 @@ export class Game {
     const sim = new VillageSim({ state: g.sim });
     this.attachSim(sim);
     this.rpg.dispose();
-    this.rpg = new Rpg(this.engine, this.world, createHost(this), g.player as Parameters<Rpg['load']>[0]);
+    this.rpg = this.makeRpg(g.player as Parameters<Rpg['load']>[0]);
     this.startPlaying();
     // „Докато те нямаше…“
     const away = Date.now() - main.savedAt;
@@ -197,6 +197,36 @@ export class Game {
     this.hudAcc = 1;
     this.audio.setMusic('village');
     this.lockPointer();
+  }
+
+  private makeRpg(save?: Parameters<Rpg['load']>[0]): Rpg {
+    const rpg = new Rpg(this.engine, this.world, createHost(this), save);
+    rpg.bus.on('notify', (e) => this.toast(e.text, e.kind));
+    rpg.bus.on('sfx', (e) => this.sfx(e.name));
+    rpg.bus.on('damage', (e) => { if (e.target === 'hero' && !e.blocked) this.ui.hud.flashDamage(); });
+    rpg.bus.on('levelup', (e) => { this.ui.banner.show(`Ниво ${e.level}`, e.title); this.sfx('levelup'); });
+    rpg.bus.on('questDone', (e) => { this.ui.banner.show('Задачата е изпълнена', e.title); this.sfx('quest'); });
+    rpg.bus.on('lamiaDefeated', () => { this.ui.banner.show('Ламята е победена!', 'Бистрица тече отново. Тази вечер селото вдига сбор.'); this.sfx('victory'); });
+    rpg.bus.on('died', () => { this.sfx('death'); this.ui.death?.show?.(() => this.rpg.respawn()); });
+    rpg.bus.on('respawn', () => { this.ui.death?.hide?.(); });
+    rpg.bus.on('pickup', () => this.refreshInventory());
+    return rpg;
+  }
+
+  /** Превърта времето до даден час (напр. „Изчакай нощта“ при кокошарника). */
+  skipTo(minute: number): void {
+    const now = minuteOfDay(this.sim.state.time);
+    let delta = minute - now; if (delta <= 0) delta += 1440;
+    let left = delta;
+    while (left > 0) {
+      const s = Math.min(15, left);
+      const prev = this.sim.state.time;
+      this.sim.advance(s);
+      for (const kind of this.timeline.snapshotDue(prev, this.sim.state.time)) void this.makeSnapshot(kind);
+      left -= s;
+    }
+    this.villagers.update(0.016, this.sim.state, true);
+    this.toast(`Времето минава… ${formatDayClock(this.sim.state.time)}`, 'info');
   }
 
   // ───────────────────────── цикъл ─────────────────────────

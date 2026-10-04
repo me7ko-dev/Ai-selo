@@ -18,5 +18,7 @@ export function createHost(g: Game): QuestHost {
     inject: (ev) => g.sim.inject(ev),
     villagerName: (id: VillagerId) => VILLAGERS[id]?.name ?? id,
     sfx: (name) => g.sfx(name),
+    villagerPos: (id: VillagerId) => { const p = g.sim.villager(id).pos; return { x: p.x, z: p.z }; },
+    waitUntil: (minute: number) => g.skipTo(minute),
   };
 }
