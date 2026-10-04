@@ -117,3 +117,53 @@ export function instanced(name: string, geo: THREE.BufferGeometry, mat: THREE.Ma
   }
   return { name, meshes, maxDist: opts.maxDist ?? 1e9 };
 }
+
+/** Общите стойности за избледняването на дърветата: камерата и героят (обновява ги World3D всеки кадър). */
+export interface TreeFadeUniforms { uCamPos: { value: THREE.Vector3 }; uFocus: { value: THREE.Vector3 }; uFadeOn: { value: number } }
+export function treeFadeUniforms(): TreeFadeUniforms {
+  return { uCamPos: { value: new THREE.Vector3(0, -1e4, 0) }, uFocus: { value: new THREE.Vector3() }, uFadeOn: { value: 1 } };
+}
+
+/**
+ * Материал за дървета, които се „разтварят“ (решетъчно, dither), когато са между камерата и героя или
+ * съвсем до камерата — иначе в гъстата гора екранът се пълни с тъмни корони. Цялото дърво избледнява заедно
+ * (по центъра на екземпляра). Сенките остават (дълбочинният материал не се пипа).
+ * crownR — радиусът на короната при мащаб 1, top — височината на върха.
+ */
+export function fadingTreeMaterial(u: TreeFadeUniforms, crownR: number, top: number): THREE.MeshLambertMaterial {
+  const mat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+  const own = { uCrownR: { value: crownR }, uTreeTop: { value: top } };
+  mat.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, u, own);
+    sh.vertexShader = 'uniform vec3 uCamPos; uniform vec3 uFocus; uniform float uFadeOn; uniform float uCrownR; uniform float uTreeTop;\nvarying float vFade;\n'
+      + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+        vFade = 0.0;
+        #ifdef USE_INSTANCING
+        {
+          vec3 tp = instanceMatrix[3].xyz;
+          float ts = length(instanceMatrix[0].xyz);
+          float R = uCrownR * ts;
+          vec2 c = uCamPos.xz, h = uFocus.xz, t = tp.xz;
+          vec2 ab = h - c; float l2 = max(dot(ab, ab), 1e-4);
+          float u = clamp(dot(t - c, ab) / l2, 0.0, 1.0);
+          float dLine = length(c + ab * u - t);
+          // между камерата и героя (без самия герой — дърво до него не изчезва)
+          float fLine = (1.0 - smoothstep(R * 0.6, R * 1.2, dLine)) * (1.0 - smoothstep(0.75, 0.95, u)) * 0.88;
+          // съвсем до камерата
+          float fNear = 1.0 - smoothstep(R + 1.2, R + 4.2, length(t - c));
+          // само ако камерата е под върха (отгоре — нищо не се крие)
+          float below = 1.0 - smoothstep(tp.y + uTreeTop * ts - 2.0, tp.y + uTreeTop * ts + 1.0, uCamPos.y);
+          vFade = max(fLine, fNear) * below * uFadeOn;
+        }
+        #endif`);
+    sh.fragmentShader = 'varying float vFade;\n' + sh.fragmentShader.replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+        if (vFade > 0.01) {
+          ivec2 bp = ivec2(mod(gl_FragCoord.xy, 4.0));
+          int bi = bp.x + bp.y * 4;
+          float b4[16] = float[16](0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0, 3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0);
+          if (vFade > (b4[bi] + 0.5) / 16.0) discard;
+        }`);
+  };
+  mat.customProgramCacheKey = () => 'fadingTree';
+  return mat;
+}

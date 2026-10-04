@@ -13,7 +13,7 @@ import { buildFences, buildRuins, buildSigns, buildSignPosts } from './extras';
 import { paintGround, paintMap, type GroundData } from './ground';
 import { buildTerrain } from './terrain';
 import { SkySystem } from './sky';
-import { instanced, pineGeo, oakGeo, bushGeo, rockGeo, deadTreeGeo, fernGeo, mushroomGeo, logGeo, flowerGeo, type InstGroup } from './vegetation';
+import { instanced, pineGeo, oakGeo, bushGeo, rockGeo, deadTreeGeo, fernGeo, mushroomGeo, logGeo, flowerGeo, fadingTreeMaterial, treeFadeUniforms, type InstGroup } from './vegetation';
 import { buildPond, buildRiver, buildSwampPools } from './water';
 import { GrassField } from './grass';
 import { Rain, Motes, Festival } from './effects';
@@ -57,6 +57,11 @@ export class World3D implements WorldQuery {
   private motes = new Motes();
   private festival: Festival;
   private forgeLight = new THREE.PointLight('#ff8a3a', 0, 16, 1.8);
+  /** Мека лунна „подсветка“ около героя нощем — да се чете фигурата му (и враговете до него) в тъмното. */
+  private heroFill = new THREE.PointLight('#b4c4f2', 0, 22, 1.0);
+  private treeFade = treeFadeUniforms();
+  private gloomOn = false;
+  private gloom = 0;
   private quality: Quality = 'high';
   private distScale = 1;
   private weatherName: Weather = 'clear';
@@ -101,6 +106,8 @@ export class World3D implements WorldQuery {
     this.root.add(this.rain.mesh, this.motes.points);
     this.festival = new Festival(this.solidMat);
     this.root.add(this.festival.group, this.festival.light);
+    this.heroFill.name = 'heroFill';
+    this.root.add(this.heroFill);
     // светлината от огнището в ковачницата
     const smithy = this.plan.props.find(p => p.type === 'smithy');
     if (smithy) {
@@ -136,8 +143,9 @@ export class World3D implements WorldQuery {
     const mat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
     const tintGreen = (t: { tint: number }, c: THREE.Color) => c.setRGB(0.82 + t.tint * 0.3, 0.86 + t.tint * 0.24, 0.8 + t.tint * 0.2);
     const add = (g: InstGroup) => { this.groups.push(g); for (const m of g.meshes) this.root.add(m); };
-    add(instanced('pines', pineGeo(), mat, p.pines, { tint: tintGreen, maxDist: 520, sink: 0.2 }));
-    add(instanced('oaks', oakGeo(), mat, p.oaks, { tint: tintGreen, maxDist: 480 }));
+    // боровете и дъбовете се разтварят пред камерата (виж fadingTreeMaterial)
+    add(instanced('pines', pineGeo(), fadingTreeMaterial(this.treeFade, 2.3, 9.4), p.pines, { tint: tintGreen, maxDist: 520, sink: 0.2 }));
+    add(instanced('oaks', oakGeo(), fadingTreeMaterial(this.treeFade, 3.0, 7.0), p.oaks, { tint: tintGreen, maxDist: 480 }));
     add(instanced('bushes', bushGeo(), mat, p.bushes, { tint: (t, c) => t.tint > 0.85 ? c.setRGB(0.6, 0.62, 0.45) : tintGreen(t, c), maxDist: 220, castShadow: true }));
     add(instanced('rocks', rockGeo(), mat, p.rocks, {
       tint: (t, c) => t.tint < 0 ? c.setRGB(0.42, 0.38, 0.35) : t.tint >= 3 ? c.setRGB(1.25, 1.22, 1.15) : t.tint >= 2 ? c.setRGB(1.15, 1.08, 0.95) : c.setRGB(0.9 + t.tint * 0.25, 0.9 + t.tint * 0.22, 0.88 + t.tint * 0.2),
@@ -171,12 +179,17 @@ export class World3D implements WorldQuery {
     const localFog = Math.max(THREE.MathUtils.smoothstep(150, 70, dSw) * 0.85, THREE.MathUtils.smoothstep(FOREST.radius + 10, FOREST.radius - 30, dFo) * 0.5);
     this.sky.localFog = localFog;
     const ds = this.distScale;
-    this.sky.weather = { cloud: this.wp.cloud, dark: this.wp.dark, fogNear: this.wp.fogNear * Math.min(1, ds + 0.2), fogFar: this.wp.fogFar * Math.min(1, ds + 0.15), flash: fl * 0.5 };
+    // зловещото притъмняване (Караконджул): плавно към целта, над времето
+    this.gloom += ((this.gloomOn ? 1 : 0) - this.gloom) * (1 - Math.exp(-dt * 0.6));
+    const gm = this.gloom;
+    const cloud = Math.max(this.wp.cloud, gm * 0.97), dark = Math.max(this.wp.dark, gm * 0.82);
+    const fogNear = THREE.MathUtils.lerp(this.wp.fogNear, Math.min(this.wp.fogNear, 40), gm), fogFar = THREE.MathUtils.lerp(this.wp.fogFar, Math.min(this.wp.fogFar, 420), gm);
+    this.sky.weather = { cloud, dark, fogNear: fogNear * Math.min(1, ds + 0.2), fogFar: fogFar * Math.min(1, ds + 0.15), flash: fl * 0.5, gloom: gm };
     this.sky.update(totalGameMinutes, this.engine.camera, focus, t);
     const night = this.sky.night;
 
     // прозорците светят нощем, огнището гори винаги
-    const lit = Math.min(1, night + this.sky.twilight * 0.6 + this.wp.dark * 0.4);
+    const lit = Math.min(1, night + this.sky.twilight * 0.6 + dark * 0.4);
     this.windowMat.color.setRGB(0.03 + lit * 1.0, 0.03 + lit * 0.75, 0.035 + lit * 0.45);
     const flick = 0.8 + 0.12 * Math.sin(t * 9.3) + 0.08 * Math.sin(t * 17.1 + 2);
     this.hotMat.color.setScalar(0.85 + 0.15 * flick);
@@ -194,7 +207,16 @@ export class World3D implements WorldQuery {
     (this.river.mesh.material as THREE.ShaderMaterial).uniforms.uFront.value = this.riverFront;
 
     // трева, дъжд, светулки, празник
-    this.grass.uniforms.uWind.value = this.wp.wind;
+    // подсветката на героя: над него и малко към камерата (осветява гърба, който виждаме)
+    const tc = this.tmp.set(cam.x - focus.x, 0, cam.z - focus.z);
+    const tl = tc.length() || 1;
+    this.heroFill.position.set(focus.x + (tc.x / tl) * 1.2, focus.y + 4.5, focus.z + (tc.z / tl) * 1.2);
+    this.heroFill.intensity = (night * 4.5 + this.sky.twilight * 1.3) * (1 - this.wp.rain * 0.3) + dark * 1.5;
+    // дърветата пред камерата
+    this.treeFade.uCamPos.value.copy(cam);
+    this.treeFade.uFocus.value.copy(focus);
+
+    this.grass.uniforms.uWind.value = Math.max(this.wp.wind, gm * 1.3);
     this.grass.update(focus, t);
     this.rain.update(t, cam, this.wp.rain, this.wp.wind);
     const nearMagic = Math.max(THREE.MathUtils.smoothstep(160, 60, Math.hypot(focus.x - GLADE.x, focus.z - GLADE.z)), THREE.MathUtils.smoothstep(140, 60, dFo) * 0.7);
@@ -220,6 +242,10 @@ export class World3D implements WorldQuery {
   get riverFlowing(): boolean { return this.riverOn; }
 
   setFestival(on: boolean): void { this.festival.set(on); }
+
+  /** Зловещо притъмняване денем (Караконджул): тъмни буреносни облаци, по-слаба светлина, без дъжд. Сменя се плавно (~3–4 с); instant — веднага. */
+  setGloom(on: boolean, instant = false): void { this.gloomOn = on; if (instant) this.gloom = on ? 1 : 0; }
+  get gloomy(): boolean { return this.gloomOn; }
 
   /** Сменя времето плавно (~5 с); instant — веднага (напр. при зареждане на запис). */
   setWeather(w: Weather, instant = false): void { this.weatherName = w; if (instant) this.wp = { ...WEATHER[w] }; }

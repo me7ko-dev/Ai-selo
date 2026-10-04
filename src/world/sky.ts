@@ -70,7 +70,8 @@ void main() {
   gl_FragColor.rgb = mix(gl_FragColor.rgb, uFogColor, uFogMix * (1.0 - smoothstep(0.0, 0.9, h) * 0.3));
 }`;
 
-export interface SkyWeather { cloud: number; dark: number; fogNear: number; fogFar: number; flash: number }
+/** gloom 0..1 — зловещо притъмняване (Караконджул): облаците са по-тъмни и лилаво-сиви. */
+export interface SkyWeather { cloud: number; dark: number; fogNear: number; fogFar: number; flash: number; gloom?: number }
 
 export class SkySystem {
   readonly dome: THREE.Mesh;
@@ -137,7 +138,8 @@ export class SkySystem {
     const twW = Math.max(0, 1 - dayW - nightW);
     this.night = nightW; this.twilight = twW;
     const w = this.weather;
-    const grey = new THREE.Color('#8d949b');
+    const gl = w.gloom ?? 0;
+    const grey = new THREE.Color('#8d949b').lerp(C('#4a4558'), gl);
 
     const mix3 = (a: string, b: string, c: string) => new THREE.Color(0, 0, 0)
       .add(C(a).multiplyScalar(dayW)).add(C(b).multiplyScalar(twW)).add(C(c).multiplyScalar(nightW));
@@ -148,6 +150,8 @@ export class SkySystem {
     const dk = w.dark;
     const greyN = grey.clone().multiplyScalar(1 - nightW * 0.8);
     top.lerp(greyN.clone().multiplyScalar(0.85), dk * 0.85); mid.lerp(greyN, dk * 0.85); hor.lerp(greyN.clone().multiplyScalar(1.05), dk * 0.8);
+    // зловещо притъмняване: тъмни лилаво-сиви буреносни облаци
+    if (gl > 0) { top.lerp(C('#24222f'), gl * 0.85); mid.lerp(C('#33303f'), gl * 0.85); hor.lerp(C('#4a4654'), gl * 0.8); }
     this.top.copy(top); this.horizon.copy(hor);
     (this.u.uTop.value as THREE.Color).copy(top);
     (this.u.uMid.value as THREE.Color).copy(mid);
@@ -159,20 +163,22 @@ export class SkySystem {
     this.u.uStars.value = nightW * (1 - Math.min(1, w.cloud * 1.2)) + nightW * 0.15;
     this.u.uTime.value = timeSec;
     this.u.uCloud.value = w.cloud;
-    (this.u.uCloudLit.value as THREE.Color).copy(mix3('#ffffff', '#ffd2a8', '#3a4a78')).lerp(C('#b9bec4').multiplyScalar(1 - nightW * 0.75), dk);
-    (this.u.uCloudShade.value as THREE.Color).copy(mix3('#c6d3df', '#9a6a80', '#1c2546')).lerp(C('#6d747c').multiplyScalar(1 - nightW * 0.75), dk);
+    (this.u.uCloudLit.value as THREE.Color).copy(mix3('#ffffff', '#ffd2a8', '#3a4a78')).lerp(C('#b9bec4').lerp(C('#5c586a'), gl).multiplyScalar(1 - nightW * 0.75), dk);
+    (this.u.uCloudShade.value as THREE.Color).copy(mix3('#c6d3df', '#9a6a80', '#1c2546')).lerp(C('#6d747c').lerp(C('#2a2834'), gl).multiplyScalar(1 - nightW * 0.75), dk);
     this.u.uFlash.value = w.flash;
     this.u.uSunVis.value = sstep(-0.05, 0.02, e) * (1 - dk);
     this.u.uMoonVis.value = sstep(-0.05, 0.1, this.moonDir.y) * (1 - dk * 0.9) * (0.3 + nightW * 0.7);
 
     // мъглата е с цвета на хоризонта
-    // three смесва мъглата след tone mapping и sRGB → подаваме я вече кодирана, за да съвпада с хоризонта на небето
-    this.fog.color.copy(hor).lerp(mid, 0.25).convertLinearToSRGB();
+    // three сам кодира fog.color в sRGB (getRGB към изходното цветово пространство) и смесва след tone mapping →
+    // подаваме го линеен; куполът (ShaderMaterial) смесва след colorspace_fragment → на него — вече кодиран.
+    // (Преди fog.color се кодираше два пъти и далечните планини излизаха по-светли от небето зад тях.)
+    this.fog.color.copy(hor).lerp(mid, 0.25);
     const lf = this.localFog;
     this.fog.near = w.fogNear * (1 - lf * 0.9);
     this.fog.far = w.fogFar * (1 - lf * 0.75);
     // при гъста мъгла и небето се губи в нея
-    (this.u.uFogColor.value as THREE.Color).copy(this.fog.color);
+    (this.u.uFogColor.value as THREE.Color).copy(this.fog.color).convertLinearToSRGB();
     this.u.uFogMix.value = Math.min(1, Math.max(0, (480 - this.fog.far) / 380));
 
     // светлина: слънцето денем, луната нощем (по-слаба, синкава)
@@ -182,14 +188,15 @@ export class SkySystem {
     if (this.lightDir.y < 0.12) this.lightDir.y = 0.12; this.lightDir.normalize();
     if (!useMoon) {
       this.sun.color.copy(sunCol);
-      this.sun.intensity = (0.15 + 2.6 * sstep(-0.02, 0.3, e)) * (1 - dk * 0.75);
+      this.sun.intensity = (0.15 + 2.6 * sstep(-0.02, 0.3, e)) * (1 - dk * 0.75) * (1 - gl * 0.3);
     } else {
-      this.sun.color.set('#9db2e6');
-      this.sun.intensity = 0.75 * sstep(-0.02, -0.12, e) * sstep(-0.1, 0.15, this.moonDir.y) * (1 - dk * 0.7);
+      // лунна светлина: синкава, но достатъчна, за да се играе (и когато луната е ниско — разсеяна светлина от небето)
+      this.sun.color.set('#a9bdf0');
+      this.sun.intensity = 1.2 * sstep(-0.02, -0.12, e) * (0.45 + 0.55 * sstep(-0.1, 0.25, this.moonDir.y)) * (1 - dk * 0.6);
     }
-    this.hemi.color.copy(mix3('#d6e6f2', '#f0b48c', '#4a63a8')).lerp(grey, dk * 0.6);
-    this.hemi.groundColor.copy(mix3('#6a7f4a', '#6a4a4a', '#1a2238'));
-    this.hemi.intensity = (dayW * 1.15 + twW * 0.85 + nightW * 0.75) * (1 - dk * 0.25) + w.flash * 3;
+    this.hemi.color.copy(mix3('#d6e6f2', '#f0b48c', '#6680c8')).lerp(grey, dk * 0.6);
+    this.hemi.groundColor.copy(mix3('#6a7f4a', '#6a4a4a', '#2a3658'));
+    this.hemi.intensity = (dayW * 1.15 + twW * 0.95 + nightW * 1.0) * (1 - dk * 0.25) * (1 - gl * 0.35) + w.flash * 3;
 
     // куполът и сенките следват камерата/героя
     this.dome.position.copy(camera.position);
