@@ -31,8 +31,9 @@ import { wireUi } from './uiWire';
 import { AutoQuality } from './perf';
 import { buildSpotTable } from './spots';
 import { setSpotTable } from '../sim/schedules';
+import { Tutorial } from './tutorial';
 
-export type Modal = null | 'dialogue' | 'inventory' | 'map' | 'chronicle' | 'time' | 'settings' | 'away' | 'dead' | 'watch';
+export type Modal = null | 'dialogue' | 'inventory' | 'map' | 'chronicle' | 'time' | 'settings' | 'away' | 'dead' | 'watch' | 'intro';
 
 export class Game {
   engine!: Engine;
@@ -49,6 +50,7 @@ export class Game {
   ambient!: Ambient;
   dialogue!: DialogueController;
   timeMachine!: TimeMachine;
+  tutorial!: Tutorial;
   twitch: TwitchChat | null = null;
   vote!: LiveVote;
   liveOn = false;
@@ -103,6 +105,7 @@ export class Game {
     this.ambient = new Ambient(this.engine.scene);
     this.dialogue = new DialogueController(this);
     this.timeMachine = new TimeMachine(this);
+    this.tutorial = new Tutorial(this);
     this.vote = new LiveVote({ voteSeconds: this.settings.live.voteSeconds, onResult: (type, by) => this.onLiveResult(type, by) });
     progress(0.8, 'Летописецът точи перото…');
     await tick();
@@ -174,8 +177,10 @@ export class Game {
     const st = PLACES.start;
     this.rpg.teleport(st.pos.x, st.pos.z, st.facing ?? Math.PI);
     await this.save.wipe();
-    this.startPlaying();
-    this.ui.banner.show('Балкански легенди', 'Ламята пресуши Бистрица. Селото Самодивско чака странник.');
+    // въведението (без него при снимките на робота)
+    this.startPlaying(!!this.shot);
+    if (this.shot) this.ui.banner.show('Балкански легенди', 'Ламята пресуши Бистрица. Селото Самодивско чака странник.');
+    else this.showIntro();
     void this.makeSnapshot('day');
     void this.saveMain();
     if (live) this.startLive();
@@ -210,7 +215,16 @@ export class Game {
     if (live) this.startLive();
   }
 
-  private startPlaying(): void {
+  /** Въведението: 3 страници; след него — към селото (мишката се заключва от клика/клавиша, с който е затворено). */
+  private showIntro(): void {
+    this.openModal('intro');
+    this.ui.intro.show(() => {
+      this.onModalClosed('intro');
+      this.ui.banner.show('Самодивско', 'Край 1 · Ламята пресуши Бистрица', 4000);
+    });
+  }
+
+  private startPlaying(lock = true): void {
     this.mode = 'play';
     this.modal = null;
     this.ui.start.hide();
@@ -220,7 +234,7 @@ export class Game {
     this.villagers.update(0.016, this.sim.state, true);
     this.hudAcc = 1;
     this.audio.setMusic('village');
-    this.lockPointer();
+    if (lock) this.lockPointer();
   }
 
   private makeRpg(save?: Parameters<Rpg['load']>[0]): Rpg {
@@ -232,7 +246,11 @@ export class Game {
     rpg.bus.on('questDone', (e) => { this.ui.banner.show('Задачата е изпълнена', e.title); this.sfx('quest'); });
     rpg.bus.on('lamiaDefeated', () => { this.ui.banner.show('Ламята е победена!', 'Бистрица тече отново. Тази вечер селото вдига сбор.'); this.sfx('victory'); });
     // мишката се пуска, за да може да се натисне „Събуди се в хана“ (при заключена мишка кликът отива в платното)
-    rpg.bus.on('died', () => { this.sfx('death'); this.ui.death.show(); this.unlockPointer(); this.ui.hud.setPaused(false); });
+    rpg.bus.on('died', () => {
+      this.sfx('death');
+      this.ui.death.show(this.rpg.hud().boss ? 'Ламята те повали. Хората от селото те отнесоха в хана.' : undefined);
+      this.unlockPointer(); this.ui.hud.setPaused(false);
+    });
     rpg.bus.on('respawn', () => {
       this.ui.death.hide();
       if (this.mode === 'play' && this.modal === null) {
@@ -266,6 +284,7 @@ export class Game {
     const input = this.engine.input;
     this.frameNo++;
     this.handleKeys();
+    this.tutorial.update(dt);
     if (this.mode === 'menu') {
       this.sim.advance(dt * GAME_MINUTES_PER_REAL_SECOND * 4);
       this.menuCamera(dt);
@@ -539,6 +558,7 @@ export class Game {
       case 'time': this.ui.time.hide(); break;
       case 'settings': this.ui.settings.hide(); break;
       case 'away': this.ui.away.hide(); break;
+      case 'intro': this.ui.intro.hide(); break;
       default: break;
     }
     this.onModalClosed(m);
@@ -588,6 +608,7 @@ export class Game {
       browser: location.protocol === 'https:',
       inGame: this.mode === 'play',
       live: { running: this.liveOn, label: this.liveOn ? (this.twitch ? `Канал: ${this.settings.live.channel}` : 'Пробен чат') : undefined },
+      hints: this.tutorial.enabled,
     };
   }
 

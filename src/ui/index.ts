@@ -22,6 +22,8 @@ import { AwayView } from './AwayView';
 import { SettingsView } from './SettingsView';
 import { LiveOverlay } from './LiveOverlay';
 import { DeathScreen, Banner, LoadingScreen, ConfirmDialog, PauseHint } from './Misc';
+import { IntroView } from './IntroView';
+import { HintView } from './HintView';
 
 export * from './StartScreen';
 export * from './Hud';
@@ -35,6 +37,8 @@ export * from './AwayView';
 export * from './SettingsView';
 export * from './LiveOverlay';
 export * from './Misc';
+export * from './IntroView';
+export * from './HintView';
 export { icon, portrait, typeIcon, sparkle, personName, TYPE_COLORS, TYPE_LABELS, ICON_KEYS } from './icons';
 
 export interface Ui {
@@ -55,7 +59,11 @@ export interface Ui {
   start: StartScreen;
   confirm: ConfirmDialog;
   loading: LoadingScreen;
-  /** Отворен ли е прозорец, който иска мишката (диалог, раница, карта, летопис, машина, меню, „Докато те нямаше“, смърт, начало, потвърждение). */
+  /** Въведението при „Нова игра“ (3 страници). */
+  intro: IntroView;
+  /** Подсказките за обучението (над бързата лента). */
+  hint: HintView;
+  /** Отворен ли е прозорец, който иска мишката (диалог, раница, карта, летопис, машина, меню, „Докато те нямаше“, смърт, начало, потвърждение, въведение). */
   anyModalOpen(): boolean;
   /** Затваря всички прозорци (без onClose). */
   closeAll(): void;
@@ -81,10 +89,14 @@ export function mountUi(root: HTMLElement): Ui {
   const death = new DeathScreen(root);
   const start = new StartScreen(root);
   const confirm = new ConfirmDialog(root);
+  const intro = new IntroView(root);
   const loading = new LoadingScreen(root);
-  const modals = [dialogue, inventory, map, chronicle, time, settings, away, death, start, confirm];
+  const hint = new HintView(hud.bottomEl);
+  // етикетите над главите не покриват панелите на HUD и прозореца с разговора
+  tags.setAvoid(() => [...hud.cornerEls(), dialogue.el]);
+  const modals = [dialogue, inventory, map, chronicle, time, settings, away, death, start, confirm, intro];
   return {
-    root, tags, hud, live, banner, pause, dialogue, inventory, map, chronicle, time, settings, away, death, start, confirm, loading,
+    root, tags, hud, live, banner, pause, dialogue, inventory, map, chronicle, time, settings, away, death, start, confirm, loading, intro, hint,
     anyModalOpen: () => modals.some((m) => m.isOpen),
     closeAll: () => { for (const m of [dialogue, inventory, map, chronicle, time, settings]) m.hide(); },
   };

@@ -17,7 +17,7 @@
 .bl-ui .dl-hrow { padding: 0.08em 0; }
 .bl-ui .dl-hrow b { color: #d8c8a0; font-weight: 700; }
 .bl-ui .dl-say { position: relative; min-height: 3.6em; }
-.bl-ui .dl-meta { position: absolute; top: -0.2em; right: 0; }
+.bl-ui .dl-meta { position: absolute; top: -0.2em; right: 1.6em; } /* вляво от бутона × */
 .bl-ui .dl-line { font-size: 1.15em; line-height: 1.45; padding-right: 6em; color: var(--text); cursor: pointer; white-space: pre-wrap; min-height: 1.45em; }
 .bl-ui .dl-think { font-size: 1.1em; font-style: italic; color: var(--text2); }
 .bl-ui .dl-think .dots { margin-left: 0.2em; color: var(--gold); }
@@ -34,3 +34,14 @@
 .bl-ui .dl-keys { text-align: right; font-size: 0.72em; opacity: 0.8; }
 .bl-ui .dl-close { position: absolute; top: 0.6em; right: 0.6em; }
 .bl-ui .dialogue .orn-c { opacity: 0.6; }
+
+/* Докато трае разговорът: часовникът, бързата лента и чатът се скриват (на тесен екран прозорецът ги застъпва),
+   известията се качват над прозореца, най-много 3 наведнъж. На нисък екран се скриват и задачите. */
+.bl-ui:has(> .dialogue:not(.hidden)) .hud-clock,
+.bl-ui:has(> .dialogue:not(.hidden)) .hud-bottom,
+.bl-ui:has(> .dialogue:not(.hidden)) .lv-chat { visibility: hidden; }
+.bl-ui:has(> .dialogue:not(.hidden)) .hud-toasts { bottom: calc(var(--dlg-h, 17em) + 2em); }
+.bl-ui:has(> .dialogue:not(.hidden)) .hud-toasts .toast:nth-last-child(n+4) { display: none; }
+@media (max-height: 640px) {
+  .bl-ui:has(> .dialogue:not(.hidden)) .hud-quests { display: none; }
+}

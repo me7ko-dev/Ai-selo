@@ -1,8 +1,9 @@
 .bl-ui .live { position: absolute; inset: 0; pointer-events: none; }
-.bl-ui .lv-badge { position: absolute; left: 1.1em; top: 9.2em; display: inline-flex; align-items: center; gap: 0.5em; padding: 0.3em 0.8em 0.3em 0.6em; border-radius: 6px; background: rgba(150, 24, 30, 0.88); border: 1px solid rgba(255, 180, 160, 0.5); box-shadow: 0 0.2em 0.8em rgba(0, 0, 0, 0.4); font-size: 0.9em; letter-spacing: 0.08em; }
+/* top в собствените em на значката (font-size 0.9em): 10.4em ≈ 9.4em на HUD — под панела на героя, с въздух */
+.bl-ui .lv-badge { position: absolute; left: 1.1em; top: 10.4em; display: inline-flex; align-items: center; gap: 0.5em; padding: 0.3em 0.8em 0.3em 0.6em; border-radius: 6px; background: rgba(150, 24, 30, 0.88); border: 1px solid rgba(255, 180, 160, 0.5); box-shadow: 0 0.2em 0.8em rgba(0, 0, 0, 0.4); font-size: 0.9em; letter-spacing: 0.08em; }
 .bl-ui .lv-rec { width: 0.65em; height: 0.65em; border-radius: 50%; background: #fff; box-shadow: 0 0 0.5em #fff; animation: bl-pulse 1.2s infinite; }
 .bl-ui .lv-chan { font-size: 0.82em; opacity: 0.85; letter-spacing: 0; }
-.bl-ui .lv-card { position: absolute; left: 1.1em; top: 11.8em; width: 19em; padding: 0.7em 0.85em 0.6em; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: 0 0.3em 1.2em rgba(0, 0, 0, 0.4); animation: bl-pop 0.3s; }
+.bl-ui .lv-card { position: absolute; left: 1.1em; top: 12.1em; width: 19em; padding: 0.7em 0.85em 0.6em; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: 0 0.3em 1.2em rgba(0, 0, 0, 0.4); animation: bl-pop 0.3s; }
 .bl-ui .lv-card.ending { border-color: rgba(232, 120, 90, 0.8); }
 .bl-ui .lv-q-row { display: flex; align-items: center; gap: 0.45em; margin-bottom: 0.55em; }
 .bl-ui .lv-q { flex: 1; font-family: var(--f-title); color: var(--gold); font-size: 0.92em; letter-spacing: 0.03em; line-height: 1.2; }

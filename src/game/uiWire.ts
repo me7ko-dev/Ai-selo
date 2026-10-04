@@ -71,6 +71,8 @@ export function wireUi(g: Game): void {
   };
   ui.settings.onLiveStart = () => { g.startLive(); ui.settings.setStatus(g.settingsStatus()); };
   ui.settings.onLiveStop = () => { g.stopLive(); ui.settings.setStatus(g.settingsStatus()); };
+  ui.settings.onHints = (on) => { g.tutorial.setEnabled(on); ui.settings.setStatus({ hints: on }); };
+  ui.settings.onHintsReset = () => { g.tutorial.reset(); ui.settings.setStatus({ hints: true }); g.toast('Съветите ще се покажат отначало.', 'info'); };
   ui.settings.onLiveDemo = () => { if (!g.liveOn) g.startLive(); g.vote.startDemo((m) => ui.live.chat(m.user, m.text)); ui.settings.setStatus(g.settingsStatus()); };
 
   // смърт

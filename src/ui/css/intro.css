@@ -1,0 +1,42 @@
+/* Въведение при „Нова игра“ — илюстрирана картичка с шевици. */
+.bl-ui .intro { position: absolute; inset: 0; z-index: 40; pointer-events: auto; display: grid; place-items: center; cursor: pointer; animation: bl-fade 0.6s ease-out; }
+.bl-ui .intro-back { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 45%, rgba(30, 22, 14, 0.82), rgba(8, 6, 4, 0.96) 75%); }
+.bl-ui .intro-card {
+  position: relative; width: min(46em, 92vw); max-height: 96vh; display: flex; flex-direction: column;
+  background: linear-gradient(180deg, rgba(34, 26, 18, 0.97), rgba(18, 13, 9, 0.98));
+  border: 1px solid var(--line-strong); border-radius: var(--radius); box-shadow: 0 1.2em 4em rgba(0, 0, 0, 0.7), 0 0 0 0.35em rgba(20, 16, 12, 0.6);
+  padding: 0.9em 0.9em 0.8em;
+}
+.bl-ui .intro-card .orn-c { z-index: 2; }
+.bl-ui .intro-frame { position: relative; border-radius: 6px; overflow: hidden; border: 1px solid rgba(232, 194, 122, 0.45); box-shadow: inset 0 0 2em rgba(0, 0, 0, 0.5); }
+.bl-ui .intro-art { height: min(21em, 40vh); overflow: hidden; background: #2a2030; }
+.bl-ui .intro-art .intro-svg { display: block; width: 100%; height: 100%; transform-origin: 50% 60%; }
+.bl-ui .intro-card.turn .intro-svg { animation: intro-zoom 9s ease-out forwards; }
+.bl-ui .intro-strip { position: absolute; left: 0; right: 0; bottom: 0; height: 0.75em; background-color: rgba(20, 16, 12, 0.85); }
+.bl-ui .intro-body { text-align: center; padding: 0.9em 1.6em 0.2em; }
+.bl-ui .intro-card.turn .intro-body { animation: intro-text 0.7s ease-out; }
+.bl-ui .intro-kicker { font-size: 0.85em; color: var(--text2); letter-spacing: 0.22em; text-transform: uppercase; }
+.bl-ui .intro-title { margin: 0.15em 0 0; font-family: var(--f-title); font-weight: 400; font-size: 1.9em; line-height: 1.15; color: var(--gold); letter-spacing: 0.04em; text-shadow: 0 0 0.6em rgba(232, 194, 122, 0.3), 0 0.06em 0 #2a1a0e; }
+.bl-ui .intro-orn { width: 18em; max-width: 70%; margin: 0.2em auto 0.3em; }
+.bl-ui .intro-text { margin: 0 auto; max-width: 36em; font-size: 1.1em; line-height: 1.55; color: #efe4cc; }
+.bl-ui .intro-foot { display: flex; align-items: center; gap: 1em; padding: 0.8em 0.7em 0.2em; }
+.bl-ui .intro-dots { display: flex; gap: 0.45em; }
+.bl-ui .intro-dots i { width: 0.6em; height: 0.6em; transform: rotate(45deg); border: 1px solid var(--gold-d); background: transparent; transition: background 0.3s; }
+.bl-ui .intro-dots i.past { background: var(--gold-d); }
+.bl-ui .intro-dots i.on { background: var(--gold); box-shadow: 0 0 0.5em rgba(232, 194, 122, 0.6); }
+.bl-ui .intro-keys { flex: 1; text-align: center; font-size: 0.78em; }
+.bl-ui .intro-next { font-size: 1.05em; padding: 0.5em 1.4em; }
+.bl-ui .intro-next.last { font-family: var(--f-title); letter-spacing: 0.05em; animation: intro-call 2.2s ease-in-out infinite; }
+.bl-ui .intro-skip { position: absolute; top: 1.1em; right: 1.1em; color: var(--text2); }
+@keyframes intro-zoom { from { transform: scale(1.0); } to { transform: scale(1.07); } }
+@keyframes intro-text { from { opacity: 0; transform: translateY(0.5em); } to { opacity: 1; transform: none; } }
+@keyframes intro-call { 0%, 100% { box-shadow: 0 0 0 rgba(232, 194, 122, 0); } 50% { box-shadow: 0 0 1.2em rgba(232, 194, 122, 0.55); } }
+/* ниски екрани — рисунката се свива, текстът остава */
+@media (max-height: 620px) {
+  .bl-ui .intro-art { height: 34vh; }
+  .bl-ui .intro-text { font-size: 1em; line-height: 1.45; }
+  .bl-ui .intro-title { font-size: 1.6em; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bl-ui .intro-card.turn .intro-svg, .bl-ui .intro-card.turn .intro-body, .bl-ui .intro-next.last { animation: none; }
+}

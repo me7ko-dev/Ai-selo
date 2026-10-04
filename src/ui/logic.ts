@@ -95,3 +95,16 @@ export function paginate<T>(items: T[], weight: (x: T) => number, perPage: numbe
 
 /** Фаза за иконата: слънце денем, луна нощем. */
 export function isSunUp(time: number): boolean { const h = minuteOfDay(time) / 60; return h >= 6 && h < 20; }
+
+/** Текст на подсказка → HTML: „[W] — вървиш“ → „<kbd>W</kbd> — вървиш“; „*карта*“ → получер. Останалото се екранира. */
+export function hintHtml(text: string): string {
+  const escd = String(text).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
+  return escd.replace(/\[([^\]]{1,24})\]/g, '<kbd>$1</kbd>').replace(/\*([^*]{1,60})\*/g, '<b>$1</b>');
+}
+
+export interface Box { l: number; t: number; r: number; b: number }
+
+/** Застъпват ли се два правоъгълника, с отстъп pad. */
+export function rectsOverlap(a: Box, b: Box, pad = 0): boolean {
+  return a.l < b.r + pad && a.r > b.l - pad && a.t < b.b + pad && a.b > b.t - pad;
+}

@@ -23,7 +23,7 @@ function sceneBg(kind: 'day' | 'dusk' | 'night'): string {
 
 // --------------------------------------------------------------------------------------- превключване
 type ViewKey = string;
-const VIEWS: ViewKey[] = ['start', 'hud', 'dialogue', 'inventory', 'map', 'chronicle', 'chronicle-empty', 'time', 'away', 'settings', 'live', 'death', 'banner', 'loading', 'confirm', 'pause', 'icons'];
+const VIEWS: ViewKey[] = ['start', 'hud', 'dialogue', 'inventory', 'map', 'chronicle', 'chronicle-empty', 'time', 'away', 'settings', 'live', 'death', 'banner', 'loading', 'confirm', 'pause', 'intro', 'hint', 'icons'];
 
 const clean = location.hash.includes('clean') || location.search.includes('clean');
 const bar = document.createElement('div');
@@ -101,6 +101,22 @@ function route(): void {
       ui.dialogue.onOption = (id) => { ui.dialogue.setThinking(true); setTimeout(() => ui.dialogue.say(`(Отговор на „${id}“) Хайде, чедо, върви с късмет.`, { ai: true }), 1200); };
       ui.dialogue.onFreeText = (t) => { ui.dialogue.setThinking(true); setTimeout(() => ui.dialogue.say(`„${t}“? Хм, чудни работи питаш.`, { ai: false }), 1200); };
       if (location.hash.includes('thinking')) ui.dialogue.setThinking(true);
+      // известия и етикет до мини-картата — да се види, че нищо не се застъпва
+      ui.hud.toast('Нова задача: „Три стръка росен“', 'quest', 600000);
+      ui.hud.toast('Взе росен ×1', 'item', 600000);
+      ui.hud.toast('Здрачава се. В Тъмната гора излизат таласъми.', 'warn', 600000);
+      ui.hud.toast('Ден 13 в Самодивско', 'info', 600000);
+      {
+        const tagLoop = () => {
+          const W = innerWidth;
+          ui.tags.update([
+            { id: 'radka', name: 'Радка', job: 'стопанка на хана', x: W - 90, y: 120, dist: 6, visible: true, bubble: { text: 'Чу ли какво стана снощи?' } },
+            { id: 'ivan', name: 'Иван', job: 'ковач', x: W * 0.42, y: innerHeight * 0.3, dist: 9, visible: true },
+          ]);
+          raf = requestAnimationFrame(tagLoop);
+        };
+        tagLoop();
+      }
       break;
     default:
       showExtra(ui, key, sceneBg, scene, (el) => { iconsEl = el; }, base);

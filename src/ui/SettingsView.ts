@@ -29,13 +29,15 @@ export interface SettingsStatus {
   live?: { running: boolean; label?: string };
   /** „Записано: Ден 4 · 18:20“ */
   saveLabel?: string;
+  /** Подсказките за начинаещи са включени (по подразбиране — да). */
+  hints?: boolean;
 }
 
 export type SettingsTab = 'game' | 'ai' | 'graphics' | 'audio' | 'controls' | 'live';
 const TABS: [SettingsTab, string][] = [['game', 'Игра'], ['ai', 'ИИ'], ['graphics', 'Графика'], ['audio', 'Звук'], ['controls', 'Управление'], ['live', 'Лайв']];
 
 export const CONTROLS_LIST: [string[], string][] = [
-  [['W', 'A', 'S', 'D'], 'ходене'], [['Мишка'], 'камера'], [['Space'], 'скок'], [['Ляв бутон'], 'удар'], [['E'], 'говори / вземи'],
+  [['W', 'A', 'S', 'D'], 'ходене'], [['Мишка'], 'камера'], [['Shift'], 'бягане'], [['Space'], 'скок'], [['Ляв бутон'], 'удар'], [['Десен бутон'], 'блок'], [['E'], 'говори / вземи'],
   [['Tab'], 'герой и раница'], [['M'], 'карта'], [['J'], 'летопис'], [['T'], 'машина на времето'], [['1', '–', '6'], 'бърза лента'], [['Esc'], 'меню / настройки'],
 ];
 
@@ -49,6 +51,10 @@ export class SettingsView extends ModalView {
   onLiveStart: () => void = () => {};
   onLiveStop: () => void = () => {};
   onLiveDemo: () => void = () => {};
+  /** Подсказки за начинаещи — вкл./изкл. */
+  onHints: (on: boolean) => void = () => {};
+  /** „Покажи съветите отначало“. */
+  onHintsReset: () => void = () => {};
 
   private s: UiSettings = structuredClone(DEFAULT_UI_SETTINGS);
   private st: SettingsStatus = {};
@@ -174,6 +180,8 @@ export class SettingsView extends ModalView {
       case 'controls':
         row('Чувствителност на мишката', slider(this.s.controls.sensitivity, 0.2, 3, 0.1, (v) => `×${v.toFixed(1)}`, (v) => { this.s.controls.sensitivity = v; this.changed(); }));
         row('Обърната мишка (горе/долу)', toggle(this.s.controls.invertY, (v) => { this.s.controls.invertY = v; this.changed(); }));
+        row('Подсказки', toggle(this.st.hints !== false, (v) => this.onHints(v)), 'малки съвети над бързата лента — за първите стъпки');
+        B.append(h('div.set-game', null, btn('Покажи съветите отначало', 'small', () => this.onHintsReset())));
         sec('Клавиши');
         B.append(h('div.set-keys', { html: CONTROLS_LIST.map(([k, v]) => `<div><span>${k.map((x) => x === '–' ? '–' : `<kbd>${esc(x)}</kbd>`).join(' ')}</span><em>${esc(v)}</em></div>`).join('') }));
         break;
