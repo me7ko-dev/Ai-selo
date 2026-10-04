@@ -352,6 +352,7 @@ export class Game {
 
   private updateTags(villagers: VillagerState[], time: number): void {
     const cam = this.engine.camera;
+    cam.updateMatrixWorld(); // камерата е местена в този кадър — иначе етикетите изостават с кадър
     const w = window.innerWidth, h = window.innerHeight;
     const tags = [];
     for (const v of villagers) {
