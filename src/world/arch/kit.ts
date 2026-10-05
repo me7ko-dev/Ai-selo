@@ -18,6 +18,8 @@ export const TILE: Record<Slot, [number, number]> = {
   plain: [1, 1], iron: [1, 1], glass: [1, 1], hot: [1, 1], wet: [1, 1], leaves: [1, 1],
 };
 
+const WALLISH = new Set<Slot>(['plaster', 'stone', 'masonry', 'rock', 'hay']);
+
 /** Желязото е в същата мрежа като „обикновените“ неща (тъмен цвят) — едно извикване по-малко. */
 const ALIAS: Partial<Record<Slot, Slot>> = { iron: 'plain' };
 
@@ -205,7 +207,8 @@ export class Kit {
     const L = this.local(x, y, z, o);
     _nm.getNormalMatrix(L);
     const size = [w, h, d];
-    const grain = o?.grain ?? (w >= h && w >= d ? 0 : h >= d ? 1 : 2);
+    // камък и мазилка: редовете са хоризонтални (V нагоре); дърво — по най-дългата страна
+    const grain = o?.grain ?? (WALLISH.has(slot) ? 1 : w >= h && w >= d ? 0 : h >= d ? 1 : 2);
     const gw = new THREE.Vector3(grain === 0 ? 1 : 0, grain === 1 ? 1 : 0, grain === 2 ? 1 : 0).applyMatrix3(_nm).normalize();
     const tile = o?.tile ?? TILE[slot];
     const center = new THREE.Vector3(0, 0, 0).applyMatrix4(L);
@@ -380,6 +383,21 @@ export class Kit {
     let nu = o?.nu ?? 1, nv = o?.nv ?? 1;
     if (o?.cell) { nu = Math.max(1, Math.round(Math.max(A.distanceTo(B), D.distanceTo(C)) / o.cell)); nv = Math.max(1, Math.round(Math.max(A.distanceTo(D), B.distanceTo(C)) / o.cell)); }
     this.grid(slot, A, B, C, D, n, g, o?.tile ?? TILE[slot], col, nu, nv, o?.stain ?? 0);
+  }
+  /** Карта (листа, табела): 4 точки (локални), UV от 0 до 1 по ъглите, нормала n (може да е „навън от короната“). */
+  card(slot: Slot, a: V3, b: V3, c: V3, d: V3, n: V3, tint: THREE.ColorRepresentation, uv: [number, number, number, number] = [0, 0, 1, 1]): void {
+    const L = this.top;
+    _nm.getNormalMatrix(L);
+    const m = this.mesher(slot);
+    _n.set(n[0], n[1], n[2]).applyMatrix3(_nm).normalize();
+    _col.set(tint);
+    const UV: [number, number][] = [[uv[0], uv[1]], [uv[2], uv[1]], [uv[2], uv[3]], [uv[0], uv[3]]];
+    const ids = [a, b, c, d].map((p, i) => {
+      _P.set(p[0], p[1], p[2]).applyMatrix4(L);
+      const f = this.shade ? this.shade(_P, slot, _n) : 1;
+      return m.v(_P.x, _P.y, _P.z, _n.x, _n.y, _n.z, UV[i][0], UV[i][1], _col.r * f, _col.g * f, _col.b * f);
+    });
+    m.tri(ids[0], ids[1], ids[2]); m.tri(ids[0], ids[2], ids[3]);
   }
   /** Триъгълник (локални точки); n — нормала навън. */
   tri(slot: Slot, a: V3, b: V3, c: V3, o?: PartOpts & { n?: V3; g?: V3 }): void {

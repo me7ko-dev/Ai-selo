@@ -235,7 +235,7 @@ export function roofOver(k: Kit, x0: number, x1: number, z0: number, z1: number,
       const n = Math.max(1, Math.round((xb - xa) / step));
       for (let i = 0; i <= n; i++) {
         const x = xa + ((xb - xa) * i) / n;
-        k.beam('timber', x, y - 0.06, z, x, y - 0.06 + sl * reach, z - s * reach, 0.08, 0.12, { tint: timber, bevel: 0.01 });
+        k.beam('timber', x, y - 0.06, z, x, y - 0.06 + sl * reach, z - s * reach, 0.08, 0.12, { tint: timber });
       }
     };
     const inset = kind === 'hip' ? reach + 0.1 : 0.15;
@@ -247,7 +247,7 @@ export function roofOver(k: Kit, x0: number, x1: number, z0: number, z1: number,
         const n = Math.max(1, Math.round((z1 - z0 - 2 * inset) / step));
         for (let i = 0; i <= n; i++) {
           const z = z0 + inset + ((z1 - z0 - 2 * inset) * i) / n;
-          k.beam('timber', x, y - 0.06, z, x - s * reach, y - 0.06 + slx * reach, z, 0.08, 0.12, { tint: timber, bevel: 0.01 });
+          k.beam('timber', x, y - 0.06, z, x - s * reach, y - 0.06 + slx * reach, z, 0.08, 0.12, { tint: timber });
         }
       };
       side(x0 + 0.02, -1); side(x1 - 0.02, 1);
@@ -317,12 +317,12 @@ export function chimney(k: Kit, x: number, z: number, y0: number, top: number, l
 }
 
 // ---------------------------------------------------------------- стругована балясина и парапет
-const BALUSTER: [number, number][] = [[0.032, 0], [0.032, 0.05], [0.022, 0.08], [0.03, 0.13], [0.042, 0.25], [0.029, 0.37], [0.02, 0.45], [0.027, 0.52], [0.021, 0.58], [0.032, 0.63], [0.032, 0.68]];
+const BALUSTER: [number, number][] = [[0.032, 0], [0.032, 0.06], [0.023, 0.09], [0.042, 0.25], [0.02, 0.45], [0.027, 0.53], [0.021, 0.6], [0.032, 0.68]];
 /** Парапет от (ax, az) до (bx, bz) на височина y (пода): горна и долна перила + балясини. */
 export function railing(k: Kit, ax: number, az: number, bx: number, bz: number, y: number, timber: string): void {
   const T = { tint: timber, bevel: 0.012 };
   k.beam('timber', ax, y + 0.93, az, bx, y + 0.93, bz, 0.11, 0.07, T);
-  k.beam('timber', ax, y + 0.15, az, bx, y + 0.15, bz, 0.09, 0.06, T);
+  k.beam('timber', ax, y + 0.15, az, bx, y + 0.15, bz, 0.09, 0.06, { tint: timber });
   const len = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.round(len / 0.17));
   for (let i = 1; i < n; i++) {
     const t = i / n;
@@ -459,7 +459,7 @@ export function buildHouse(k: Kit, h: HouseSpec): void {
     const n = Math.round(uw / 0.55);
     for (let i = 0; i <= n; i++) {
       const x = -uw / 2 + 0.07 + ((uw - 0.14) * i) / n;
-      k.box('timber', 0.12, 0.15, overhang + 0.12, x, g - 0.075, d / 2 + overhang / 2 + 0.03, { ...T, grain: 2 });
+      k.box('timber', 0.12, 0.15, overhang + 0.12, x, g - 0.075, d / 2 + overhang / 2 + 0.03, { tint: L.timber, grain: 2 });
     }
     k.box('planks', uw, 0.03, overhang, 0, g - 0.016, d / 2 + overhang / 2, { tint: '#a8907a', grain: 0, jitter: 0, noTop: true });
     for (const x of [-uw / 2 + 0.12, -uw / 6, uw / 6, uw / 2 - 0.12]) k.beam('timber', x, g - 0.85, d / 2 + 0.02, x, g - 0.14, uz1 - 0.06, 0.12, 0.13, T);
