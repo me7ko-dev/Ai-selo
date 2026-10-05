@@ -27,7 +27,7 @@ function tuftGeo(): THREE.BufferGeometry {
 }
 function flowerTuftGeo(): THREE.BufferGeometry {
   const g = tuftGeo();
-  const extra = new THREE.OctahedronGeometry(0.075, 0).toNonIndexed(); // 8 триъгълника вместо 20 — главичката е мъничка
+  const extra = new THREE.OctahedronGeometry(0.075, 0); // 8 триъгълника вместо 20 — главичката е мъничка (вече е без индекси)
   extra.deleteAttribute('uv');
   extra.translate(0.05, 0.55, 0.02);
   const n = extra.attributes.position.count;

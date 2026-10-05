@@ -203,6 +203,7 @@ export class Game {
     // превъртяно през полунощ — запис за новия ден (машината на времето да има откъде да гледа)
     if (dayOf(this.sim.state.time) > dayBefore) void this.makeSnapshot('day');
     this.villagers.update(0.016, this.sim.state, true);
+    this.updateHud(); // часовникът — след превъртането
     if (cards.length) {
       this.openAway(cards);
       // с ИИ: трите най-важни случки се преразказват (картичките се показват веднага, после се подменят)
@@ -233,6 +234,7 @@ export class Game {
     this.rpg.setControlsEnabled(true);
     this.villagers.update(0.016, this.sim.state, true);
     this.hudAcc = 1;
+    this.updateHud(); // веднага — иначе зад „Докато те нямаше…“ се виждат празни ленти и „Ниво 1“
     this.audio.setMusic('village');
     if (lock) this.lockPointer();
   }
@@ -242,9 +244,9 @@ export class Game {
     rpg.bus.on('notify', (e) => this.toast(e.text, e.kind));
     rpg.bus.on('sfx', (e) => this.sfx(e.name));
     rpg.bus.on('damage', (e) => { if (e.target === 'hero' && !e.blocked) this.ui.hud.flashDamage(); });
-    rpg.bus.on('levelup', (e) => { this.ui.banner.show(`Ниво ${e.level}`, e.title); this.sfx('levelup'); });
+    rpg.bus.on('levelup', (e) => { this.ui.banner.show(`Ниво ${e.level}`, e.title, 4500, 'gold', { key: 'level' }); this.sfx('levelup'); });
     rpg.bus.on('questDone', (e) => { this.ui.banner.show('Задачата е изпълнена', e.title); this.sfx('quest'); });
-    rpg.bus.on('lamiaDefeated', () => { this.ui.banner.show('Ламята е победена!', 'Бистрица тече отново. Тази вечер селото вдига сбор.'); this.sfx('victory'); });
+    rpg.bus.on('lamiaDefeated', () => { this.ui.banner.show('Ламята е победена!', 'Бистрица тече отново. Тази вечер селото вдига сбор.', 6000, 'gold', { urgent: true }); this.sfx('victory'); });
     // мишката се пуска, за да може да се натисне „Събуди се в хана“ (при заключена мишка кликът отива в платното)
     rpg.bus.on('died', () => {
       this.sfx('death');
@@ -342,7 +344,8 @@ export class Game {
   private dlgCand = -1;
   resetDialogueCamera(): void { this.dlgCam.copy(this.engine.camera.position); this.dlgLook.set(0, 0, 0); this.dlgCand = -1; }
   /** Места за камерата при разговор: [назад, встрани] спрямо героя; първото, от което жителят се вижда. */
-  private static DLG_CANDS: [number, number][] = [[2.6, 1.1], [2.6, -1.1], [1.9, 1.4], [1.9, -1.4], [1.3, 0.8]];
+  // страничното отместване е голямо, за да не закрива героят лицето на жителя
+  private static DLG_CANDS: [number, number][] = [[2.4, 1.6], [2.4, -1.6], [1.8, 1.8], [1.8, -1.8], [1.3, 1.0]];
   private dialogueCamera(dt: number, id: VillagerId): void {
     const hero = this.rpg.heroPos;
     const vp = this.villagers.position(id);
@@ -447,7 +450,7 @@ export class Game {
     return this.sim.state.villagers.filter((v) => this.villagers.isVisible(v.id)).map((v) => ({ x: v.pos.x, z: v.pos.z }));
   }
 
-  private updateHud(timeShown?: number): void {
+  updateHud(timeShown?: number): void {
     const h = this.rpg.hud();
     const t = timeShown ?? this.sim.state.time;
     this.ui.hud.update({
@@ -511,6 +514,9 @@ export class Game {
     canvas.addEventListener('click', () => { if (this.mode === 'play' && this.modal === null && !this.rpg.dead) this.lockPointer(); });
     document.addEventListener('pointerlockchange', () => {
       const locked = document.pointerLockElement === canvas;
+      // заявката за мишката е закъсняла, а междувременно се е отворил прозорец („Докато те нямаше…“, смърт…) — пусни я,
+      // иначе курсорът е скрит и бутоните не могат да се натиснат
+      if (locked && (this.mode !== 'play' || this.modal !== null || this.rpg.dead)) { this.unlockPointer(); return; }
       this.ui.hud.setPaused(!locked && this.mode === 'play' && this.modal === null && !this.rpg.dead);
       if (!locked && !this.expectUnlock && this.mode === 'play' && this.modal === null && !this.rpg.dead && performance.now() >= this.suppressKeysUntil) {
         // Esc освободи мишката → менюто

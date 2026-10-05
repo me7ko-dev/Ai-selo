@@ -91,6 +91,7 @@ export class TimeMachine {
     this.viewer = null;
     g.ui.time.setPlayhead(null);
     g.villagers.update(0.016, g.sim.state, true);
+    g.updateHud(); // часовникът долу пак показва настоящето
     g.modal = 'time';
     g.ui.time.show(this.data());
   }

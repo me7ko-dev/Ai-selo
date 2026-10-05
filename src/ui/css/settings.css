@@ -1,3 +1,5 @@
+/* над началния екран (той е по-късно в DOM) — иначе „Настройки“ от менюто се отварят под заглавието и бутоните */
+.bl-ui .set-back { z-index: 30; }
 .bl-ui .set { width: min(46em, 94vw); }
 .bl-ui .set-main { display: flex; gap: 1em; padding: 0.3em 1.3em 1.3em; }
 .bl-ui .set-tabs { width: 9em; flex: none; display: flex; flex-direction: column; gap: 0.25em; }
