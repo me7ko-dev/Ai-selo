@@ -106,7 +106,56 @@ async function people(list: string[]): Promise<void> {
   controls.target.copy(target);
   controls.update();
   (window as any).models = models;
+  if (qs.get('perf')) (window as any).__perf = await gpuPerf(qs.get('perf')!);
   (window as any).__ready = true;
+}
+
+/**
+ * GPU време на кадър (EXT_disjoint_timer_query): по 4 кадъра с „нещото“ и 4 без, редувани — за честно сравнение
+ * дори когато видеокартата е заета с други неща. what: all | shadow | cloth | folk | skin | eyes | hair | ds (двустранни).
+ */
+async function gpuPerf(what: string): Promise<Record<string, unknown>> {
+  const gl = renderer.getContext() as WebGL2RenderingContext;
+  const ext = gl.getExtension('EXT_disjoint_timer_query_webgl2');
+  if (!ext) return { err: 'няма timer query' };
+  const toggles: [any, string, unknown, unknown][] = [];
+  if (what === 'sun') toggles.push([sun, 'castShadow', true, false]);
+  if (what === 'bonetex') for (const m of models) m.root.traverse((o: any) => { if (o.isSkinnedMesh) toggles.push([o.skeleton, 'frame', -1, -1]); });
+  for (const m of models) m.root.traverse((o: any) => {
+    if (!o.isMesh) return;
+    if (what === 'all') toggles.push([o, 'visible', true, false]);
+    else if (what === 'shadow') toggles.push([o, 'castShadow', true, false]);
+    else if (what === 'ds') toggles.push([o.material, 'side', o.material.side, THREE.FrontSide]);
+    else if (o.name.endsWith('_' + what) || o.name === what) toggles.push([o, 'visible', true, false]);
+  });
+  const out: number[][] = [[], []];
+  const pending: [WebGLQuery, number][] = [];
+  let mode = 0;
+  const poll = () => {
+    for (let i = pending.length - 1; i >= 0; i--) {
+      const [q, m] = pending[i];
+      if (gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE)) {
+        if (!gl.getParameter(ext.GPU_DISJOINT_EXT)) out[m].push(gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6);
+        gl.deleteQuery(q); pending.splice(i, 1);
+      }
+    }
+  };
+  for (let n = 0; n < 400; n++) {
+    mode = Math.floor(n / 4) % 2;
+    for (const [o, k, on, off] of toggles) { o[k] = mode === 0 ? on : off; if (k === 'side') o.needsUpdate = true; }
+    const q = gl.createQuery()!;
+    gl.beginQuery(ext.TIME_ELAPSED_EXT, q);
+    renderer.render(scene, camera);
+    gl.endQuery(ext.TIME_ELAPSED_EXT);
+    pending.push([q, mode]);
+    await new Promise((r) => requestAnimationFrame(r));
+    poll();
+  }
+  for (const [o, k, on] of toggles) o[k] = on;
+  await new Promise((r) => setTimeout(r, 200)); poll();
+  const med = (a: number[]) => { const s = [...a].sort((x, y) => x - y); return +(s[s.length >> 1] ?? 0).toFixed(3); };
+  const lo = (a: number[]) => { const s = [...a].sort((x, y) => x - y); return +(s[Math.floor(s.length * 0.1)] ?? 0).toFixed(3); };
+  return { what, toggles: toggles.length, on: med(out[0]), off: med(out[1]), onLo: lo(out[0]), offLo: lo(out[1]), n: [out[0].length, out[1].length] };
 }
 
 async function main(): Promise<void> {

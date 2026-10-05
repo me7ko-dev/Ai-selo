@@ -160,6 +160,62 @@ function merge(parts) {
   }
   return o;
 }
+/**
+ * Рязане на меша по гладко поле: остава частта, където field(i) ≥ 0. Триъгълниците по ръба се режат точно по
+ * линията field = 0 (новите върхове са по ръбовете, с интерполирани позиция/нормала/UV/тегла) — ръбът на дрехата
+ * е гладък, а не „назъбен“ по триъгълниците.
+ */
+function clipByField(p, field) {
+  const fv = new Float32Array(p.n);
+  for (let i = 0; i < p.n; i++) fv[i] = field(i);
+  const pos = [...p.pos], nrm = [...p.nrm], uv = [...p.uv], gar = [...p.gar];
+  const jn = p.jn ? [...p.jn] : null, wt = p.wt ? [...p.wt] : null;
+  let n = p.n;
+  const edgeCache = new Map();
+  const cut = (a, b) => {
+    const key = a < b ? a + ',' + b : b + ',' + a;
+    const hit = edgeCache.get(key);
+    if (hit !== undefined) return hit;
+    const t = fv[a] / (fv[a] - fv[b]);
+    for (let k = 0; k < 3; k++) { pos.push(p.pos[a * 3 + k] + (p.pos[b * 3 + k] - p.pos[a * 3 + k]) * t); }
+    const nn = [0, 1, 2].map((k) => p.nrm[a * 3 + k] + (p.nrm[b * 3 + k] - p.nrm[a * 3 + k]) * t);
+    const l = Math.hypot(...nn) || 1;
+    nrm.push(nn[0] / l, nn[1] / l, nn[2] / l);
+    uv.push(p.uv[a * 2] + (p.uv[b * 2] - p.uv[a * 2]) * t, p.uv[a * 2 + 1] + (p.uv[b * 2 + 1] - p.uv[a * 2 + 1]) * t);
+    gar.push(p.gar[a]);
+    if (jn) {
+      const m = new Map();
+      for (let q = 0; q < 4; q++) {
+        m.set(p.jn[a * 4 + q], (m.get(p.jn[a * 4 + q]) || 0) + p.wt[a * 4 + q] * (1 - t));
+        m.set(p.jn[b * 4 + q], (m.get(p.jn[b * 4 + q]) || 0) + p.wt[b * 4 + q] * t);
+      }
+      const s = skinW([...m.entries()]);
+      jn.push(...s.jn); wt.push(...s.wt);
+    }
+    edgeCache.set(key, n);
+    return n++;
+  };
+  const idx = [];
+  for (let t = 0; t < p.idx.length; t += 3) {
+    const tri = [p.idx[t], p.idx[t + 1], p.idx[t + 2]];
+    const ins = tri.map((i) => fv[i] >= 0);
+    if (ins.every(Boolean)) { idx.push(...tri); continue; }
+    if (!ins.some(Boolean)) continue;
+    // Sutherland–Hodgman за една равнина
+    const poly = [];
+    for (let k = 0; k < 3; k++) {
+      const a = tri[k], b = tri[(k + 1) % 3];
+      if (fv[a] >= 0) poly.push(a);
+      if ((fv[a] >= 0) !== (fv[b] >= 0)) poly.push(cut(a, b));
+    }
+    for (let k = 1; k + 1 < poly.length; k++) idx.push(poly[0], poly[k], poly[k + 1]);
+  }
+  return compact({
+    n, pos: new Float32Array(pos), nrm: new Float32Array(nrm), uv: new Float32Array(uv), gar: new Uint8Array(gar),
+    jn: jn ? new Uint16Array(jn) : null, wt: wt ? new Float32Array(wt) : null, col: null, idx: new Uint32Array(idx),
+  });
+}
+
 /** Опростяване (meshoptimizer) — пази ръбовете на UV островите. */
 function simplify(p, ratio, err = 0.02) {
   if (ratio >= 1) return p;
@@ -527,16 +583,18 @@ function shellFrom(p, keep, { offset, gar, uvRect, yRange = [0, 2] }) {
 }
 
 /** Калпак — пресечен конус с овален връх, в пространството на Head (твърда част). */
-function makeKalpak(headTop, { r = 0.105, h = 0.15, rings = 8, cols = 28, uvRect = FOLK.wool } = {}) {
+function makeKalpak(headTop, { r = 0.1, h = 0.13, rings = 10, cols = 32, uvRect = FOLK.wool } = {}) {
   const n = (rings + 2) * (cols + 1);
   const o = { n, pos: new Float32Array(n * 3), nrm: new Float32Array(n * 3), uv: new Float32Array(n * 2), gar: new Uint8Array(n).fill(G.KALPAK), idx: null, jn: null, wt: null };
   let k = 0;
   for (let i = 0; i <= rings + 1; i++) for (let j = 0; j <= cols; j++) {
     const a = (j / cols) * Math.PI * 2;
     const t = Math.min(1, i / rings);
-    let rr = r * (1 + 0.08 * Math.sin(t * Math.PI)) * (1 - 0.1 * t);
+    // леко издут, стеснен нагоре, с заоблен горен ръб и почти плосък връх
+    let rr = r * (1 + 0.06 * Math.sin(t * Math.PI)) * (1 - 0.08 * t);
     let y = headTop.y + t * h;
-    if (i === rings + 1) { rr = 0; y = headTop.y + h + 0.012; }
+    if (t > 0.8) { const k = (t - 0.8) / 0.2; rr *= 1 - 0.12 * k * k; }
+    if (i === rings + 1) { rr = 0; y = headTop.y + h + 0.008; }
     o.pos.set([headTop.x + Math.sin(a) * rr * 1.04, y, headTop.z + Math.cos(a) * rr], k * 3);
     o.uv.set(inRect(uvRect, j / cols, Math.min(1, i / (rings + 1))), k * 2);
     k++;
@@ -572,13 +630,56 @@ function rigidPart(doc, gar) {
   }
   return o;
 }
-/** Части с UV в [0,1] → в лявата/дясната половина на атлас 2:1. */
+/** Части с UV в [0,1] → в лявата/дясната четвърт на горната половина на атласа на косите (долу е вълната за калпака). */
 function toAtlasHalf(p, half) {
   for (let i = 0; i < p.n; i++) {
-    let u = p.uv[i * 2]; u = Math.min(1, Math.max(0, u));
+    const u = Math.min(1, Math.max(0, p.uv[i * 2])), v = Math.min(1, Math.max(0, p.uv[i * 2 + 1]));
     p.uv[i * 2] = half * 0.5 + u * 0.5;
+    p.uv[i * 2 + 1] = v * 0.5;
   }
   return p;
+}
+
+/** Агнешка вълна (каракул) за калпака: ситни къдрици; връща сив цвят и височина (за нормалите). */
+function woolTexture(W, H) {
+  const col = Buffer.alloc(W * H * 3), hgt = new Float32Array(W * H);
+  let seed = 11;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const C = 18, gx = Math.ceil(W / C), gy = Math.ceil(H / C);
+  const jit = Array.from({ length: gx * gy }, () => [rnd() * 0.7 + 0.15, rnd() * 0.7 + 0.15, rnd() * Math.PI * 2, rnd() > 0.5 ? 1 : -1]);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    let best = 1e9, val = 0;
+    const cx0 = Math.floor(x / C), cy0 = Math.floor(y / C);
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const cx = (cx0 + dx + gx) % gx, cy = (cy0 + dy + gy) % gy;
+      const j = jit[cy * gx + cx];
+      let px = (cx0 + dx + j[0]) * C, py = (cy0 + dy + j[1]) * C;
+      const ddx = x - px, ddy = y - py, d = Math.hypot(ddx, ddy);
+      if (d < best) {
+        best = d;
+        const a = Math.atan2(ddy, ddx) * j[3] + j[2];
+        // спирала: светли витки, тъмни бразди между тях, по-тъмно към ръба на къдрицата
+        val = (0.55 + 0.45 * Math.cos(d * 0.75 - a * 1.0)) * Math.max(0, 1 - Math.pow(d / (C * 0.85), 2));
+      }
+    }
+    const g = Math.round(60 + 170 * val);
+    col[(y * W + x) * 3] = col[(y * W + x) * 3 + 1] = col[(y * W + x) * 3 + 2] = g;
+    hgt[y * W + x] = val;
+  }
+  const nrm = Buffer.alloc(W * H * 3);
+  const Hh = (x, y) => hgt[((y + H) % H) * W + ((x + W) % W)];
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const dx = (Hh(x + 1, y) - Hh(x - 1, y)) * 3, dy = (Hh(x, y + 1) - Hh(x, y - 1)) * 3, l = Math.hypot(dx, dy, 1), o = (y * W + x) * 3;
+    nrm[o] = Math.round((-dx / l * 0.5 + 0.5) * 255); nrm[o + 1] = Math.round((dy / l * 0.5 + 0.5) * 255); nrm[o + 2] = Math.round((1 / l * 0.5 + 0.5) * 255);
+  }
+  return { col, nrm };
+}
+/** Атлас на косите 1024×1024: горе Hair_1 | Hair_2, долу вълна. */
+async function hairAtlas(a, b, wool) {
+  const top = await sideBySide(a, b, 512);
+  return sharp({ create: { width: 1024, height: 1024, channels: 3, background: '#808080' } })
+    .composite([{ input: top, left: 0, top: 0 }, { input: await sharp(wool, { raw: { width: 1024, height: 512, channels: 3 } }).png().toBuffer(), left: 0, top: 512 }])
+    .png().toBuffer();
 }
 
 const bodies = {};
@@ -603,18 +704,21 @@ const bodies = {};
   const headSet = boneSet(sk, /^(Head|neck_01)$/);
   const head = cutSkin(src.mBase, sk, (p, i) => wOf(p, i, headSet) > 0.35 && p.pos[i * 3 + 1] > 1.45);
   const eyes = one(src.mBase, 'Eyes', null, sk);
-  // елек: торсът на ризата (без ръкавите — по теглата на костите — и без яката), отворен отпред с остро деколте
+  // елек: торсът на ризата (без ръкавите — по теглата на костите — и без яката), отворен отпред с остро деколте.
+  // Ръбовете се режат по гладко поле (clipByField), за да са прави, а не назъбени по триъгълниците.
   const armSet = boneSet(sk, /^(upperarm|lowerarm|hand)_/);
-  const vest = shellFrom(body, (t, a, b, c) => [a, b, c].every((i) => {
-    const x = body.pos[i * 3], y = body.pos[i * 3 + 1], z = body.pos[i * 3 + 2];
-    // покрива и раменете (без яката); деколтето е тясно долу и се разширява към врата
-    const open = z > 0 && Math.abs(x) < 0.028 + Math.max(0, y - 1.28) * 0.42;
-    const collar = y > 1.5 && Math.abs(x) < 0.1;
-    return body.gar[i] === G.SHIRT && wOf(body, i, armSet) < 0.35 && y > 1.1 && y < 1.58 && !open && !collar;
-  }), { offset: 0.008, gar: G.VEST, uvRect: FOLK.cloth, yRange: [1.0, 1.6] });
-  // пояс: широка ивица от ризата на кръста
-  const sash = shellFrom(body, (t, a, b, c) => [a, b, c].every((i) => body.gar[i] === G.SHIRT && body.pos[i * 3 + 1] > 1.0 && body.pos[i * 3 + 1] < 1.16), { offset: 0.011, gar: G.SASH, uvRect: FOLK.sash, yRange: [1.0, 1.16] });
-  for (let i = 0; i < sash.n; i++) sash.uv[i * 2 + 1] = FOLK.sash[1] + (FOLK.sash[3] - FOLK.sash[1]) * Math.min(0.999, Math.max(0, (sash.pos[i * 3 + 1] - 1.0) / 0.16));
+  const shirtOnly = filterTris(body, (t, a, b, c) => body.gar[a] === G.SHIRT);
+  const vest = shellFrom(clipByField(shirtOnly, (i) => {
+    const p = shirtOnly, x = p.pos[i * 3], y = p.pos[i * 3 + 1], z = p.pos[i * 3 + 2];
+    const band = Math.min(y - 1.1, 1.575 - y);                                   // от пояса до раменете
+    const arm = (0.4 - wOf(p, i, armSet)) * 0.25;                                 // без ръкавите
+    const neck = Math.hypot(x / 1.0, (z - 0.0) / 0.9) - 0.115 + Math.max(0, 1.5 - y) * 2;  // около врата
+    const open = z > -0.02 ? Math.abs(x) - (0.022 + Math.max(0, y - 1.26) * 0.36) : 1; // деколте отпред
+    return Math.min(band, arm, neck, open);
+  }), () => true, { offset: 0.008, gar: G.VEST, uvRect: FOLK.cloth, yRange: [1.0, 1.6] });
+  // пояс: широка ивица от ризата на кръста (прави ръбове горе и долу)
+  const sash = shellFrom(clipByField(shirtOnly, (i) => { const y = shirtOnly.pos[i * 3 + 1]; return Math.min(y - 1.0, 1.165 - y); }),
+    () => true, { offset: 0.011, gar: G.SASH, uvRect: FOLK.sash, yRange: [1.0, 1.165] });
   // кожена престилка (Иван): платно отпред от гърдите до коленете
   const leather = makeApron(sk, [body, legs], { topY: 1.42, botY: 0.6, halfW: 0.15, rows: 12, gar: G.LEATHER, uvRect: FOLK.cloth, flare: 0.15, gap: 0.016 });
   bodies.M = {
@@ -664,9 +768,9 @@ const bodies = {};
       v.fromArray(hood.pos, i * 3);
       const k = THREE.MathUtils.smoothstep(v.y, 1.6, 1.68);
       if (k <= 0) continue;
-      const d = v.distanceTo(c), r0 = 0.112;
+      const d = v.distanceTo(c), r0 = 0.124;
       if (d <= r0) continue;
-      const d2 = r0 + (d - r0) * (1 - 0.6 * k);
+      const d2 = r0 + (d - r0) * (1 - 0.55 * k);
       v.sub(c).multiplyScalar(d2 / d).add(c);
       hood.pos.set([v.x, v.y, v.z], i * 3);
     }
@@ -747,7 +851,7 @@ hair.mustache.gar.fill(7);
   const hp = hair.hair_buzzed;
   for (let i = 0; i < hp.n; i++) if (hp.pos[i * 3 + 1] > top) { top = hp.pos[i * 3 + 1]; cz = hp.pos[i * 3 + 2]; }
   // калпакът ползва гъстата коса от атласа (дясната половина) — оцветена в черно прилича на агнешка вълна
-  hair.kalpak = makeKalpak(new THREE.Vector3(0, top - 0.075, cz - 0.02), { uvRect: [0.52, 0.1, 0.98, 0.7] });
+  hair.kalpak = makeKalpak(new THREE.Vector3(0, top - 0.07, cz - 0.015), { uvRect: [0, 0.5, 1, 1] });
   hair.kalpak.gar.fill(10);
 }
 for (const [k, p] of Object.entries(hair)) {
@@ -770,6 +874,7 @@ async function tex(name, makeBuf, mime = 'image/jpeg') {
 }
 const T = (rel) => path.join(SRC, rel);
 const folkTex = folkTexture();
+const woolTex = woolTexture(1024, 512);
 const mats = {
   peasant: doc.createMaterial('cloth_peasant').setDoubleSided(true).setMetallicFactor(1).setRoughnessFactor(1)
     .setBaseColorTexture(await tex('peasant_c', () => jpeg(T(P.tex + '/Peasant/T_Peasant_BaseColor.png'), [TEX, TEX], 88)))
@@ -793,8 +898,8 @@ const mats = {
   eyes: doc.createMaterial('eyes').setMetallicFactor(0).setRoughnessFactor(0.25)
     .setBaseColorTexture(await tex('eyes_c', () => jpeg(T(P.base + '/T_Eye_Brown.png'), [256, 256], 90))),
   hair: doc.createMaterial('hair').setDoubleSided(true).setMetallicFactor(0).setRoughnessFactor(0.6)
-    .setBaseColorTexture(await tex('hair_c', async () => jpeg(await sideBySide(T(P.hair + '/T_Hair_1_BaseColor.png'), T(P.hair + '/T_Hair_2_BaseColor.png'), 512), null, 88)))
-    .setNormalTexture(await tex('hair_n', async () => jpeg(await sideBySide(T(P.hair + '/T_Hair_1_Normal.png'), T(P.hair + '/T_Hair_2_Normal.png'), 512), null, 90))),
+    .setBaseColorTexture(await tex('hair_c', async () => jpeg(await hairAtlas(T(P.hair + '/T_Hair_1_BaseColor.png'), T(P.hair + '/T_Hair_2_BaseColor.png'), woolTex.col), null, 88)))
+    .setNormalTexture(await tex('hair_n', async () => jpeg(await hairAtlas(T(P.hair + '/T_Hair_1_Normal.png'), T(P.hair + '/T_Hair_2_Normal.png'), woolTex.nrm), null, 90))),
 };
 // средна яркост на оригиналната текстура под всеки етикет (за пребоядисването в играта)
 function garmentRef(tex, p) {
@@ -807,7 +912,7 @@ function garmentRef(tex, p) {
 mats.peasant.setExtras({ garmentRef: (() => { const r = garmentRef(texPeasant, merge([bodies.M.cloth, bodies.F.cloth])); return r; })() });
 mats.ranger.setExtras({ garmentRef: garmentRef(texRanger, bodies.H.cloth) });
 {
-  const atlas = await sideBySide(T(P.hair + '/T_Hair_1_BaseColor.png'), T(P.hair + '/T_Hair_2_BaseColor.png'), 256);
+  const atlas = await sharp(await hairAtlas(T(P.hair + '/T_Hair_1_BaseColor.png'), T(P.hair + '/T_Hair_2_BaseColor.png'), woolTex.col)).resize(512, 512).png().toBuffer();
   const { data, info } = await sharp(atlas).removeAlpha().raw().toBuffer({ resolveWithObject: true });
   mats.hair.setExtras({ garmentRef: garmentRef({ data, w: info.width, h: info.height }, hairAll) });
 }
