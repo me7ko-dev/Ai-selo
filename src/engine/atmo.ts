@@ -34,6 +34,8 @@ export const A = {
   SHADOW: 13,
   /** rgb — относително погасяване по канали (синьото се разсейва повече → далечното синкаво) */
   HAZE_TINT: 14,
+  /** rgb — цвят на височинната (утринна) мъгла: осветена от цялото небе, по-бледа от мараната */
+  MIST: 15,
 } as const;
 
 export const ATMO_GLSL = /* glsl */`
@@ -106,11 +108,12 @@ const fogParsFragment = /* glsl */`
 		float ea = exp( - a / H ), eb = exp( - b / H );
 		return abs( d ) > 0.05 ? H * ( ea - eb ) / d : ea;
 	}
-	vec3 atmoFogAmount( vec3 rel, float dist ) {
+	// tau: rgb — мараната (по канали), a — височинната мъгла
+	vec4 atmoFogTau( vec3 rel, float dist ) {
 		float base = gAtmo[ 2 ].w;
 		float mist = gAtmo[ 2 ].y * dist * atmoHeightAvg( cameraPosition.y - base, cameraPosition.y + rel.y - base, max( gAtmo[ 2 ].z, 0.5 ) );
 		vec3 tint = gAtmo[ 14 ].x > 0.0 ? gAtmo[ 14 ].rgb : vec3( 1.0 );
-		return 1.0 - exp( - ( dist * gAtmo[ 2 ].x * tint + mist ) );
+		return vec4( dist * gAtmo[ 2 ].x * tint, mist );
 	}
 #endif
 `;
@@ -128,8 +131,10 @@ const fogFragment = /* glsl */`
 		vec3 fogRel = vFogWorld - cameraPosition;
 		float fogDist = length( fogRel );
 		vec3 fogDir = fogRel / max( fogDist, 1e-4 );
-		fogF = atmoFogAmount( fogRel, fogDist );
-		fogCol = atmoHaze( fogDir );
+		vec4 fogTau = atmoFogTau( fogRel, fogDist );
+		fogF = 1.0 - exp( - ( fogTau.rgb + fogTau.a ) );
+		float hazeT = dot( fogTau.rgb, vec3( 0.333 ) );
+		fogCol = mix( atmoHaze( fogDir ), gAtmo[ 15 ].rgb, fogTau.a / max( hazeT + fogTau.a, 1e-5 ) );
 	}
 	gl_FragColor.rgb = mix( gl_FragColor.rgb, fogCol, fogF );
 #endif

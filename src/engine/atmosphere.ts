@@ -12,8 +12,10 @@ const HR = 8000;
 const HM = 1200;
 const BO: [number, number, number] = [0.65e-6, 1.881e-6, 0.085e-6];
 /** Ми по подразбиране (лека мараня); времето го вдига */
-export const MIE_CLEAR = 6e-6;
+export const MIE_CLEAR = 8.5e-6;
 const MS = 0.9; // добавка за многократно разсейване (изотропна)
+/** оцветяване на многократното разсейване: (β_R / β_R.g)^0.3 — малко по-синьо */
+const MSB = BR.map((b) => Math.pow(b / BR[1], 0.3)) as [number, number, number];
 
 export const ATMOSPHERE_GLSL = /* glsl */`
 const float A_RE = ${R_EARTH.toFixed(1)};
@@ -23,6 +25,7 @@ const vec3 A_BO = vec3(${BO.map((v) => v.toExponential(4)).join(', ')});
 const float A_HR = ${HR.toFixed(1)};
 const float A_HM = ${HM.toFixed(1)};
 const float A_MS = ${MS.toFixed(3)};
+const vec3 A_MSB = vec3(${MSB.map((v) => v.toFixed(4)).join(', ')});
 uniform float uMie;   // разсейване на Ми при земята (м⁻¹)
 uniform float uMieG;  // асиметрия на Ми
 
@@ -74,7 +77,8 @@ vec3 aScatter( vec3 V, vec3 L ) {
 		sM += S * d.y * dt;
 	}
 	vec3 single = sR * A_BR * aPhaseR( mu ) + sM * uMie * aPhaseM( mu, uMieG );
-	vec3 multi = ( sR * A_BR + sM * uMie ) * 0.0795775 * A_MS;
+	// многократното разсейване е по-синьо от единичното (светлината се разсейва повторно по Рейли)
+	vec3 multi = ( sR * A_BR * A_MSB + sM * uMie ) * 0.0795775 * A_MS;
 	return single + multi;
 }
 `;
@@ -150,8 +154,8 @@ export function scatter(V: THREE.Vector3, L: THREE.Vector3, mie: number, g: numb
   }
   const pR = 0.0596831 * (1 + mu * mu), pM = phaseM(mu, g), iso = 0.0795775 * MS;
   return out.setRGB(
-    sR0 * BR[0] * (pR + iso) + sM0 * mie * (pM + iso),
-    sR1 * BR[1] * (pR + iso) + sM1 * mie * (pM + iso),
-    sR2 * BR[2] * (pR + iso) + sM2 * mie * (pM + iso),
+    sR0 * BR[0] * (pR + iso * MSB[0]) + sM0 * mie * (pM + iso),
+    sR1 * BR[1] * (pR + iso * MSB[1]) + sM1 * mie * (pM + iso),
+    sR2 * BR[2] * (pR + iso * MSB[2]) + sM2 * mie * (pM + iso),
   );
 }

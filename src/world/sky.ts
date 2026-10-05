@@ -20,6 +20,8 @@ const lerp = THREE.MathUtils.lerp;
 
 /** Слънчева осветеност извън атмосферата (единици на сцената). */
 const SUN_E = 3.7;
+/** Небето спрямо слънцето: единичното разсейване + грубото многократно дават около половината от истинската яркост. */
+const SKY_GAIN = 1.6;
 /** Луната — много по-силна от истинската (играе се и нощем), синкава. */
 const MOON_E = 0.42;
 const MOON_COLOR = new THREE.Color('#b9c8f0');
@@ -485,7 +487,7 @@ export class SkySystem {
     this.directE = this.sun.intensity * (Math.max(0.05, this.lightDir.y) + 1) * 0.5;
 
     // ── таблицата на небето ──
-    const sunE = this.sunDir.y > -0.25 ? SUN_E : 0;
+    const sunE = this.sunDir.y > -0.25 ? SUN_E * SKY_GAIN : 0;
     const moonE = MOON_E * MOON_SKY * moonUp;
     const ocMix = Math.min(1, sstep(0.35, 1.0, cover) * 0.95 + gl * 0.9);
     this.lutU.uSunE.value = sunE;
@@ -536,7 +538,7 @@ export class SkySystem {
     u.uPix.value = ((cam.fov ?? 60) * Math.PI / 180) / Math.max(1, this.renderer.domElement.height);
     u.uCover.value = Math.max(cover, gl * 0.97);
     u.uCloudDark.value = Math.min(1, dk * 0.9 + gl * 0.6);
-    u.uSunE.value = sunE * this.sunCloudVis / Math.max(0.08, 1 - sstep(0.5, 0.98, cover) * 0.92);
+    u.uSunE.value = (sunE / SKY_GAIN) * this.sunCloudVis / Math.max(0.08, 1 - sstep(0.5, 0.98, cover) * 0.92);
     (u.uMoonLight.value as THREE.Color).copy(MOON_COLOR).multiplyScalar(moonLight * MOON_SKY * 1.5);
     // облаците отдолу: осветени от небето (по-тъмни от него нощем)
     (u.uCloudAmb.value as THREE.Color).copy(this.zenith).multiplyScalar(lerp(2.2, 0.9, nightW)).add(this.tmpC2.copy(this.haze[0]).multiplyScalar(0.3));
@@ -558,11 +560,17 @@ export class SkySystem {
     const ins = this.tmpC2.copy(this.sun.color).multiplyScalar(this.sun.intensity * 0.02 * (1 - dk * 0.6));
     setAtmoVec(A.INSCATTER, ins.r, ins.g, ins.b, 1);
     // утринна мъгла в низините + местна (гора, блато)
-    const mist = (w.mist ?? 0) * 0.018 + lf * 0.014;
+    const mist = (w.mist ?? 0) * 0.008 + lf * 0.01;
     setAtmoVec(A.FOG, hz, mist, 7 + lf * 5, -1);
     // при чист въздух синьото се разсейва повече (Рейли) → далечните склонове посиняват; в мъгла/дъжд — сиво
     const grey = sstep(0.0012, 0.006, hz);
     setAtmoVec(A.HAZE_TINT, lerp(0.66, 1, grey), lerp(0.9, 1, grey), lerp(1.35, 1, grey), 0);
+    // мъглата в низините: светлината от цялото небе (отгоре и встрани) + малко пряко слънце, бяла (албедо ~0.85)
+    const mc = this.irradiance(this.tmpV.set(0, 1, 0), this.tmpC2).multiplyScalar(0.5);
+    mc.add(this.irradiance(this.tmpV.set(0.7, 0, 0.7), this.tmpC).multiplyScalar(0.5));
+    mc.add(this.tmpC.copy(this.sun.color).multiplyScalar(this.sun.intensity * 0.35));
+    mc.multiplyScalar(0.85 / Math.PI);
+    setAtmoVec(A.MIST, mc.r, mc.g, mc.b, 0);
     for (let k = 0; k < 8; k++) setAtmoColor(A.HAZE0 + k, this.haze[k], 0);
     setAtmoVec(A.ZENITH, this.zenith.r, this.zenith.g, this.zenith.b, nightW);
     // време и „околната светлина е от сондата“ (мокротата/дъждът се пишат от World3D)
