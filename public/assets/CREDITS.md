@@ -22,3 +22,6 @@
 - „Modular Character Outfits – Fantasy“ — селски и горски дрехи (пребоядисани в носии) — https://quaternius.com/packs/modularcharacteroutfitsfantasy.html
 - „Universal Animation Library“ — анимациите (ходене, тичане, удари, хоро…) — https://quaternius.com/packs/universalanimationlibrary.html
 Полата, престилката с шевиците, забрадката, елекът, поясът, калпакът и текстурите им (шевици, басма, агнешка вълна) са направени в кода на играта.
+- Текстура „pine_bark“ — Poly Haven, CC0 — https://polyhaven.com/a/pine_bark
+- Текстура „fern_02“ — Poly Haven, CC0 — https://polyhaven.com/a/fern_02
+- Текстури на иглички и листа (смърч, дъб, ясен) — ez-tree от Daniel Greenheck, лиценз MIT — https://github.com/dgreenheck/ez-tree

@@ -18,7 +18,7 @@ import { buildTerrain } from './terrain';
 import { createTerrainMaterial, type TerrainMaterial } from './terrainMaterial';
 import { groundTextures, heightTexture } from './groundTex';
 import { SkySystem } from './sky';
-import { instanced, pineGeo, oakGeo, bushGeo, rockGeo, deadTreeGeo, fernGeo, mushroomGeo, logGeo, flowerGeo, fadingTreeMaterial, treeFadeUniforms, type InstGroup } from './vegetation';
+import { Vegetation, treeFadeUniforms, type InstGroup } from './vegetation';
 import { buildPond, buildRiver, buildSwampPools, updateWater, type WaterFrame } from './water';
 import { noiseTextures } from '../engine/noise';
 import { GrassField } from './grass';
@@ -70,6 +70,7 @@ export class World3D implements WorldQuery {
   /** Мека лунна „подсветка“ около героя нощем — да се чете фигурата му (и враговете до него) в тъмното. */
   private heroFill = new THREE.PointLight('#b4c4f2', 0, 22, 1.0);
   private treeFade = treeFadeUniforms();
+  private veg!: Vegetation;
   private gloomOn = false;
   private gloom = 0;
   private quality: Quality = 'high';
@@ -140,7 +141,7 @@ export class World3D implements WorldQuery {
     const key = (x: number, z: number) => Math.hypot(x - VILLAGE_CENTER.x, z - VILLAGE_CENTER.z) < 115 ? 'village' : `${Math.floor(x / CHUNK)},${Math.floor(z / CHUNK)}`;
     const K = (x: number, z: number) => { const k = key(x, z); let kit = kits.get(k); if (!kit) { kit = new Kit(); setWeathering(kit); kits.set(k, kit); } return kit; };
     for (const h of this.plan.houses) buildHouse(K(h.x, h.z), h);
-    for (const p of this.plan.props) buildProp(K(p.x, p.z), p);
+    for (const p of this.plan.props) if (p.type !== 'walnut') buildProp(K(p.x, p.z), p); // орехът е истинско дърво във vegetation.ts
     for (const f of this.plan.fences) buildFences(K(f.pts[0][0], f.pts[0][1]), [f]);
     if (this.plan.ruins.length) buildRuins(K(this.plan.ruins[0][0], this.plan.ruins[0][1]), this.plan.ruins);
     const inn = this.plan.props.find(p => p.type === 'inn_sign');
@@ -154,24 +155,9 @@ export class World3D implements WorldQuery {
   private addStatic(m: THREE.Mesh) { m.updateMatrix(); this.root.add(m); this.staticMeshes.push(m); }
 
   private buildVegetation(): void {
-    const p = this.plan;
-    const mat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
-    const tintGreen = (t: { tint: number }, c: THREE.Color) => c.setRGB(0.82 + t.tint * 0.3, 0.86 + t.tint * 0.24, 0.8 + t.tint * 0.2);
-    const add = (g: InstGroup) => { this.groups.push(g); for (const m of g.meshes) this.root.add(m); };
-    // боровете и дъбовете се разтварят пред камерата (виж fadingTreeMaterial)
-    add(instanced('pines', pineGeo(), fadingTreeMaterial(this.treeFade, 2.3, 9.4), p.pines, { tint: tintGreen, maxDist: 520, sink: 0.2 }));
-    add(instanced('oaks', oakGeo(), fadingTreeMaterial(this.treeFade, 3.0, 7.0), p.oaks, { tint: tintGreen, maxDist: 480 }));
-    add(instanced('bushes', bushGeo(), mat, p.bushes, { tint: (t, c) => t.tint > 0.85 ? c.setRGB(0.6, 0.62, 0.45) : tintGreen(t, c), maxDist: 220, castShadow: true }));
-    add(instanced('rocks', rockGeo(), mat, p.rocks, {
-      tint: (t, c) => t.tint < 0 ? c.setRGB(0.42, 0.38, 0.35) : t.tint >= 3 ? c.setRGB(1.25, 1.22, 1.15) : t.tint >= 2 ? c.setRGB(1.15, 1.08, 0.95) : c.setRGB(0.9 + t.tint * 0.25, 0.9 + t.tint * 0.22, 0.88 + t.tint * 0.2),
-      maxDist: 300, sink: 0.25,
-    }));
-    add(instanced('deadTrees', deadTreeGeo(), mat, p.deadTrees, { maxDist: 320 }));
-    add(instanced('ferns', fernGeo(), mat, p.ferns, { tint: tintGreen, maxDist: 110, castShadow: false, sink: 0.05 }));
-    add(instanced('mushrooms', mushroomGeo(), mat, p.mushrooms, { maxDist: 70, castShadow: false, sink: 0 }));
-    add(instanced('logs', logGeo(), mat, p.logs, { maxDist: 160, sink: 0.1 }));
-    const flowerCols = [[1, 1, 1], [1, 0.85, 0.3], [0.95, 0.55, 0.75], [0.6, 0.7, 1]];
-    add(instanced('flowers', flowerGeo(), mat, p.flowers, { tint: (t, c) => { const f = flowerCols[Math.floor(t.tint * 4) % 4]; c.setRGB(f[0], f[1], f[2]); }, maxDist: 120, castShadow: false, sink: 0 }));
+    // дървета, храсти, камъни, папрат… — реалистични, с нива на детайл и импостори (виж vegetation.ts)
+    this.veg = new Vegetation(this.plan, this.treeFade, this.engine.renderer, this.engine.scene, this.engine.camera);
+    this.root.add(this.veg.group);
   }
 
   // ------------------------------------------------------------------ API
@@ -252,6 +238,7 @@ export class World3D implements WorldQuery {
     // дърветата пред камерата
     this.treeFade.uCamPos.value.copy(cam);
     this.treeFade.uFocus.value.copy(focus);
+    this.veg.update(dt, t, Math.max(this.wp.wind, gm * 1.3));
 
     this.grass.uniforms.uWind.value = Math.max(this.wp.wind, gm * 1.3);
     this.grass.update(focus, t, this.engine.camera, this.wp.rain);
@@ -311,6 +298,7 @@ export class World3D implements WorldQuery {
     this.terrainMat.setQuality(q !== 'low'); this.terrainMat.setGrassFar(this.grass.range);
     r.shadowMap.type = THREE.PCFSoftShadowMap;
     r.shadowMap.needsUpdate = true;
+    this.veg.setQuality(q, this.distScale);
   }
   getQuality(): Quality { return this.quality; }
 
