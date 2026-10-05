@@ -13,7 +13,7 @@
 //   window.__ready = true          — играта е заредена (менюто/светът се вижда);
 //   window.__shotReady = true      — при ?shot=<сцена>: сцената е подредена (камера, час, хора, прозорци) и може да се снима;
 //   window.__info                  — по желание: каквото играта иска да покаже в отчета (fps, брой жители…).
-import { spawn } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -103,7 +103,11 @@ async function startServer() {
   return base;
 }
 function stopServer() {
-  if (server && !server.killed) { try { server.kill(); } catch { /* */ } }
+  if (server && !server.killed) {
+    // на Windows (shell: true) kill() спира само обвивката — vite preview остава да виси; taskkill /T спира и децата
+    if (process.platform === 'win32' && server.pid) { try { spawnSync('taskkill', ['/pid', String(server.pid), '/T', '/F'], { stdio: 'ignore' }); } catch { /* */ } }
+    try { server.kill(); } catch { /* */ }
+  }
   server = null;
 }
 process.on('exit', stopServer);
