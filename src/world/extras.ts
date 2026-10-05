@@ -118,33 +118,40 @@ function boardsOf(plan: WorldPlan, innSign: { x: number; z: number; rot: number 
 /** Атлас с боядисаните букви (прозрачен фон) + лицата на табелите като една мрежа. */
 export function buildSigns(plan: WorldPlan, innSign: { x: number; z: number; rot: number } | null): THREE.Mesh {
   const boards = boardsOf(plan, innSign);
-  const list = [...new Set(boards.map((b) => b.text))];
-  const W = 1024, rowH = 96, cv = document.createElement('canvas');
-  cv.width = W; cv.height = Math.max(256, THREE.MathUtils.ceilPowerOfTwo(list.length * rowH));
+  // всеки надпис — в свой ред на атласа, със същите пропорции като дъската (иначе буквите се разтягат)
+  const key = (b: Board) => `${b.text}|${b.w}|${b.h}`;
+  const uniq = new Map<string, Board>();
+  for (const b of boards) if (!uniq.has(key(b))) uniq.set(key(b), b);
+  const W = 512;
+  const rows = [...uniq.values()].map((b) => ({ b, h: Math.round((W * (b.h - 0.04)) / (b.w - 0.08)) }));
+  const cv = document.createElement('canvas');
+  cv.width = W; cv.height = THREE.MathUtils.ceilPowerOfTwo(Math.max(256, rows.reduce((a, r) => a + r.h, 0)));
   const ctx = cv.getContext('2d')!;
   const uvOf = new Map<string, [number, number, number, number]>();
-  list.forEach((t, i) => {
-    const y = i * rowH;
+  let y = 0;
+  rows.forEach(({ b, h: rowH }, i) => {
+    const t = b.text;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    let fs = 64; const font = () => `bold ${fs}px "Ruslan Display", "Philosopher", Georgia, serif`;
+    let fs = Math.round(rowH * 0.62); const font = () => `bold ${fs}px "Ruslan Display", "Philosopher", Georgia, serif`;
     ctx.font = font();
-    while (ctx.measureText(t).width > W - 90 && fs > 20) { fs -= 4; ctx.font = font(); }
+    while (ctx.measureText(t).width > W - 44 && fs > 10) { fs -= 2; ctx.font = font(); }
     // изрязано в дървото (тъмна сянка), после боядисано с вар
-    ctx.fillStyle = 'rgba(28,18,10,0.85)'; ctx.fillText(t, W / 2 + 3, y + rowH / 2 + 5);
+    ctx.fillStyle = 'rgba(28,18,10,0.85)'; ctx.fillText(t, W / 2 + 2, y + rowH / 2 + 4);
     ctx.fillStyle = '#efe4cc'; ctx.fillText(t, W / 2, y + rowH / 2 + 2);
     // изтъркана боя: малки драскотини
     ctx.globalCompositeOperation = 'destination-out';
     const r = new Rng(i + 17);
-    for (let k = 0; k < 160; k++) { ctx.fillStyle = `rgba(0,0,0,${0.25 + r.next() * 0.5})`; ctx.fillRect(r.next() * W, y + r.next() * rowH, 2 + r.next() * 8, 1 + r.next() * 2); }
+    for (let k = 0; k < 90; k++) { ctx.fillStyle = `rgba(0,0,0,${0.25 + r.next() * 0.5})`; ctx.fillRect(r.next() * W, y + r.next() * rowH, 1 + r.next() * 5, 1 + r.next() * 1.5); }
     ctx.globalCompositeOperation = 'source-over';
-    uvOf.set(t, [0, 1 - (y + rowH) / cv.height, 1, 1 - y / cv.height]);
+    uvOf.set(key(b), [0, 1 - (y + rowH) / cv.height, 1, 1 - y / cv.height]);
+    y += rowH;
   });
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
   const pos: number[] = [], nor: number[] = [], uv: number[] = [];
   const m4 = new THREE.Matrix4(), v = new THREE.Vector3(), nm = new THREE.Matrix3();
   for (const b of boards) {
-    const r = uvOf.get(b.text)!;
+    const r = uvOf.get(key(b))!;
     m4.makeRotationY(b.rot).setPosition(b.x, b.y, b.z); nm.getNormalMatrix(m4);
     // двете лица (към +z и към -z), малко пред дъската
     const quads: [number, number[], number[]][] = [[0.033, [0, 0, 1], [r[0], r[2]]], [-0.033, [0, 0, -1], [r[2], r[0]]]];

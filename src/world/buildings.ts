@@ -87,12 +87,12 @@ export function buildProp(k: Kit, p: Prop): void {
     case 'smithy': smithy(k, rng); break;
     case 'coop': {
       for (const [x, z] of [[-1.6, -1.2], [1.6, -1.2], [-1.6, 1.2], [1.6, 1.2]]) k.box('timber', 0.14, 0.62, 0.14, x, 0.31, z, { tint: WOOD, bevel: 0.015 });
-      k.box('planks', 3.4, 1.6, 2.6, 0, 1.4, 0, { tint: '#b09a84', grain: 1, cell: 0.8, stain: 0.2, tile: [1.6, 1.9] });
+      k.box('planks', 3.4, 1.6, 2.6, 0, 1.4, 0, { tint: '#d0c0ae', grain: 1, cell: 0.8, stain: 0.2, tile: [1.6, 1.9] });
       for (const s of [-1, 1]) for (const yy of [0.62, 2.18]) k.box('timber', 3.5, 0.1, 0.1, 0, yy, s * 1.32, { tint: WOOD, bevel: 0.01 });
       k.box('plain', 0.5, 0.6, 0.04, 0.8, 1.0, 1.31, { tint: '#1a1410', jitter: 0 });
       k.box('planks', 0.5, 0.04, 1.6, 0.8, 0.34, 2.0, { rx: -0.42, tint: PLANK, grain: 2 });
       for (let i = 0; i < 6; i++) k.box('timber', 0.46, 0.025, 0.03, 0.8, 0.15 + i * 0.12, 1.45 + i * 0.26, { rx: -0.42, tint: WOOD });
-      roofOver(k, -2.0, 2.0, -1.6, 1.6, 2.2, 0.8, 'gable', { boards: true, tint: '#a08a74', timber: WOOD, eave: 0.35, gable: { slot: 'planks', tint: '#a8927c' } });
+      roofOver(k, -2.0, 2.0, -1.6, 1.6, 2.2, 0.8, 'gable', { boards: true, tint: '#c8b8a6', timber: WOOD, eave: 0.35, gable: { slot: 'planks', tint: '#a8927c' } });
       break;
     }
     case 'workshop': {
@@ -218,10 +218,15 @@ export function buildProp(k: Kit, p: Prop): void {
     }
     case 'field': {
       const w = Math.floor((p.extra ?? 2420) / 100), d = (p.extra ?? 2420) % 100;
-      // редове жито: слама (зелено-златна), леко различна височина
-      for (let r = -d / 2 + 1.2; r < d / 2 - 0.6; r += 1.2) for (let x = -w / 2 + 0.8; x < w / 2 - 0.5; x += 1.6) {
-        const hgt = 0.55 + rng.next() * 0.3;
-        k.box('hay', 1.4, hgt, 0.5, x, hgt / 2, r, { tint: rng.next() < 0.5 ? '#e6d27e' : '#c6c472', jitter: 0.1, noBottom: true, tile: [0.8, 0.8] });
+      // редове жито: кръстосани карти със стръкове и класове (атласът на листата, дясната половина)
+      for (let r = -d / 2 + 1.2; r < d / 2 - 0.6; r += 1.0) for (let x = -w / 2 + 0.6; x < w / 2 - 0.4; x += 0.55) {
+        const hgt = 0.75 + rng.next() * 0.3, cw = 0.75, xx = x + (rng.next() - 0.5) * 0.2, zz = r + (rng.next() - 0.5) * 0.2;
+        const g = rng.next(), tint = new THREE.Color().setRGB(0.9 + g * 0.2, 0.86 + g * 0.18, 0.7 + g * 0.15);
+        const v0 = rng.next() < 0.5 ? 0 : 0.5;
+        for (const a of [0.4 + rng.next() * 0.3, 0.4 + Math.PI / 2 + rng.next() * 0.3]) {
+          const dx = Math.cos(a) * cw / 2, dz = -Math.sin(a) * cw / 2;
+          k.card('leaves', [xx - dx, -0.02, zz - dz], [xx + dx, -0.02, zz + dz], [xx + dx, hgt, zz + dz], [xx - dx, hgt, zz - dz], [0, 1, 0], tint, [0.5, v0, 1, v0 + 0.5]);
+        }
       }
       break;
     }
@@ -236,10 +241,10 @@ export function buildProp(k: Kit, p: Prop): void {
     }
     case 'fold_shed': {
       for (const [x, z] of [[-2.4, 1.2], [2.4, 1.2], [0, 1.2]]) { k.box('timber', 0.18, 2.0, 0.18, x, 1.0, z, { tint: WOOD, bevel: 0.02 }); slab(k, 0.3, 0.14, 0.3, x, 0.04, z); }
-      k.box('planks', 5, 2.0, 0.1, 0, 1.0, -1.25, { tint: '#b29a84', grain: 1, cell: 0.8, stain: 0.2, tile: [1.6, 1.9] });
-      k.box('planks', 0.1, 2.0, 2.5, -2.45, 1.0, 0, { tint: '#b29a84', grain: 1, tile: [1.6, 1.9] }); k.box('planks', 0.1, 2.0, 2.5, 2.45, 1.0, 0, { tint: '#b29a84', grain: 1, tile: [1.6, 1.9] });
+      k.box('planks', 5, 2.0, 0.1, 0, 1.0, -1.25, { tint: '#d4c4b2', grain: 1, cell: 0.8, stain: 0.2, tile: [1.6, 1.9] });
+      k.box('planks', 0.1, 2.0, 2.5, -2.45, 1.0, 0, { tint: '#d4c4b2', grain: 1, tile: [1.6, 1.9] }); k.box('planks', 0.1, 2.0, 2.5, 2.45, 1.0, 0, { tint: '#d4c4b2', grain: 1, tile: [1.6, 1.9] });
       k.box('timber', 5.2, 0.16, 0.16, 0, 2.0, 1.2, { tint: WOOD, bevel: 0.015 });
-      roofOver(k, -2.9, 2.9, -1.7, 1.7, 2.04, 0.6, 'gable', { boards: true, tint: '#a08a74', timber: WOOD, eave: 0.4, gable: { slot: 'planks', tint: '#a8927c' } });
+      roofOver(k, -2.9, 2.9, -1.7, 1.7, 2.04, 0.6, 'gable', { boards: true, tint: '#c8b8a6', timber: WOOD, eave: 0.4, gable: { slot: 'planks', tint: '#a8927c' } });
       // ясли със сено
       k.box('planks', 3.6, 0.5, 0.5, 0, 0.55, -0.85, { tint: PLANK_D, grain: 0 });
       k.geo('hay', lumpy(new THREE.SphereGeometry(0.5, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), 0.1, 7), 0, 0.78, -0.85, { sx: 3.4, sy: 0.4, sz: 0.45, tint: '#dcc898' });
@@ -285,9 +290,11 @@ export function buildProp(k: Kit, p: Prop): void {
         [-8.8, 1.2, -1.5, 3.0, 1], [8.6, 1.5, -2, 3.2, 1], [-4.5, 9.5, -4, 4.4, 1], [4.8, 9.8, -4.5, 4.6, 1], [0, 12, -8, 5.5, 1],
       ];
       rocks.forEach(([x, yy, z, r, sy], i) => k.geo('rock', lumpy(new THREE.DodecahedronGeometry(r, 1), 0.28, i + 7), x, yy - 1.2, z, { ry: i * 1.3, sy, tint: i % 3 === 1 ? '#6e675e' : i % 3 === 2 ? '#857d72' : '#9a9286', flat: true, tile: [4, 4] }));
-      k.geo('plain', new THREE.CylinderGeometry(3.4, 3.4, 5.0, 16, 1, true, -Math.PI / 2, Math.PI), 0, 0.0, -2.4, { rx: -Math.PI / 2, sz: 1.25, tint: '#070605', jitter: 0 });
+      // самият отвор: черна арка (лицето към +z), тъмен праг и под
+      // (лицето е пред склона — иначе теренът зад пещерата я скрива)
+      k.geo('plain', new THREE.CircleGeometry(3.4, 20, 0, Math.PI), 0, -0.6, 0.6, { sy: 1.25, tint: '#040303', jitter: 0 });
+      k.geo('plain', new THREE.CylinderGeometry(3.4, 3.4, 1.2, 20, 1, true, -Math.PI / 2, Math.PI), 0, -0.6, 1.2, { rx: Math.PI / 2, sz: 1.25, tint: '#100c0a', jitter: 0 });
       k.box('plain', 6.8, 0.25, 5.0, 0, -0.05, -2.4, { tint: '#120f0d', jitter: 0 });
-      k.box('plain', 6.6, 6.0, 0.2, 0, 1.0, -4.9, { tint: '#050404', jitter: 0 });
       // опушено около входа
       for (let i = 0; i < 7; i++) k.geo('rock', lumpy(new THREE.DodecahedronGeometry(0.8, 0), 0.4, i + 30), (i - 3) * 1.4, 0.05, 0.8 + rng.next() * 1.4, { ry: i, sy: 0.45, tint: '#3a3430', flat: true });
       break;
@@ -376,9 +383,9 @@ function leafCard(k: Kit, x: number, y: number, z: number, size: number, rx: num
   const h = size / 2;
   const M = new THREE.Matrix4().makeRotationFromEuler(_e.set(rx, ry, 0));
   const c = (a: number, b: number): V3 => { const v = new THREE.Vector3(a, b, 0).applyMatrix4(M); return [x + v.x, y + v.y, z + v.z]; };
-  // атласът е 2×2 снопа листа — всяка карта взема един от тях
-  const q = Math.floor(Math.abs(Math.sin(x * 12.9 + z * 78.2)) * 4) % 4, u0 = (q % 2) * 0.5, v0 = Math.floor(q / 2) * 0.5;
-  k.card('leaves', c(-h, -h), c(h, -h), c(h, h), c(-h, h), [nrm.x, nrm.y, nrm.z], tint, [u0, v0, u0 + 0.5, v0 + 0.5]);
+  // лявата половина на атласа е 2×2 снопа листа — всяка карта взема един от тях
+  const q = Math.floor(Math.abs(Math.sin(x * 12.9 + z * 78.2)) * 4) % 4, u0 = (q % 2) * 0.25, v0 = Math.floor(q / 2) * 0.5;
+  k.card('leaves', c(-h, -h), c(h, -h), c(h, h), c(-h, h), [nrm.x, nrm.y, nrm.z], tint, [u0, v0, u0 + 0.25, v0 + 0.5]);
 }
 
 // ---------------------------------------------------------------- чешмата
@@ -495,8 +502,11 @@ function buildBridge(k: Kit): void {
     }
   }
   // клинци по свода
-  for (let i = 0; i <= 14; i++) {
-    const a = Math.PI * (i / 14), x = (x0 + x1) / 2 - Math.cos(a) * 7.55, yy = bed + Math.sin(a) * 4.65;
-    for (const s of [-1, 1]) k.box('rock', 0.62, 0.48, 0.14, x, yy, z + s * (halfW + 0.02), { rz: a - Math.PI / 2, tint: '#cfc8bc', bevel: 0.03, jitter: 0.1 });
+  for (let i = 1; i < 14; i++) {
+    // по елипсата на свода, всеки клинец — по нормалата ѝ, малко над ръба на отвора
+    const a = Math.PI * (i / 14), A = 7.5, B = 4.6;
+    const nx = -Math.cos(a) / A, ny = Math.sin(a) / B, nl = Math.hypot(nx, ny);
+    const x = (x0 + x1) / 2 - Math.cos(a) * A + (nx / nl) * 0.22, yy = bed + Math.sin(a) * B + (ny / nl) * 0.22;
+    for (const s of [-1, 1]) k.box('rock', 0.5, 0.5, 0.1, x, yy, z + s * (halfW + 0.03), { rz: Math.atan2(-nx, ny), tint: '#cfc8bc', bevel: 0.025, jitter: 0.1 });
   }
 }

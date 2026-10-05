@@ -56,11 +56,14 @@ export function archMaterials(): Record<Slot, THREE.Material> {
   return m;
 }
 
-/** Атлас с листа на орех (сложни листа: дръжка + 5–9 продълговати листчета), прозрачен фон. В Node — празна текстура. */
+/**
+ * Атлас 1024×512, прозрачен фон: вляво 2×2 снопа листа на орех (дръжка + 5–9 продълговати листчета),
+ * вдясно две ивици жито (стръкове с класове: узряло и по-зелено). В Node — без текстура.
+ */
 function leafAtlas(): THREE.Texture | null {
   if (typeof document === 'undefined') return null;
   const S = 512, cv = document.createElement('canvas');
-  cv.width = cv.height = S;
+  cv.width = S * 2; cv.height = S;
   const c = cv.getContext('2d')!;
   let seed = 7;
   const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
@@ -79,7 +82,7 @@ function leafAtlas(): THREE.Texture | null {
   };
   const greens = ['#4f7a2c', '#5d8a34', '#466e28', '#6a9440', '#3e6424', '#58803a'];
   for (let q = 0; q < 4; q++) {
-    const ox = (q % 2) * (S / 2), oy = Math.floor(q / 2) * (S / 2), H = S / 2;
+    const ox = (q % 2) * (S / 2), oy = Math.floor(q / 2) * (S / 2), H = S / 2; // лявата половина
     c.save(); c.beginPath(); c.rect(ox, oy, H, H); c.clip();
     for (let l = 0; l < 9; l++) {
       // сложен лист: дръжка от ръба към вътре, двойки листчета, едно на върха
@@ -98,6 +101,26 @@ function leafAtlas(): THREE.Texture | null {
       leaflet(sx + Math.cos(ang) * len, sy + Math.sin(ang) * len, ang, len * 0.45, len * 0.12, col);
     }
     c.restore();
+  }
+  // жито: стръкове от долу нагоре, с клас (зърна) в горната четвърт
+  for (let band = 0; band < 2; band++) {
+    const oy = band * (S / 2), H = S / 2, ripe = band === 0;
+    for (let i = 0; i < 70; i++) {
+      const x0 = S + 8 + rnd() * (S - 16), lean = (rnd() - 0.5) * 40, top = oy + 6 + rnd() * H * 0.25;
+      const stem = ripe ? (rnd() < 0.5 ? '#b89a52' : '#c8aa62') : (rnd() < 0.5 ? '#8a9a48' : '#a0a858');
+      c.strokeStyle = stem; c.lineWidth = 2 + rnd() * 1.5;
+      c.beginPath(); c.moveTo(x0, oy + H); c.quadraticCurveTo(x0 + lean * 0.3, oy + H * 0.5, x0 + lean, top + 30); c.stroke();
+      // листо по стръка
+      if (rnd() < 0.6) { c.lineWidth = 3; c.beginPath(); c.moveTo(x0 + lean * 0.15, oy + H * 0.7); c.quadraticCurveTo(x0 + lean * 0.2 + 18, oy + H * 0.55, x0 + lean * 0.3 + 30 * (rnd() - 0.3), oy + H * 0.45); c.stroke(); }
+      // класът: зърна на двойки
+      const kx = x0 + lean, ear = ripe ? '#d8b864' : '#b4b860';
+      for (let g = 0; g < 9; g++) {
+        const gy = top + 30 - g * 4, s2 = g % 2 ? 1 : -1;
+        c.fillStyle = shadeCss(ear, 0.85 + rnd() * 0.3);
+        c.beginPath(); c.ellipse(kx + s2 * 2.5 - lean * 0.02 * g, gy, 2.6, 4.2, s2 * 0.4, 0, Math.PI * 2); c.fill();
+      }
+      if (ripe) { c.strokeStyle = 'rgba(220,190,110,0.8)'; c.lineWidth = 1; for (let g = 0; g < 5; g++) { c.beginPath(); c.moveTo(kx, top + 30 - g * 7); c.lineTo(kx + (rnd() - 0.5) * 14, top - 6 - g * 4); c.stroke(); } }
+    }
   }
   const t = new THREE.CanvasTexture(cv);
   t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
