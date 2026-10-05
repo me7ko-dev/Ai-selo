@@ -65,13 +65,23 @@ export function mergeSettings(raw: unknown): Settings {
   };
 }
 
-export function loadSettings(): Settings {
+/** Телефон/таблет: по-лека графика, докато играчът сам не избере друга. */
+export const TOUCH_GRAPHICS: Settings['graphics'] = { quality: 'low', shadows: true, pixelRatioCap: 1 };
+
+/** Слива и попълва стойностите по подразбиране за телефон (само това, което играчът не е запазил). */
+export function mergeSettingsFor(raw: unknown, opts: { touch?: boolean } = {}): Settings {
+  if (!opts.touch) return mergeSettings(raw);
+  const r = obj(raw), g = obj(r.graphics);
+  return mergeSettings({ ...r, graphics: { ...TOUCH_GRAPHICS, ...g } });
+}
+
+export function loadSettings(opts: { touch?: boolean } = {}): Settings {
   try {
     const s = storage()?.getItem(SETTINGS_KEY);
-    if (!s) return mergeSettings({});
-    return mergeSettings(JSON.parse(s));
+    if (!s) return mergeSettingsFor({}, opts);
+    return mergeSettingsFor(JSON.parse(s), opts);
   } catch {
-    return mergeSettings({});
+    return mergeSettingsFor({}, opts);
   }
 }
 

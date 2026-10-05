@@ -1,0 +1,87 @@
+/* Управление с пръсти (само при .bl-touch — телефон/таблет). */
+
+/* страницата не се мащабира, не се превърта и не се презарежда с дърпане */
+html.bl-touch, html.bl-touch body { overscroll-behavior: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+html.bl-touch #game { touch-action: none; }
+.bl-ui.bl-touch button { touch-action: manipulation; }
+
+/* без „Кликни, за да играеш“ и без дублирана подкана (текстът е на бутона E) */
+.bl-ui.bl-touch .hud-paused,
+.bl-ui.bl-touch .hud-prompt { display: none !important; }
+/* по-малко място: без реда за ИИ под часовника, по-малка мини-карта, бос под горните бутони */
+.bl-ui.bl-touch .hud-ai { display: none; }
+.bl-ui.bl-touch .hud-mm { width: 8.5em; height: 8.5em; }
+.bl-ui.bl-touch .hud-right { width: 13em; }
+.bl-ui.bl-touch .hud-boss { top: 3.6em; }
+/* известията — горе в средата (долу вдясно са бутоните) */
+.bl-ui.bl-touch .hud-toasts { top: 3.8em; bottom: auto; right: auto; left: 50%; transform: translateX(-50%); align-items: center; max-width: min(22em, 46vw); }
+.bl-ui.bl-touch .hud:has(.hud-boss:not(.hidden)) .hud-toasts { top: 9.5em; }
+/* клетките на бързата лента се натискат */
+.bl-ui.bl-touch .hot-cell { pointer-events: auto; touch-action: none; }
+.bl-ui.bl-touch .hot-cell.down { border-color: var(--gold); box-shadow: 0 0 0.8em rgba(232, 194, 122, 0.45); }
+
+/* слоят за джойстика и камерата */
+.bl-ui .touch-zone { position: absolute; inset: 0; pointer-events: auto; touch-action: none; }
+.bl-ui .touch-joy { position: absolute; width: 132px; height: 132px; transform: translate(-50%, -50%); pointer-events: none; transition: opacity 0.2s; }
+.bl-ui .touch-joy.idle { left: calc(max(env(safe-area-inset-left), 0px) + 112px); top: calc(100% - 118px); opacity: 0.35; }
+.bl-ui .touch-joy-ring {
+  position: absolute; inset: 0; border-radius: 50%;
+  background: radial-gradient(circle, rgba(20, 16, 12, 0.25) 0%, rgba(20, 16, 12, 0.55) 70%);
+  border: 2px solid var(--line-strong); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), inset 0 0 1.2em rgba(0, 0, 0, 0.45);
+}
+.bl-ui .touch-joy.run .touch-joy-ring { border-color: var(--gold); box-shadow: 0 0 1.2em rgba(232, 194, 122, 0.45), inset 0 0 1.2em rgba(0, 0, 0, 0.45); }
+.bl-ui .touch-knob {
+  position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; border-radius: 50%; transform: translate(-50%, -50%);
+  background: radial-gradient(circle at 40% 35%, #f2d69a, #a8823a 75%); border: 2px solid #2a1a0e;
+  box-shadow: 0 0.25em 0.8em rgba(0, 0, 0, 0.5);
+}
+
+/* бутоните */
+.bl-ui .touch-pad { position: absolute; inset: 0; pointer-events: none; }
+.bl-ui .touch-btn {
+  pointer-events: auto; touch-action: none; position: absolute; padding: 0; margin: 0; cursor: pointer;
+  color: var(--text); background: var(--panel); border: 1px solid var(--line-strong);
+  box-shadow: 0 0.25em 0.9em rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(0, 0, 0, 0.3);
+  -webkit-user-select: none; user-select: none; transition: transform 0.06s, background 0.1s, border-color 0.1s;
+}
+.bl-ui .touch-btn.down { transform: scale(0.93); background: rgba(120, 90, 40, 0.85); border-color: var(--gold); }
+
+.bl-ui .touch-top { position: absolute; top: calc(max(env(safe-area-inset-top), 0px) + 0.6em); left: 50%; transform: translateX(-50%); display: flex; gap: 0.4em; pointer-events: none; }
+.bl-ui .touch-small { position: relative; min-width: 4.3em; height: 2.6em; padding: 0 0.7em; border-radius: 1.3em; font-size: 0.92em; color: var(--gold); letter-spacing: 0.02em; }
+
+.bl-ui .touch-actions {
+  position: absolute; right: calc(max(env(safe-area-inset-right), 0px) + 14px); bottom: calc(max(env(safe-area-inset-bottom), 0px) + 14px);
+  width: 230px; height: 190px; pointer-events: none;
+}
+.bl-ui .touch-round { border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; line-height: 1; }
+.bl-ui .touch-round span { font-size: 11px; color: var(--text2); margin-top: 2px; }
+.bl-ui .touch-round svg { display: block; }
+.bl-ui .t-attack { right: 6px; bottom: 6px; width: 84px; height: 84px; border: 2px solid var(--gold); background: radial-gradient(circle at 50% 35%, rgba(150, 40, 36, 0.92), rgba(70, 18, 18, 0.92)); }
+.bl-ui .t-attack span { color: #f3ead7; font-size: 12px; }
+.bl-ui .t-attack.down { background: radial-gradient(circle at 50% 35%, rgba(190, 60, 50, 0.95), rgba(96, 22, 22, 0.95)); }
+.bl-ui .t-block { right: 20px; bottom: 104px; width: 60px; height: 60px; }
+.bl-ui .t-jump { right: 104px; bottom: 4px; width: 60px; height: 60px; }
+.bl-ui .t-arrow { font-size: 20px; color: var(--gold); line-height: 1; }
+.bl-ui .t-use {
+  right: 92px; bottom: 82px; height: 44px; max-width: 200px; padding: 0 0.9em 0 0.4em; border-radius: 22px;
+  display: flex; align-items: center; gap: 0.45em; font-size: 13px; border-color: var(--gold);
+}
+.bl-ui .t-use kbd { font-size: 13px; min-width: 1.9em; }
+.bl-ui .t-use-txt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bl-ui .t-use.dim { opacity: 0.5; border-color: var(--line); }
+
+/* „Обърни телефона хоризонтално“ */
+.bl-ui .touch-rotate { display: none; }
+@media (orientation: portrait) {
+  .bl-ui.bl-touch .touch-rotate:not(.dismissed) {
+    display: grid; place-items: center; position: absolute; inset: 0; z-index: 100; pointer-events: auto;
+    background: radial-gradient(ellipse at center, rgba(30, 22, 16, 0.9), rgba(10, 8, 6, 0.96));
+  }
+}
+.bl-ui .touch-rotate-box { text-align: center; padding: 1.4em 1.6em; max-width: 22em; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); }
+.bl-ui .touch-rotate-ic { font-size: 3em; color: var(--gold); animation: touch-rot 2.4s ease-in-out infinite; }
+.bl-ui .touch-rotate-t { font-family: var(--f-title); color: var(--gold); font-size: 1.35em; letter-spacing: 0.04em; margin: 0.4em 0; }
+@keyframes touch-rot { 0%, 30% { transform: rotate(0deg); } 60%, 100% { transform: rotate(90deg); } }
+
+/* подсказките за клавиатура в разговора и въведението — не важат за пръсти */
+.bl-ui.bl-touch .dl-keys, .bl-ui.bl-touch .intro-keys { display: none; }

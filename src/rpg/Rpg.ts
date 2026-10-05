@@ -148,9 +148,11 @@ export class Rpg {
     const active = this.controls && !this.hero.dead;
     let inp: HeroInput = NO_INPUT;
     if (active) {
+      const st = input.enabled ? input.stick : null; // аналоговият джойстик (телефон)
+      const clamp1 = (v: number) => Math.max(-1, Math.min(1, v));
       inp = {
-        fwd: (input.down('KeyW') ? 1 : 0) - (input.down('KeyS') ? 1 : 0),
-        right: (input.down('KeyD') ? 1 : 0) - (input.down('KeyA') ? 1 : 0),
+        fwd: clamp1((input.down('KeyW') ? 1 : 0) - (input.down('KeyS') ? 1 : 0) + (st ? st.fwd : 0)),
+        right: clamp1((input.down('KeyD') ? 1 : 0) - (input.down('KeyA') ? 1 : 0) + (st ? st.right : 0)),
         run: input.down('ShiftLeft') || input.down('ShiftRight'),
         jump: input.pressed('Space'),
         attack: input.mouseClicked(0),
@@ -205,8 +207,8 @@ export class Rpg {
 
     // камера
     const look = {
-      dx: this.controls && input.locked ? input.mouseDX : 0,
-      dy: this.controls && input.locked ? input.mouseDY : 0,
+      dx: this.controls && input.lookActive ? input.mouseDX : 0,
+      dy: this.controls && input.lookActive ? input.mouseDY : 0,
       wheel: this.controls ? input.wheel : 0,
       keyYaw: this.controls ? (input.down('ArrowLeft') ? -1 : 0) + (input.down('ArrowRight') ? 1 : 0) : 0,
       sensitivity: input.sensitivity,

@@ -19,6 +19,17 @@ export const STEP_TEXT: Record<TutorialStep, string> = {
   heal: 'Ранен си! [1]–[6] ползват нещата от бързата лента (отвара, баница), а [Tab] отваря раницата',
 };
 
+/** Същите съвети за телефон/таблет (джойстик и бутони). */
+export const TOUCH_STEP_TEXT: Record<TutorialStep, string> = {
+  move: 'Ляв палец — вървиш · плъзни с десния — оглеждаш се',
+  run: 'Джойстика до ръба — бягаш · [Скок] — скачаш',
+  gena: STEP_TEXT.gena,
+  talk: '[E] — говориш с човека до теб (бутонът вдясно)',
+  panels: 'Горе: [Раница] · [Карта] · [Летопис] · [Време]',
+  dusk: 'Здрачава се — в гората излизат таласъми. [Удар] — удар · задръж [Блок] — блок',
+  heal: 'Ранен си! Докосни клетка от бързата лента (отвара, баница), а [Раница] отваря раницата',
+};
+
 export function stepLabel(s: TutorialStep): string {
   const i = LINEAR_STEPS.indexOf(s);
   if (i >= 0) return `Съвет ${i + 1} от ${LINEAR_STEPS.length}`;
@@ -243,7 +254,7 @@ export class Tutorial {
     }
     if (fr.step) {
       const key = fr.step;
-      if (key !== this.shownKey) { this.shownKey = key; hint.show(STEP_TEXT[fr.step], stepLabel(fr.step)); }
+      if (key !== this.shownKey) { this.shownKey = key; hint.show((input.touch ? TOUCH_STEP_TEXT : STEP_TEXT)[fr.step], stepLabel(fr.step)); }
     } else if (this.shownKey) {
       // прозорец, смърт, отдалечи се от жителя… — скрий, без „✓“
       this.shownKey = '';

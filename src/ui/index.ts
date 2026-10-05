@@ -24,6 +24,7 @@ import { LiveOverlay } from './LiveOverlay';
 import { DeathScreen, Banner, LoadingScreen, ConfirmDialog, PauseHint } from './Misc';
 import { IntroView } from './IntroView';
 import { HintView } from './HintView';
+import { TouchControls } from './TouchControls';
 
 export * from './StartScreen';
 export * from './Hud';
@@ -39,6 +40,7 @@ export * from './LiveOverlay';
 export * from './Misc';
 export * from './IntroView';
 export * from './HintView';
+export * from './TouchControls';
 export { icon, portrait, typeIcon, sparkle, personName, TYPE_COLORS, TYPE_LABELS, ICON_KEYS } from './icons';
 
 export interface Ui {
@@ -63,6 +65,8 @@ export interface Ui {
   intro: IntroView;
   /** Подсказките за обучението (над бързата лента). */
   hint: HintView;
+  /** Управление с пръсти (телефон/таблет); на компютър е скрито и не слуша. */
+  touch: TouchControls;
   /** Отворен ли е прозорец, който иска мишката (диалог, раница, карта, летопис, машина, меню, „Докато те нямаше“, смърт, начало, потвърждение, въведение). */
   anyModalOpen(): boolean;
   /** Затваря всички прозорци (без onClose). */
@@ -92,11 +96,17 @@ export function mountUi(root: HTMLElement): Ui {
   const intro = new IntroView(root);
   const loading = new LoadingScreen(root);
   const hint = new HintView(hud.bottomEl);
+  // пръсти: джойстикът/камерата — под HUD-а, бутоните — над него, „обърни телефона“ — над всичко
+  const touch = new TouchControls(root);
+  root.insertBefore(touch.zone, hud.el);
+  hud.el.after(touch.pad);
+  root.append(touch.rotate);
+  touch.bindHotbar([...hud.bottomEl.querySelectorAll<HTMLElement>('.hot-cell')]);
   // етикетите над главите не покриват панелите на HUD и прозореца с разговора
   tags.setAvoid(() => [...hud.cornerEls(), dialogue.el]);
   const modals = [dialogue, inventory, map, chronicle, time, settings, away, death, start, confirm, intro];
   return {
-    root, tags, hud, live, banner, pause, dialogue, inventory, map, chronicle, time, settings, away, death, start, confirm, loading, intro, hint,
+    root, tags, hud, live, banner, pause, dialogue, inventory, map, chronicle, time, settings, away, death, start, confirm, loading, intro, hint, touch,
     anyModalOpen: () => modals.some((m) => m.isOpen),
     closeAll: () => { for (const m of [dialogue, inventory, map, chronicle, time, settings]) m.hide(); },
   };

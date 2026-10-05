@@ -14,7 +14,7 @@ import { loadSettings, saveSettings, type Settings } from '../save/settings';
 import { TwitchChat } from '../live/TwitchChat';
 import { LiveVote, liveAnnouncement } from '../live/LiveVote';
 import { Audio } from '../audio/Sfx';
-import { mountUi, type Ui } from '../ui';
+import { mountUi, prefersTouch, type Ui } from '../ui';
 import { VillagerViews } from './villagerViews';
 import { Ambient } from './ambient';
 import { createHost } from './host';
@@ -84,7 +84,8 @@ export class Game {
   private async init(canvas: HTMLCanvasElement, uiRoot: HTMLElement, progress: (p: number, text?: string) => void): Promise<void> {
     const tick = () => new Promise<void>((r) => setTimeout(r, 0));
     this.shot = new URLSearchParams(location.search).get('shot');
-    this.settings = loadSettings();
+    const touch = prefersTouch(); // телефон/таблет: по-лека графика по подразбиране
+    this.settings = loadSettings({ touch });
     progress(0.05, 'Пали се огнището…');
     this.engine = new Engine(canvas);
     this.engine.setPixelRatioCap(this.settings.graphics.pixelRatioCap);
@@ -96,6 +97,9 @@ export class Game {
     progress(0.55, 'Жителите се събуждат…');
     await tick();
     this.ui = mountUi(uiRoot);
+    this.ui.touch.bind(this.engine.input);
+    this.ui.touch.onModeChange = (on) => this.onTouchMode(on);
+    if (touch) this.ui.touch.enable();
     this.save = await SaveManager.open();
     this.audio = new Audio();
     this.audio.setVolumes(this.settings.audio);
@@ -322,6 +326,8 @@ export class Game {
   }
 
   private lateUpdate(dt: number): void {
+    // бутоните за пръсти — само докато се играе (без прозорци, героят е жив)
+    this.ui.touch.setActive(this.mode === 'play' && this.modal === null && !this.rpg.dead && !this.ui.anyModalOpen());
     // имената над главите — само в света (не върху летописа, картата, раницата…)
     if (this.mode !== 'play' || (this.modal !== null && this.modal !== 'dialogue' && this.modal !== 'watch')) { this.ui.tags.update([]); return; }
     const state = this.modal === 'watch' ? this.timeMachine.viewState() : this.sim.state;
@@ -471,6 +477,7 @@ export class Game {
       else { const hint = this.rpg.interactHint(); if (hint) prompt = hint.label; }
     }
     this.ui.hud.prompt(prompt);
+    this.ui.touch.prompt(prompt);
     if (this.liveOn) this.updateLive();
   }
 
@@ -524,6 +531,12 @@ export class Game {
       }
       this.expectUnlock = false;
     });
+  }
+
+  /** Смяна мишка ↔ пръсти: с пръсти няма заключване на мишката и „Кликни, за да играеш“. */
+  private onTouchMode(touch: boolean): void {
+    if (touch) { this.unlockPointer(); this.ui.hud.setPaused(false); }
+    else this.ui.hud.setPaused(this.mode === 'play' && this.modal === null && !this.rpg?.dead && !this.engine.input.locked);
   }
 
   lockPointer(): void { this.engine.input.lock(); }
