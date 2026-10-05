@@ -28,6 +28,8 @@ export function archMaterials(): Record<Slot, THREE.Material> {
   const m = {} as Record<Slot, THREE.Material>;
   for (const [slot, t] of Object.entries(TEX) as [Slot, { id: string; normal: number }][]) {
     const mat = new THREE.MeshStandardMaterial({ ...pbr(t.id), vertexColors: true });
+    // всичко тук е неметално (синият канал на arm е черен) — без карта за метал: едно четене по-малко на пиксел
+    mat.metalnessMap = null; mat.metalness = 0;
     mat.normalScale.set(t.normal, t.normal);
     mat.name = 'arch_' + slot;
     saved.set(mat, { normalMap: mat.normalMap, aoMap: mat.aoMap });
@@ -44,7 +46,7 @@ export function archMaterials(): Record<Slot, THREE.Material> {
   glass.customProgramCacheKey = () => 'arch_glass';
   m.glass = glass;
   m.hot = new THREE.MeshBasicMaterial({ vertexColors: true, name: 'arch_hot' });
-  m.wet = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.04, metalness: 0, vertexColors: true, name: 'arch_wet' });
+  m.wet = glass; // водата е в мрежата на стъклото (виж ALIAS в kit.ts)
   // листата на ореха: атлас 2×2 снопа сложни листа (рисуват се на canvas); двете страни се осветяват еднакво
   const leaves = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, side: THREE.DoubleSide, alphaTest: 0.45, name: 'arch_leaves', map: leafAtlas() });
   leaves.onBeforeCompile = (sh) => {
@@ -128,11 +130,11 @@ function leafAtlas(): THREE.Texture | null {
 }
 function shadeCss(hex: string, f: number): string { const k = new THREE.Color(hex).multiplyScalar(f); return '#' + k.getHexString(); }
 
-/** Ниско качество: без релефни карти и AO (по-лек шейдър); средно/високо — пълно. */
+/** Ниско: без релефни карти и AO (най-лек шейдър); средно: релеф без AO; високо — пълно. */
 export function setArchQuality(q: Quality): void {
   if (!mats) return;
   for (const [mat, s] of saved) {
-    const nm = q === 'low' ? null : s.normalMap, ao = q === 'low' ? null : s.aoMap;
+    const nm = q === 'low' ? null : s.normalMap, ao = q === 'high' ? s.aoMap : null;
     if (mat.normalMap !== nm || mat.aoMap !== ao) { mat.normalMap = nm; mat.aoMap = ao; mat.needsUpdate = true; }
   }
 }

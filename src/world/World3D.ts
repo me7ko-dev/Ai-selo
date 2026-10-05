@@ -7,7 +7,7 @@ import type { Weather } from '../sim/types';
 import { heightAt, riverInfo, riverWaterHeight, terrainHeight, POND_WATER_HEIGHT } from './height';
 import { getPlan, type WorldPlan, GLADE, POND, SWAMP } from './plan';
 import { CameraBlockers } from './cameraBlock';
-import { Batch, vertexColorMaterial } from './geom';
+import { vertexColorMaterial } from './geom';
 import { buildHouse, buildProp } from './buildings';
 import { Kit } from './arch/kit';
 import { archMaterials, archTick, setArchQuality } from './arch/materials';

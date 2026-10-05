@@ -20,8 +20,11 @@ export const TILE: Record<Slot, [number, number]> = {
 
 const WALLISH = new Set<Slot>(['plaster', 'stone', 'masonry', 'rock', 'hay']);
 
-/** Желязото е в същата мрежа като „обикновените“ неща (тъмен цвят) — едно извикване по-малко. */
-const ALIAS: Partial<Record<Slot, Slot>> = { iron: 'plain' };
+/**
+ * Сливане на слотове в една мрежа (по-малко извиквания): желязото е при „обикновените“ неща (тъмен цвят),
+ * водата — при стъклото (тъмна, гладка; с тъмен цвят на върховете не свети нощем).
+ */
+const ALIAS: Partial<Record<Slot, Slot>> = { iron: 'plain', wet: 'glass' };
 
 export interface PartOpts {
   /** завъртане на частта (в радиани, ред XYZ като THREE.Euler) */
