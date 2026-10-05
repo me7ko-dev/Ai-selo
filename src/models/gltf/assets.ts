@@ -137,58 +137,7 @@ export function preloadCharacters(opts: { quality?: string; onProgress?: (p: num
         if (e.total) { prog[k] = e.loaded / e.total; report(); }
       });
       const [people, anims] = await Promise.all([load('people.glb', 0), load('anims.glb', 1)]);
-      const scene = people.scene;
-      // GLTFLoader прави имената уникални (втори скелет: „pelvis_1“…) — връщаме истинските, по тях вървят анимациите
-      const json = people.parser.json as { nodes: { name?: string }[] };
-      scene.traverse((o) => {
-        const ref = people.parser.associations.get(o) as { nodes?: number } | undefined;
-        const n = ref?.nodes !== undefined ? json.nodes[ref.nodes]?.name : undefined;
-        if (n && (o as THREE.Bone).isBone) o.name = THREE.PropertyBinding.sanitizeNodeName(n);
-      });
-      const mats = new Map<string, THREE.MeshStandardMaterial>();
-      scene.traverse((o) => {
-        const m = o as THREE.Mesh;
-        if (!m.isMesh) return;
-        const mat = m.material as THREE.MeshStandardMaterial;
-        mats.set(mat.name, mat);
-        m.castShadow = true;
-        m.receiveShadow = true;
-      });
-      const need = (n: string) => { const m = mats.get(n); if (!m) throw new Error('липсва материал ' + n); return m; };
-      const materials = {
-        peasant: need('cloth_peasant'), ranger: need('cloth_ranger'), folk: need('folk'),
-        skinM: need('skin_m'), skinF: need('skin_f'), eyes: need('eyes'), hair: need('hair'),
-      };
-      // тъканите и косата — матови; кожата — мека, без пластмасов блясък
-      for (const m of Object.values(materials)) {
-        for (const t of [m.map, m.normalMap, m.roughnessMap]) if (t) t.anisotropy = 4;
-        m.envMapIntensity = 1;
-      }
-      materials.folk.roughness = 0.95;
-      materials.hair.roughness = 0.55;
-      for (const s of [materials.skinM, materials.skinF]) { s.roughness = 1; s.metalness = 0; s.normalScale.set(0.8, 0.8); }
-      materials.eyes.roughness = 0.2;
-
-      const animPelvis = (anims.userData?.pelvisHeight as number) ?? 0.9167;
-      const speeds = (anims.userData?.speeds as Record<string, number>) ?? {};
-      const bodies = {} as Record<BodyKind, BodyTemplate>;
-      for (const kind of ['M', 'F', 'H'] as BodyKind[]) {
-        const armature = scene.getObjectByName(kind);
-        if (!armature) throw new Error('липсва тяло ' + kind);
-        armature.removeFromParent();
-        armature.position.set(0, 0, 0);
-        const boneNames = new Set<string>();
-        armature.traverse((o) => { if ((o as THREE.Bone).isBone) boneNames.add(o.name); });
-        const ph = pelvisZ(armature);
-        const clips = new Map<string, THREE.AnimationClip>();
-        for (const c of anims.animations) clips.set(c.name, retarget(c, boneNames, ph / animPelvis));
-        const bp = bindPose(armature);
-        bodies[kind] = { kind, armature, pelvisHeight: ph, clips, bindWorld: bp.rot, bindPos: bp.pos };
-      }
-      const hair = scene.getObjectByName('HAIR') as THREE.Mesh;
-      if (!hair) throw new Error('липсва косата');
-      hair.removeFromParent();
-      assets = { bodies, hair, speeds, animPelvis, materials, quality: opts.quality ?? 'high' };
+      initCharacterAssets(people, anims, opts.quality ?? 'high');
       opts.onProgress?.(1);
       return true;
     } catch (e) {
@@ -197,6 +146,63 @@ export function preloadCharacters(opts: { quality?: string; onProgress?: (p: num
     }
   })();
   return loading;
+}
+
+/** Заредените GLTF (people.glb + anims.glb) → шаблони за клониране. Отделно, за да се ползва и в пробите (Node). */
+export interface LoadedGltf { scene: THREE.Group; animations: THREE.AnimationClip[]; userData: Record<string, unknown>; parser: { json: unknown; associations: Map<THREE.Object3D | THREE.Material | THREE.Texture, unknown> } }
+export function initCharacterAssets(people: LoadedGltf, anims: LoadedGltf, quality = 'high'): void {
+  const scene = people.scene;
+  // GLTFLoader прави имената уникални (втори скелет: „pelvis_1“…) — връщаме истинските, по тях вървят анимациите
+  const json = people.parser.json as { nodes: { name?: string }[] };
+  scene.traverse((o) => {
+    const ref = people.parser.associations.get(o) as { nodes?: number } | undefined;
+    const n = ref?.nodes !== undefined ? json.nodes[ref.nodes]?.name : undefined;
+    if (n && (o as THREE.Bone).isBone) o.name = THREE.PropertyBinding.sanitizeNodeName(n);
+  });
+  const mats = new Map<string, THREE.MeshStandardMaterial>();
+  scene.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    const mat = m.material as THREE.MeshStandardMaterial;
+    mats.set(mat.name, mat);
+    m.castShadow = true;
+    m.receiveShadow = true;
+  });
+  const need = (n: string) => { const m = mats.get(n); if (!m) throw new Error('липсва материал ' + n); return m; };
+  const materials = {
+    peasant: need('cloth_peasant'), ranger: need('cloth_ranger'), folk: need('folk'),
+    skinM: need('skin_m'), skinF: need('skin_f'), eyes: need('eyes'), hair: need('hair'),
+  };
+  // тъканите и косата — матови; кожата — мека, без пластмасов блясък
+  for (const m of Object.values(materials)) {
+    for (const t of [m.map, m.normalMap, m.roughnessMap]) if (t) t.anisotropy = 4;
+    m.envMapIntensity = 1;
+  }
+  materials.folk.roughness = 0.95;
+  materials.hair.roughness = 0.55;
+  for (const s of [materials.skinM, materials.skinF]) { s.roughness = 1; s.metalness = 0; s.normalScale.set(0.8, 0.8); }
+  materials.eyes.roughness = 0.2;
+
+  const animPelvis = (anims.userData?.pelvisHeight as number) ?? 0.9167;
+  const speeds = (anims.userData?.speeds as Record<string, number>) ?? {};
+  const bodies = {} as Record<BodyKind, BodyTemplate>;
+  for (const kind of ['M', 'F', 'H'] as BodyKind[]) {
+    const armature = scene.getObjectByName(kind);
+    if (!armature) throw new Error('липсва тяло ' + kind);
+    armature.removeFromParent();
+    armature.position.set(0, 0, 0);
+    const boneNames = new Set<string>();
+    armature.traverse((o) => { if ((o as THREE.Bone).isBone) boneNames.add(o.name); });
+    const ph = pelvisZ(armature);
+    const clips = new Map<string, THREE.AnimationClip>();
+    for (const c of anims.animations) clips.set(c.name, retarget(c, boneNames, ph / animPelvis));
+    const bp = bindPose(armature);
+    bodies[kind] = { kind, armature, pelvisHeight: ph, clips, bindWorld: bp.rot, bindPos: bp.pos };
+  }
+  const hair = scene.getObjectByName('HAIR') as THREE.Mesh;
+  if (!hair) throw new Error('липсва косата');
+  hair.removeFromParent();
+  assets = { bodies, hair, speeds, animPelvis, materials, quality };
 }
 
 /** Само за пробите: забравя заредените хора. */
