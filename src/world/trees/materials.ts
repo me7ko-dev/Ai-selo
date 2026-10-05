@@ -129,7 +129,8 @@ export function barkMaterial(u: VegUniforms, o: VegMatOpts, params: THREE.MeshSt
  * затова тук не пишем дълбочина: всеки пиксел на короната се осветява веднъж, а не по веднъж за всеки слой листа.
  */
 export function leafMaterial(u: VegUniforms, o: VegMatOpts, params: THREE.MeshStandardMaterialParameters, prepass = false): THREE.MeshStandardMaterial {
-  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, alphaTest: 0.42, alphaToCoverage: true, roughness: 0.82, metalness: 0, depthWrite: !prepass, ...params });
+  // с предварителен проход прагът трябва да е същият (0.5) и без alpha-to-coverage — иначе по ръбовете остават дупки
+  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, alphaTest: prepass ? 0.5 : 0.42, alphaToCoverage: !prepass, roughness: 0.82, metalness: 0, depthWrite: !prepass, ...params });
   const uni = uniformsFor(u, o);
   const defs = o.camFade !== false ? '#define VEG_CAMFADE\n' : '';
   mat.onBeforeCompile = (sh) => inject(sh, uni, defs, true, false);
