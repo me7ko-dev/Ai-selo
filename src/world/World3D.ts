@@ -7,8 +7,11 @@ import type { Weather } from '../sim/types';
 import { heightAt, riverInfo, riverWaterHeight, terrainHeight, POND_WATER_HEIGHT } from './height';
 import { getPlan, type WorldPlan, GLADE, POND, SWAMP } from './plan';
 import { CameraBlockers } from './cameraBlock';
-import { Batch, vertexColorMaterial } from './geom';
+import { vertexColorMaterial } from './geom';
 import { buildHouse, buildProp } from './buildings';
+import { Kit } from './arch/kit';
+import { archMaterials, archTick, setArchQuality } from './arch/materials';
+import { setWeathering } from './arch/house';
 import { buildFences, buildRuins, buildSigns, buildSignPosts } from './extras';
 import { paintGround, paintMap, type GroundData } from './ground';
 import { buildTerrain } from './terrain';
@@ -20,7 +23,7 @@ import { buildPond, buildRiver, buildSwampPools, updateWater, type WaterFrame } 
 import { noiseTextures } from '../engine/noise';
 import { GrassField } from './grass';
 import { Rain, Motes, Festival, Splashes, Lightning } from './effects';
-import { FOREST, RIVER_HALF_WIDTH } from '../data/layout';
+import { FOREST, RIVER_HALF_WIDTH, VILLAGE_CENTER } from '../data/layout';
 import { ATMO, A, atmoState } from '../engine/atmo';
 import { minuteOfDay } from '../core/time';
 
@@ -51,8 +54,6 @@ export class World3D implements WorldQuery {
   private ground: GroundData;
   private terrainMat: TerrainMaterial;
   private solidMat = vertexColorMaterial();
-  private windowMat = new THREE.MeshBasicMaterial({ vertexColors: true });
-  private hotMat = new THREE.MeshBasicMaterial({ vertexColors: true });
   private staticMeshes: THREE.Mesh[] = [];
   private groups: InstGroup[] = [];
   private grass: GrassField;
@@ -133,20 +134,21 @@ export class World3D implements WorldQuery {
 
   // ------------------------------------------------------------------ строене
   private buildStatic(): void {
-    const solid = new Map<string, Batch>(), windows = new Map<string, Batch>(), hot = new Batch();
-    const key = (x: number, z: number) => `${Math.floor(x / CHUNK)},${Math.floor(z / CHUNK)}`;
-    const S = (x: number, z: number) => { const k = key(x, z); return solid.get(k) ?? solid.set(k, new Batch()).get(k)!; };
-    const Wn = (x: number, z: number) => { const k = key(x, z); return windows.get(k) ?? windows.set(k, new Batch()).get(k)!; };
-    for (const h of this.plan.houses) buildHouse(S(h.x, h.z), Wn(h.x, h.z), h);
-    for (const p of this.plan.props) buildProp(S(p.x, p.z), hot, p);
-    for (const f of this.plan.fences) buildFences(S(f.pts[0][0], f.pts[0][1]), [f]);
-    if (this.plan.ruins.length) buildRuins(S(this.plan.ruins[0][0], this.plan.ruins[0][1]), this.plan.ruins);
-    buildSignPosts(S(0, 0), this.plan);
-    for (const [k, b] of solid) { const m = b.build(this.solidMat, { name: `static_${k}` }); if (m) this.addStatic(m); }
-    for (const [k, b] of windows) { const m = b.build(this.windowMat, { castShadow: false, name: `windows_${k}` }); if (m) this.addStatic(m); }
-    const hm = hot.build(this.hotMat, { castShadow: false, receiveShadow: false, name: 'coals' }); if (hm) this.addStatic(hm);
+    // сградите, оградите, руините, табелите — по материали (arch/): селото е една група (по едно извикване на
+    // материал за всичките къщи), останалото — по квадрати от 100 м, за да се скрива извън погледа
+    const kits = new Map<string, Kit>();
+    const key = (x: number, z: number) => Math.hypot(x - VILLAGE_CENTER.x, z - VILLAGE_CENTER.z) < 115 ? 'village' : `${Math.floor(x / CHUNK)},${Math.floor(z / CHUNK)}`;
+    const K = (x: number, z: number) => { const k = key(x, z); let kit = kits.get(k); if (!kit) { kit = new Kit(); setWeathering(kit); kits.set(k, kit); } return kit; };
+    for (const h of this.plan.houses) buildHouse(K(h.x, h.z), h);
+    for (const p of this.plan.props) buildProp(K(p.x, p.z), p);
+    for (const f of this.plan.fences) buildFences(K(f.pts[0][0], f.pts[0][1]), [f]);
+    if (this.plan.ruins.length) buildRuins(K(this.plan.ruins[0][0], this.plan.ruins[0][1]), this.plan.ruins);
     const inn = this.plan.props.find(p => p.type === 'inn_sign');
-    const signs = buildSigns(this.plan, inn ? { x: inn.x, z: inn.z, rot: inn.rot } : null);
+    const innSign = inn ? { x: inn.x, z: inn.z, rot: inn.rot } : null;
+    buildSignPosts(K, this.plan, innSign);
+    const mats = archMaterials();
+    for (const [k, kit] of kits) for (const m of kit.meshes(mats, `bld_${k}`)) this.addStatic(m);
+    const signs = buildSigns(this.plan, innSign);
     this.root.add(signs); this.staticMeshes.push(signs);
   }
   private addStatic(m: THREE.Mesh) { m.updateMatrix(); this.root.add(m); this.staticMeshes.push(m); }
@@ -225,10 +227,8 @@ export class World3D implements WorldQuery {
 
     // прозорците светят нощем, огнището гори винаги
     const lit = Math.min(1, night + this.sky.twilight * 0.6 + dark * 0.4);
-    // (линейни HDR стойности: нощем светят и леко „преливат“ в блясъка)
-    this.windowMat.color.setRGB(0.03 + lit * 0.62, 0.03 + lit * 0.4, 0.035 + lit * 0.17);
     const flick = 0.8 + 0.12 * Math.sin(t * 9.3) + 0.08 * Math.sin(t * 17.1 + 2);
-    this.hotMat.color.setScalar(2.2 + 0.6 * flick);
+    archTick(lit, flick);
     this.forgeLight.intensity = (3 + night * 9) * flick;
 
     // вода: небето, светлината, околната светлина отгоре и тъмните брегове (гората) в отражението
@@ -295,6 +295,7 @@ export class World3D implements WorldQuery {
 
   setQuality(q: Quality): void {
     this.quality = q;
+    setArchQuality(q);
     const r = this.engine.renderer;
     // картина (пост-обработка, резолюция), сенки и отражения
     this.engine.setQuality(q);
