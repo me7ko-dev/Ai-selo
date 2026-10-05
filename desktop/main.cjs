@@ -17,6 +17,8 @@ function serve(port) {
     const srv = http.createServer((req, res) => {
       let p;
       try { p = decodeURIComponent(req.url.split('?')[0]); } catch { res.writeHead(400); return res.end(); }
+      // локалният ИИ (Ollama) — препращане, за да няма CORS проблеми
+      if (p.startsWith('/__ollama/')) return proxyOllama(req, res, req.url.slice('/__ollama'.length));
       if (p === '/' || p === '') p = '/index.html';
       const file = path.join(ROOT, path.normalize(p));
       if (!file.startsWith(ROOT)) { res.writeHead(403); return res.end(); }
@@ -29,6 +31,16 @@ function serve(port) {
     srv.on('error', reject);
     srv.listen(port, '127.0.0.1', () => resolve(srv.address().port));
   });
+}
+
+function proxyOllama(req, res, rest) {
+  const up = http.request({ host: '127.0.0.1', port: 11434, path: rest || '/', method: req.method,
+    headers: { 'content-type': req.headers['content-type'] || 'application/json' } }, (r) => {
+    res.writeHead(r.statusCode || 502, { 'Content-Type': r.headers['content-type'] || 'application/json' });
+    r.pipe(res);
+  });
+  up.on('error', () => { if (!res.headersSent) res.writeHead(502); res.end(); });
+  req.pipe(up);
 }
 
 // 3D играта иска истинската видеокарта (на лаптопите има и вградена)
@@ -64,6 +76,6 @@ app.whenReady().then(async () => {
     if (/^https?:\/\//.test(url) && !url.startsWith(`http://127.0.0.1:${port}`)) shell.openExternal(url);
     return { action: 'deny' };
   });
-  await win.loadURL(`http://127.0.0.1:${port}/`);
+  await win.loadURL(`http://127.0.0.1:${port}/?app=desktop`);
 });
 app.on('window-all-closed', () => app.quit());

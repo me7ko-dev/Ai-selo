@@ -295,7 +295,16 @@ function isAbort(e: unknown): boolean {
   return !!e && typeof e === 'object' && ((e as { name?: string }).name === 'AbortError' || (e as { name?: string }).name === 'TimeoutError');
 }
 
+/** В Windows версията (.exe) заявките към локалния Ollama минават през вътрешния сървър на играта (/__ollama) — без CORS грижи. */
+export function routeUrl(url: string): string {
+  const loc = (globalThis as { location?: { search?: string; origin?: string } }).location;
+  if (!loc?.search || !/[?&]app=desktop\b/.test(loc.search) || !loc.origin) return url;
+  const m = /^http:\/\/(127\.0\.0\.1|localhost):11434(\/.*)?$/i.exec(url);
+  return m ? `${loc.origin}/__ollama${m[2] ?? ''}` : url;
+}
+
 async function fetchWithTimeout(url: string, init: RequestInit, ms: number): Promise<Response> {
+  url = routeUrl(url);
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), ms);
   try {
