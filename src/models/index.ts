@@ -1,4 +1,6 @@
-// Модели на героите, чудовищата, животните и предметите — процедурни low-poly, с процедурна анимация.
+// Модели на героите, чудовищата, животните и предметите.
+// Хората (жителите, Стоян, самодивите) са реалистични модели от public/assets/chars/ (src/models/gltf/), ако са заредени
+// с preloadCharacters(); иначе (Node, телефон с „Ниско“, грешка при зареждане) — процедурните low-poly.
 // Подписите на функциите са договорът — не ги сменяй.
 import * as THREE from 'three';
 import type { VillagerLook } from '../data/villagers';
@@ -13,19 +15,35 @@ import { buildRosen, buildChest, buildSaber, buildBow, buildPotion, buildFeather
 export type { AnimName, CharacterModel, HeroModel, LamiaModel, AnimalKind, MonsterKind } from './types';
 export { countTris } from './shared';
 import { mergeStatic } from './shared';
+import { charactersReady } from './gltf/assets';
+import { GltfCharacter } from './gltf/character';
+import { villagerSpec, heroSpec, samodivaSpec } from './gltf/looks';
+export { preloadCharacters, charactersReady } from './gltf/assets';
+
+/** Реалистичен модел, ако хората са заредени; при грешка — null (тогава процедурният). */
+function gltfOr<T>(make: () => T): T | null {
+  if (!charactersReady()) return null;
+  try { return make(); } catch (e) { console.warn('Моделът на човека не стана — процедурен.', e); return null; }
+}
 
 /** Жител по външния му вид (VILLAGERS[id].look). Моделът има и `seatHeight` (за 'sit', по подразбиране 0.45 м). */
-export function createVillagerModel(look: VillagerLook): CharacterModel { return buildVillager(look); }
+export function createVillagerModel(look: VillagerLook): CharacterModel {
+  return gltfOr(() => new GltfCharacter(villagerSpec(look))) ?? buildVillager(look);
+}
 
 /** Стоян. Начално оръжие: 'saber' в ръката. */
-export function createHeroModel(): HeroModel { return new Hero(); }
+export function createHeroModel(): HeroModel {
+  return gltfOr(() => { const h = new GltfCharacter(heroSpec()); h.setWeapon('saber'); return h; }) ?? new Hero();
+}
 
 export function createMonsterModel(kind: MonsterKind): CharacterModel {
   if (kind === 'karakondzhul') return new Karakondzhul();
   return kind === 'talasam' ? new Talasam() : new Quadruped('fox_talasam');
 }
 
-export function createSamodivaModel(index = 0): CharacterModel { return new Samodiva(index); }
+export function createSamodivaModel(index = 0): CharacterModel {
+  return gltfOr(() => new GltfCharacter(samodivaSpec(index))) ?? new Samodiva(index);
+}
 
 export function createAnimalModel(kind: AnimalKind): CharacterModel { return buildAnimal(kind); }
 
