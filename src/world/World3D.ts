@@ -14,20 +14,24 @@ import { paintGround, paintMap, type GroundData } from './ground';
 import { buildTerrain } from './terrain';
 import { SkySystem } from './sky';
 import { instanced, pineGeo, oakGeo, bushGeo, rockGeo, deadTreeGeo, fernGeo, mushroomGeo, logGeo, flowerGeo, fadingTreeMaterial, treeFadeUniforms, type InstGroup } from './vegetation';
-import { buildPond, buildRiver, buildSwampPools } from './water';
+import { buildPond, buildRiver, buildSwampPools, updateWater, type WaterFrame } from './water';
+import { noiseTextures } from '../engine/noise';
 import { GrassField } from './grass';
 import { Rain, Motes, Festival } from './effects';
 import { FOREST, RIVER_HALF_WIDTH } from '../data/layout';
+import { ATMO, A, atmoState } from '../engine/atmo';
+import { minuteOfDay } from '../core/time';
 
 export type Quality = 'low' | 'medium' | 'high';
 
-interface WeatherParams { cloud: number; dark: number; fogNear: number; fogFar: number; rain: number; wind: number; storm: number }
+// haze — плътност на мараната (на метър): ясно ~30 % при 400 м, мъгла — видимост ~100 м; mist — утринна мъгла в низините
+interface WeatherParams { cloud: number; dark: number; fogNear: number; fogFar: number; rain: number; wind: number; storm: number; haze: number; mist: number }
 const WEATHER: Record<Weather, WeatherParams> = {
-  clear: { cloud: 0.3, dark: 0, fogNear: 140, fogFar: 1000, rain: 0, wind: 0.45, storm: 0 },
-  cloudy: { cloud: 0.8, dark: 0.32, fogNear: 70, fogFar: 520, rain: 0, wind: 0.75, storm: 0 },
-  rain: { cloud: 0.97, dark: 0.58, fogNear: 25, fogFar: 260, rain: 0.65, wind: 0.95, storm: 0 },
-  storm: { cloud: 1, dark: 0.8, fogNear: 18, fogFar: 210, rain: 1, wind: 1.7, storm: 1 },
-  fog: { cloud: 0.55, dark: 0.25, fogNear: 2, fogFar: 85, rain: 0, wind: 0.2, storm: 0 },
+  clear: { cloud: 0.3, dark: 0, fogNear: 140, fogFar: 1000, rain: 0, wind: 0.45, storm: 0, haze: 0.0009, mist: 0 },
+  cloudy: { cloud: 0.8, dark: 0.32, fogNear: 70, fogFar: 520, rain: 0, wind: 0.75, storm: 0, haze: 0.0018, mist: 0.1 },
+  rain: { cloud: 0.97, dark: 0.58, fogNear: 25, fogFar: 260, rain: 0.65, wind: 0.95, storm: 0, haze: 0.0055, mist: 0.35 },
+  storm: { cloud: 1, dark: 0.8, fogNear: 18, fogFar: 210, rain: 1, wind: 1.7, storm: 1, haze: 0.0075, mist: 0.3 },
+  fog: { cloud: 0.55, dark: 0.25, fogNear: 2, fogFar: 85, rain: 0, wind: 0.2, storm: 0, haze: 0.026, mist: 1 },
 };
 
 const CHUNK = 100;
@@ -74,16 +78,21 @@ export class World3D implements WorldQuery {
   private time = 0;
   private mapCache: { flowing: boolean; canvas: HTMLCanvasElement } | null = null;
   private tmp = new THREE.Vector3();
+  private waterFrame: WaterFrame = {
+    time: 0, lightDir: new THREE.Vector3(), lightColor: new THREE.Color(), amb: new THREE.Color(), skyHor: new THREE.Color(), skyTop: new THREE.Color(), bank: new THREE.Color(),
+    env: null, envI: 1, rain: 0, flash: 0,
+  };
+  /** отразеност на гората/бреговете (тъмнозелено) — за отражението във водата */
+  private bankAlbedo = new THREE.Color(0.035, 0.06, 0.03);
 
   constructor(private engine: Engine, opts: { quality?: Quality } = {}) {
     const scene = engine.scene;
     this.root.name = 'world';
     scene.add(this.root);
-    this.engine.renderer.toneMapping = THREE.NeutralToneMapping;
     let tm = performance.now();
     const mark = (k: string) => { const n = performance.now(); this.buildMs[k] = Math.round(n - tm); tm = n; };
     this.plan = getPlan(); mark('plan');
-    this.sky = new SkySystem(scene);
+    this.sky = new SkySystem(scene, engine.renderer);
     this.lights = { sun: this.sky.sun, hemi: this.sky.hemi };
 
     // земята
@@ -99,9 +108,10 @@ export class World3D implements WorldQuery {
     this.buildStatic(); mark('static');
     this.buildVegetation(); mark('vegetation');
 
-    this.pond = buildPond(); this.root.add(this.pond);
-    this.river = buildRiver(); this.root.add(this.river.mesh);
-    this.swamp = buildSwampPools(this.plan.swampPools); this.root.add(this.swamp);
+    const waterNormals = noiseTextures(engine.renderer).water;
+    this.pond = buildPond(waterNormals); this.root.add(this.pond);
+    this.river = buildRiver(waterNormals); this.root.add(this.river.mesh);
+    this.swamp = buildSwampPools(this.plan.swampPools, waterNormals); this.root.add(this.swamp);
     this.grass = new GrassField(this.ground.grass, this.ground.base); this.root.add(this.grass.group);
     this.root.add(this.rain.mesh, this.motes.points);
     this.festival = new Festival(this.solidMat);
@@ -176,33 +186,56 @@ export class World3D implements WorldQuery {
     // местна мъгла: блатото, гората
     const dSw = Math.hypot(focus.x - SWAMP.x, focus.z - SWAMP.z);
     const dFo = Math.hypot(focus.x - FOREST.center.x, focus.z - FOREST.center.z);
-    const localFog = Math.max(THREE.MathUtils.smoothstep(150, 70, dSw) * 0.85, THREE.MathUtils.smoothstep(FOREST.radius + 10, FOREST.radius - 30, dFo) * 0.5);
+    // (three: smoothstep(x, min, max) — преди аргументите бяха разменени и мъглата на блатото стигаше до селото)
+    const ss = THREE.MathUtils.smoothstep;
+    const localFog = Math.max((1 - ss(dSw, 70, 150)) * 0.85, (1 - ss(dFo, FOREST.radius - 30, FOREST.radius + 10)) * 0.5);
     this.sky.localFog = localFog;
+    // под короните на гората: по-малко небе → по-слаба околна светлина и отражения
+    this.sky.canopy = 1 - ss(dFo, FOREST.radius - 35, FOREST.radius + 5);
     const ds = this.distScale;
     // зловещото притъмняване (Караконджул): плавно към целта, над времето
     this.gloom += ((this.gloomOn ? 1 : 0) - this.gloom) * (1 - Math.exp(-dt * 0.6));
     const gm = this.gloom;
     const cloud = Math.max(this.wp.cloud, gm * 0.97), dark = Math.max(this.wp.dark, gm * 0.82);
     const fogNear = THREE.MathUtils.lerp(this.wp.fogNear, Math.min(this.wp.fogNear, 40), gm), fogFar = THREE.MathUtils.lerp(this.wp.fogFar, Math.min(this.wp.fogFar, 420), gm);
-    this.sky.weather = { cloud, dark, fogNear: fogNear * Math.min(1, ds + 0.2), fogFar: fogFar * Math.min(1, ds + 0.15), flash: fl * 0.5, gloom: gm };
-    this.sky.update(totalGameMinutes, this.engine.camera, focus, t);
+    // утринна мъгла в низините (зазоряване), по-слаба вечер и нощем; времето добавя своята
+    const hr = minuteOfDay(totalGameMinutes) / 60;
+    const dawnMist = THREE.MathUtils.smoothstep(hr, 3.5, 5.5) * (1 - THREE.MathUtils.smoothstep(hr, 7.5, 10));
+    const eveMist = THREE.MathUtils.smoothstep(hr, 19.5, 23) * 0.35 + (hr < 4 ? 0.35 : 0);
+    const mist = Math.min(1, Math.max(dawnMist, eveMist, this.wp.mist));
+    this.sky.weather = {
+      cloud, dark, fogNear: fogNear * Math.min(1, ds + 0.2), fogFar: fogFar * Math.min(1, ds + 0.15), flash: fl * 0.5, gloom: gm,
+      haze: Math.max(this.wp.haze, gm * 0.003) / Math.min(1, ds + 0.15), mist,
+    };
+    this.sky.update(totalGameMinutes, this.engine.camera, focus, t, dt);
+    this.engine.exposureTarget = this.sky.exposure;
+    this.engine.post.night = this.sky.nightLook;
+    this.engine.post.bloomBoost = fl * 0.6;
+    this.sky.hemi.color.set('#c8d4ff'); this.sky.hemi.groundColor.set('#3a4050');
+    this.sky.hemi.intensity = fl * 5;
+    // мокрота: расте при дъжд (~40 s до подгизване), съхне бавно (~4 мин)
+    const rainNow = this.wp.rain;
+    atmoState.rain = rainNow;
+    atmoState.wetness = rainNow > 0.05 ? Math.min(1, atmoState.wetness + dt * rainNow / 40) : Math.max(0, atmoState.wetness - dt / 240);
+    ATMO[A.MISC * 4] = atmoState.wetness; ATMO[A.MISC * 4 + 1] = rainNow;
     const night = this.sky.night;
 
     // прозорците светят нощем, огнището гори винаги
     const lit = Math.min(1, night + this.sky.twilight * 0.6 + dark * 0.4);
-    this.windowMat.color.setRGB(0.03 + lit * 1.0, 0.03 + lit * 0.75, 0.035 + lit * 0.45);
+    // (линейни HDR стойности: нощем светят и леко „преливат“ в блясъка)
+    this.windowMat.color.setRGB(0.03 + lit * 0.62, 0.03 + lit * 0.4, 0.035 + lit * 0.17);
     const flick = 0.8 + 0.12 * Math.sin(t * 9.3) + 0.08 * Math.sin(t * 17.1 + 2);
-    this.hotMat.color.setScalar(0.85 + 0.15 * flick);
+    this.hotMat.color.setScalar(2.2 + 0.6 * flick);
     this.forgeLight.intensity = (3 + night * 9) * flick;
 
-    // вода
-    const skyTop = this.sky.top, skyHor = this.sky.horizon;
-    for (const m of [this.pond, this.river.mesh, this.swamp]) {
-      const u = (m.material as THREE.ShaderMaterial).uniforms;
-      u.uTime.value = t; u.uSky.value.copy(skyHor); u.uTop.value.copy(skyTop);
-      u.uLightDir.value.copy(this.sky.lightDir);
-      u.uLightColor.value.copy(this.sky.sun.color).multiplyScalar(Math.min(1.2, this.sky.sun.intensity * 0.5));
-    }
+    // вода: небето, светлината, околната светлина отгоре и тъмните брегове (гората) в отражението
+    const wf = this.waterFrame;
+    wf.time = t; wf.lightDir.copy(this.sky.lightDir); wf.lightColor.copy(this.sky.lightColor);
+    this.sky.irradiance(this.tmp.set(0, 1, 0), wf.amb);
+    this.sky.irradiance(this.tmp.set(0.7, 0.3, 0).normalize(), wf.bank).multiply(this.bankAlbedo).multiplyScalar(1 / Math.PI);
+    wf.skyHor.copy(this.sky.horizon); wf.skyTop.copy(this.sky.top);
+    wf.env = this.sky.envTexture; wf.envI = this.engine.scene.environmentIntensity; wf.rain = this.wp.rain; wf.flash = fl;
+    for (const m of [this.pond, this.river.mesh, this.swamp]) updateWater(m.material as THREE.ShaderMaterial, wf);
     if (this.riverOn && this.riverFront < 1.01) this.riverFront = Math.min(1.01, this.riverFront + dt * this.riverSpeed);
     (this.river.mesh.material as THREE.ShaderMaterial).uniforms.uFront.value = this.riverFront;
 
@@ -211,7 +244,8 @@ export class World3D implements WorldQuery {
     const tc = this.tmp.set(cam.x - focus.x, 0, cam.z - focus.z);
     const tl = tc.length() || 1;
     this.heroFill.position.set(focus.x + (tc.x / tl) * 1.2, focus.y + 4.5, focus.z + (tc.z / tl) * 1.2);
-    this.heroFill.intensity = (night * 4.5 + this.sky.twilight * 1.3) * (1 - this.wp.rain * 0.3) + dark * 1.5;
+    // (експонацията нощем е ~3× — затова подсветката е по-слаба от преди)
+    this.heroFill.intensity = (night * 1.4 + this.sky.twilight * 0.45) * (1 - this.wp.rain * 0.3) + dark * 0.5;
     // дърветата пред камерата
     this.treeFade.uCamPos.value.copy(cam);
     this.treeFade.uFocus.value.copy(focus);
@@ -219,7 +253,7 @@ export class World3D implements WorldQuery {
     this.grass.uniforms.uWind.value = Math.max(this.wp.wind, gm * 1.3);
     this.grass.update(focus, t);
     this.rain.update(t, cam, this.wp.rain, this.wp.wind);
-    const nearMagic = Math.max(THREE.MathUtils.smoothstep(160, 60, Math.hypot(focus.x - GLADE.x, focus.z - GLADE.z)), THREE.MathUtils.smoothstep(140, 60, dFo) * 0.7);
+    const nearMagic = Math.max(1 - ss(Math.hypot(focus.x - GLADE.x, focus.z - GLADE.z), 60, 160), (1 - ss(dFo, 60, 140)) * 0.7);
     this.motes.update(t, night * nearMagic * (1 - this.wp.rain), this.engine.renderer.getPixelRatio());
     this.festival.update(t, night);
 
@@ -254,17 +288,17 @@ export class World3D implements WorldQuery {
   setQuality(q: Quality): void {
     this.quality = q;
     const r = this.engine.renderer;
-    const sun = this.sky.sun;
+    // картина (пост-обработка, резолюция), сенки и отражения
+    this.engine.setQuality(q);
+    this.sky.setQuality(q);
     if (q === 'low') {
-      sun.castShadow = false; this.grass.setDensity(1); this.distScale = 0.55; this.engine.setPixelRatioCap(1);
+      this.grass.setDensity(1); this.distScale = 0.55;
     } else if (q === 'medium') {
-      sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); this.sky.setShadowExtent(55); this.grass.setDensity(2); this.distScale = 0.78; this.engine.setPixelRatioCap(1.25);
-      r.shadowMap.type = THREE.PCFShadowMap;
+      this.grass.setDensity(2); this.distScale = 0.78;
     } else {
-      sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); this.sky.setShadowExtent(70); this.grass.setDensity(3); this.distScale = 1; this.engine.setPixelRatioCap(1.5);
-      r.shadowMap.type = THREE.PCFSoftShadowMap;
+      this.grass.setDensity(3); this.distScale = 1;
     }
-    sun.shadow.map?.dispose(); sun.shadow.map = null;
+    r.shadowMap.type = THREE.PCFSoftShadowMap;
     r.shadowMap.needsUpdate = true;
   }
   getQuality(): Quality { return this.quality; }
