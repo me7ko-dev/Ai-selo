@@ -1,6 +1,7 @@
 // Рендер, сцена, камера, цикъл. Светът (World3D) слага небе/светлини/мъгла; героят движи камерата.
 import * as THREE from 'three';
 import { Input } from './Input';
+import { setMaxAnisotropy } from '../world/tex';
 
 export type Updater = (dt: number) => void;
 
@@ -26,6 +27,7 @@ export class Engine {
     this.renderer.toneMappingExposure = 1.0;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    setMaxAnisotropy(this.renderer.capabilities.getMaxAnisotropy());
     this.camera = new THREE.PerspectiveCamera(60, 1, 0.1, 1400);
     this.camera.position.set(0, 20, 160);
     this.input = new Input(canvas);

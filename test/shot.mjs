@@ -6,7 +6,8 @@
 //   npm run shot -- --list                        — списък на сцените
 //
 // Сам НЕ сглобява играта: пуска `vite preview` на порт 4180 върху готовия dist/ (или ползва SHOT_URL=http://…).
-// Други настройки: CHROME_PATH (Chromium), SHOT_OUT (папка), SHOT_W/SHOT_H (1920×1080), SHOT_TIMEOUT (ms, 90000), HEADED=1.
+// Други настройки: CHROME_PATH (Chromium), SHOT_OUT (папка), SHOT_W/SHOT_H (1920×1080), SHOT_TIMEOUT (ms, 90000), HEADED=1,
+// SHOT_GPU=1 (истинската видеокарта + кадри/с за всяка сцена).
 //
 // Договор с играта:
 //   window.__ready = true          — играта е заредена (менюто/светът се вижда);
@@ -22,9 +23,14 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.resolve(ROOT, process.env.SHOT_OUT || 'docs/screenshots');
 const W = +(process.env.SHOT_W || 1920), H = +(process.env.SHOT_H || 1080);
 const TIMEOUT = +(process.env.SHOT_TIMEOUT || 90000);
-const PORT = 4180;
-const CHROME = process.env.CHROME_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
-const GL_ARGS = ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'];
+const PORT = +(process.env.SHOT_PORT || 4180);
+const WIN_CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
+const CHROME = process.env.CHROME_PATH || (process.platform === 'win32' && fs.existsSync(WIN_CHROME) ? WIN_CHROME : '/opt/pw-browsers/chromium-1194/chrome-linux/chrome');
+// SHOT_GPU=1 — истинската видеокарта (напр. GTX 1650 на лаптопа), за реални кадри/с и истинския вид; иначе софтуерен рендер.
+const GPU = !!process.env.SHOT_GPU;
+const GL_ARGS = GPU
+  ? ['--ignore-gpu-blocklist', '--enable-gpu-rasterization', '--force_high_performance_gpu', '--disable-frame-rate-limit', '--disable-gpu-vsync', '--autoplay-policy=no-user-gesture-required', ...(process.platform === 'win32' ? ['--use-angle=d3d11'] : [])]
+  : ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'];
 
 /**
  * Сцените. url е относителен към адреса на играта. keys — клавиши след зареждането (по ред), напр. 'KeyJ' или
@@ -184,6 +190,7 @@ try {
     if (!list.length) { console.error('Няма такава сцена. Виж: npm run shot -- --list'); exitCode = 2; }
     fs.mkdirSync(OUT, { recursive: true });
     const summary = [];
+    const fpsLog = [];
     for (const s of list) {
       const t0 = Date.now();
       const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
@@ -197,6 +204,15 @@ try {
         await pressKeys(page, s.keys);
         if (s.evalJs) await page.evaluate(s.evalJs);
         await sleep(s.waitMs ?? 2000);
+        if (GPU) {
+          // кадри/с за 3 s (истинската видеокарта, без таван от vsync)
+          const fps = await page.evaluate(() => new Promise((res) => {
+            let n = 0; const t0 = performance.now();
+            const f = () => { n++; if (performance.now() - t0 < 3000) requestAnimationFrame(f); else res(n / ((performance.now() - t0) / 1000)); };
+            requestAnimationFrame(f);
+          }));
+          fpsLog.push({ name: s.name, fps: Math.round(fps) });
+        }
         const file = path.join(OUT, s.name + '.png');
         await page.screenshot({ path: file, timeout: 60000 });
         saved = true;
@@ -206,7 +222,7 @@ try {
       }
       if (errors.length) { status += `, ${errors.length} грешки в конзолата`; exitCode = exitCode || 1; }
       summary.push({ name: s.name, status, saved, sec: ((Date.now() - t0) / 1000).toFixed(1), errors });
-      console.log(`${status === 'ok' ? '✔' : saved ? '!' : '✖'} ${s.name.padEnd(16)} ${status} (${summary.at(-1).sec} s)`);
+      console.log(`${status.startsWith('ok') ? '✔' : saved ? '!' : '✖'} ${s.name.padEnd(16)} ${status} (${summary.at(-1).sec} s)`);
       await page.close();
     }
     console.log('\nОбобщение:');
@@ -215,7 +231,8 @@ try {
       for (const e of r.errors.slice(0, 5)) console.log('      ' + e.split('\n')[0]);
     }
     const savedN = summary.filter((r) => r.saved).length;
-    const okN = summary.filter((r) => r.status === 'ok').length;
+    const okN = summary.filter((r) => r.status.startsWith('ok')).length;
+    if (fpsLog.length) console.log('Кадри/с: ' + fpsLog.map((r) => r.name + ' ' + r.fps).join(', '));
     console.log(`\n${savedN}/${summary.length} снимки в ${path.relative(ROOT, OUT) || '.'}/ (${okN} с готова сцена)`);
   }
 } finally {
