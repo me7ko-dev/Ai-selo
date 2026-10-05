@@ -4,7 +4,7 @@
 //   node tools/fetch-polyhaven.mjs rock_face --res 2k --maps diff,nor_gl,arm,disp
 //   node tools/fetch-polyhaven.mjs --hdri kloofendal_48d_partly_cloudy --res 1k
 //
-// Текстура → public/assets/tex/<id>/<id>_<map>_<res>.jpg   (map: diff | nor_gl | arm | rough | ao | disp)
+// Текстура → public/assets/tex/<id>/<id>_<map>_<res>.jpg   (map: diff | nor_gl | arm | rough | ao | disp | alpha — alpha е за листа/папрат от модели)
 // HDRI     → public/assets/hdri/<id>_<res>.hdr
 // Всеки свален ресурс се дописва в public/assets/CREDITS.md (името и линк към източника).
 import fs from 'fs';
@@ -13,7 +13,7 @@ import { fileURLToPath } from 'url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'public/assets');
-const KEY = { diff: 'Diffuse', nor_gl: 'nor_gl', arm: 'arm', rough: 'Rough', ao: 'AO', disp: 'Displacement' };
+const KEY = { diff: 'Diffuse', nor_gl: 'nor_gl', arm: 'arm', rough: 'Rough', ao: 'AO', disp: 'Displacement', alpha: 'Alpha' };
 
 const args = process.argv.slice(2);
 const opt = (name, def) => { const i = args.indexOf('--' + name); return i >= 0 ? args[i + 1] : def; };

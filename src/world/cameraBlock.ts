@@ -1,6 +1,6 @@
 // Какво закрива камерата: стволовете на дърветата и къщите (чиста логика, без three.js).
 // Камерата на героя пита cameraHit(x, y, z) по лъча от героя към себе си и се приближава, ако влиза в ствол или стена.
-// Короните НЕ дърпат камерата: дърветата пред нея се разтварят (fadingTreeMaterial във vegetation.ts) — така в гората
+// Короните НЕ дърпат камерата: дърветата пред нея се разтварят (trees/materials.ts, VEG_CAMFADE) — така в гората
 // камерата остава зад героя на нормално разстояние, вместо да се забива в него сред тъмните игли.
 import { WORLD_HALF } from '../data/layout';
 import { heightAt } from './height';
@@ -17,9 +17,13 @@ type Shape =
 export class CameraBlockers {
   private grid: Shape[][] = Array.from({ length: N * N }, () => []);
 
-  constructor(plan: Pick<WorldPlan, 'pines' | 'oaks' | 'houses'>) {
-    for (const t of plan.pines) this.add({ k: 'trunk', x: t.x, z: t.z, y1: heightAt(t.x, t.z) + 8.5 * t.s, r: 0.3 * t.s }, 0.3 * t.s);
+  constructor(plan: Pick<WorldPlan, 'pines' | 'oaks' | 'houses'> & Partial<Pick<WorldPlan, 'props'>>) {
+    // мерките следват моделите във vegetation.ts: смърчът/елата са високи 17.5·s м, стволът ~0.3·s;
+    // дъбът се разклонява на ~3 м, клоните са до ~5.5·s
+    for (const t of plan.pines) this.add({ k: 'trunk', x: t.x, z: t.z, y1: heightAt(t.x, t.z) + 17 * t.s, r: 0.3 * t.s }, 0.3 * t.s);
     for (const t of plan.oaks) this.add({ k: 'trunk', x: t.x, z: t.z, y1: heightAt(t.x, t.z) + 5.5 * t.s, r: 0.4 * t.s }, 0.4 * t.s);
+    // старият орех на мегдана — дебел ствол до разклона (~3.4 м)
+    for (const p of plan.props ?? []) if (p.type === 'walnut') this.add({ k: 'trunk', x: p.x, z: p.z, y1: heightAt(p.x, p.z) + 4, r: 1.0 }, 1.0);
     for (const h of plan.houses) {
       const g = heightAt(h.x, h.z);
       this.add({ k: 'box', x: h.x, z: h.z, hw: h.w / 2, hd: h.d / 2, cs: Math.cos(h.rot), sn: Math.sin(h.rot), y1: g + 6.5 }, Math.hypot(h.w, h.d) / 2);
