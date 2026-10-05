@@ -485,7 +485,7 @@ export class GltfCharacter implements HeroModel {
     }
     if (!this.baseEmissive.length) this.baseEmissive = this.flashMats.map((m) => ({ c: m.emissive.clone(), i: m.emissiveIntensity }));
     const c = new THREE.Color(color ?? 0xff5040);
-    for (const m of this.flashMats) { m.emissive.copy(c); m.emissiveIntensity = 0.55; }
+    for (const m of this.flashMats) { m.emissive.copy(c); m.emissiveIntensity = 0.22; } // лек оттенък, не плътен цвят
     this.flashT = 0.16;
   }
 
