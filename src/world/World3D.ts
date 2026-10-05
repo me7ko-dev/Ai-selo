@@ -17,7 +17,7 @@ import { instanced, pineGeo, oakGeo, bushGeo, rockGeo, deadTreeGeo, fernGeo, mus
 import { buildPond, buildRiver, buildSwampPools, updateWater, type WaterFrame } from './water';
 import { noiseTextures } from '../engine/noise';
 import { GrassField } from './grass';
-import { Rain, Motes, Festival } from './effects';
+import { Rain, Motes, Festival, Splashes, Lightning } from './effects';
 import { FOREST, RIVER_HALF_WIDTH } from '../data/layout';
 import { ATMO, A, atmoState } from '../engine/atmo';
 import { minuteOfDay } from '../core/time';
@@ -58,6 +58,9 @@ export class World3D implements WorldQuery {
   private river: { mesh: THREE.Mesh; length: number };
   private swamp: THREE.Mesh;
   private rain = new Rain();
+  private splashes = new Splashes();
+  private bolt = new Lightning();
+  private skyLight = new THREE.Color();
   private motes = new Motes();
   private festival: Festival;
   private forgeLight = new THREE.PointLight('#ff8a3a', 0, 16, 1.8);
@@ -113,8 +116,8 @@ export class World3D implements WorldQuery {
     this.river = buildRiver(waterNormals); this.root.add(this.river.mesh);
     this.swamp = buildSwampPools(this.plan.swampPools, waterNormals); this.root.add(this.swamp);
     this.grass = new GrassField(this.ground.grass, this.ground.base); this.root.add(this.grass.group);
-    this.root.add(this.rain.mesh, this.motes.points);
-    this.festival = new Festival(this.solidMat);
+    this.root.add(this.rain.mesh, this.splashes.mesh, this.bolt.mesh, this.motes.points);
+    this.festival = new Festival(this.solidMat, noiseTextures(engine.renderer).cloud);
     this.root.add(this.festival.group, this.festival.light);
     this.heroFill.name = 'heroFill';
     this.root.add(this.heroFill);
@@ -179,7 +182,7 @@ export class World3D implements WorldQuery {
     // светкавици
     if (this.wp.storm > 0.5) {
       this.lightningTimer -= dt;
-      if (this.lightningTimer <= 0) { this.flash = 1; this.lightningTimer = 4 + Math.random() * 9; this.onLightning?.(); }
+      if (this.lightningTimer <= 0) { this.flash = 1; this.lightningTimer = 4 + Math.random() * 9; this.bolt.strike(cam); this.onLightning?.(); }
     }
     this.flash = Math.max(0, this.flash - dt * 3.2);
     const fl = this.flash > 0 ? this.flash * (0.6 + 0.4 * Math.sin(this.flash * 40)) : 0;
@@ -252,10 +255,13 @@ export class World3D implements WorldQuery {
 
     this.grass.uniforms.uWind.value = Math.max(this.wp.wind, gm * 1.3);
     this.grass.update(focus, t);
-    this.rain.update(t, cam, this.wp.rain, this.wp.wind);
+    this.skyLight.copy(wf.amb).multiplyScalar(1 / Math.PI);
+    this.rain.update(t, cam, this.wp.rain, this.wp.wind, this.skyLight, fl);
+    this.splashes.update(t, cam, this.wp.rain, this.skyLight);
+    this.bolt.update(dt);
     const nearMagic = Math.max(1 - ss(Math.hypot(focus.x - GLADE.x, focus.z - GLADE.z), 60, 160), (1 - ss(dFo, 60, 140)) * 0.7);
     this.motes.update(t, night * nearMagic * (1 - this.wp.rain), this.engine.renderer.getPixelRatio());
-    this.festival.update(t, night);
+    this.festival.update(t, night, this.skyLight, this.engine.post.exposure);
 
     // скриване по разстояние (дребните неща — само близо)
     for (const g of this.groups) {
@@ -291,6 +297,7 @@ export class World3D implements WorldQuery {
     // картина (пост-обработка, резолюция), сенки и отражения
     this.engine.setQuality(q);
     this.sky.setQuality(q);
+    this.rain.setDensity(q === 'low' ? 0.4 : q === 'medium' ? 0.7 : 1);
     if (q === 'low') {
       this.grass.setDensity(1); this.distScale = 0.55;
     } else if (q === 'medium') {
@@ -302,6 +309,12 @@ export class World3D implements WorldQuery {
     r.shadowMap.needsUpdate = true;
   }
   getQuality(): Quality { return this.quality; }
+
+  /** Сенки вкл./изкл. (настройката „Сенки“) — сменя и светлините, иначе шейдърите остават със старите карти. */
+  setShadows(on: boolean): void {
+    this.engine.renderer.shadowMap.enabled = on;
+    this.sky.setShadows(on);
+  }
 
   heightAt(x: number, z: number): number { return heightAt(x, z); }
   collide(x: number, z: number, radius: number): { x: number; z: number } { return this.plan.colliders.collide(x, z, radius); }

@@ -68,14 +68,18 @@ export function mergeSettings(raw: unknown): Settings {
 /** Телефон/таблет: по-лека графика, докато играчът сам не избере друга. */
 export const TOUCH_GRAPHICS: Settings['graphics'] = { quality: 'low', shadows: true, pixelRatioCap: 1 };
 
-/** Слива и попълва стойностите по подразбиране за телефон (само това, което играчът не е запазил). */
-export function mergeSettingsFor(raw: unknown, opts: { touch?: boolean } = {}): Settings {
-  if (!opts.touch) return mergeSettings(raw);
+/**
+ * Слива и попълва стойностите по подразбиране за телефон (само това, което играчът не е запазил).
+ * gpu — препоръчаното качество за видеокартата (Engine.gpu.quality): ползва се само при първо пускане (няма запазено).
+ */
+export function mergeSettingsFor(raw: unknown, opts: { touch?: boolean; gpu?: GraphicsQuality } = {}): Settings {
   const r = obj(raw), g = obj(r.graphics);
-  return mergeSettings({ ...r, graphics: { ...TOUCH_GRAPHICS, ...g } });
+  if (opts.touch) return mergeSettings({ ...r, graphics: { ...TOUCH_GRAPHICS, ...g } });
+  if (opts.gpu) return mergeSettings({ ...r, graphics: { quality: opts.gpu, ...g } });
+  return mergeSettings(raw);
 }
 
-export function loadSettings(opts: { touch?: boolean } = {}): Settings {
+export function loadSettings(opts: { touch?: boolean; gpu?: GraphicsQuality } = {}): Settings {
   try {
     const s = storage()?.getItem(SETTINGS_KEY);
     if (!s) return mergeSettingsFor({}, opts);

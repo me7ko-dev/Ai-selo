@@ -14,7 +14,7 @@ export interface UiSettings {
 
 export const DEFAULT_UI_SETTINGS: UiSettings = {
   ai: { ...DEFAULT_AI },
-  graphics: { quality: 'medium', shadows: true, pixelRatioCap: 1.5 },
+  graphics: { quality: 'high', shadows: true, pixelRatioCap: 1.5 },
   audio: { master: 0.8, music: 0.6, sfx: 0.8 },
   controls: { sensitivity: 1, invertY: false },
   live: { channel: '', voteSeconds: 30 },
@@ -31,6 +31,8 @@ export interface SettingsStatus {
   saveLabel?: string;
   /** Подсказките за начинаещи са включени (по подразбиране — да). */
   hints?: boolean;
+  /** Видеокартата и препоръчаното качество за нея. */
+  gpu?: { name: string; recommended: 'low' | 'medium' | 'high' };
 }
 
 export type SettingsTab = 'game' | 'ai' | 'graphics' | 'audio' | 'controls' | 'live';
@@ -166,12 +168,27 @@ export class SettingsView extends ModalView {
           <ol><li>Инсталирай Ollama (ollama.com).</li><li>Отвори „Команден ред“ и напиши:<br><code>ollama pull ${esc(MODEL_CHOICES[0])}</code></li><li>Пусни играта за Windows и натисни „Провери връзката“.</li></ol>` }));
         break;
       }
-      case 'graphics':
-        row('Качество', seg(this.s.graphics.quality, [['low', 'Ниско'], ['medium', 'Средно'], ['high', 'Високо']], (v) => { this.s.graphics.quality = v; this.changed(); }));
+      case 'graphics': {
+        const QDESC: Record<string, string> = {
+          high: 'Пълен вид: меки сенки близо и далеч, засенчване в ъглите, блясък, отражения. За отделна видеокарта (напр. GTX 1650).',
+          medium: 'Сенки около героя, блясък, по-леки отражения — около два пъти по-бързо.',
+          low: 'Без сенки и ефекти, по-малка резолюция — за слаби лаптопи и телефони.',
+        };
+        const desc = h('p.set-p.set-hint', { text: QDESC[this.s.graphics.quality] });
+        row('Качество', seg(this.s.graphics.quality, [['low', 'Ниско'], ['medium', 'Средно'], ['high', 'Високо']], (v) => { this.s.graphics.quality = v; desc.textContent = QDESC[v]; this.changed(); }));
+        B.append(desc);
         row('Сенки', toggle(this.s.graphics.shadows, (v) => { this.s.graphics.shadows = v; this.changed(); }));
         row('Резолюция (таван)', slider(this.s.graphics.pixelRatioCap, 0.5, 2, 0.25, (v) => `×${v.toFixed(2)}`, (v) => { this.s.graphics.pixelRatioCap = v; this.changed(); }), 'по-ниско = повече кадри');
-        B.append(h('p.set-p', { text: 'Ако играта насича, сложи „Ниско“ и изключи сенките.' }));
+        const g = this.st.gpu;
+        if (g?.name) {
+          const QN: Record<string, string> = { low: 'Ниско', medium: 'Средно', high: 'Високо' };
+          // името на картата без „ANGLE (…, … Direct3D11 …)“
+          const short = g.name.replace(/^ANGLE \(([^,]*),\s*/, '').replace(/\s*(\(0x[0-9a-f]+\))?\s*Direct3D.*$/i, '').replace(/\)$/, '');
+          B.append(h('p.set-p.set-hint', { text: `Видеокарта: ${short} — препоръчано: ${QN[g.recommended]}.` }));
+        }
+        B.append(h('p.set-p', { text: 'Ако играта насича, сложи „Средно“ или „Ниско“ (играта и сама сваля качеството, ако кадрите паднат много).' }));
         break;
+      }
       case 'audio':
         row('Общо', slider(this.s.audio.master, 0, 1, 0.05, pct, (v) => { this.s.audio.master = v; this.changed(); }));
         row('Музика', slider(this.s.audio.music, 0, 1, 0.05, pct, (v) => { this.s.audio.music = v; this.changed(); }));

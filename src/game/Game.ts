@@ -85,9 +85,10 @@ export class Game {
     const tick = () => new Promise<void>((r) => setTimeout(r, 0));
     this.shot = new URLSearchParams(location.search).get('shot');
     const touch = prefersTouch(); // телефон/таблет: по-лека графика по подразбиране
-    this.settings = loadSettings({ touch });
     progress(0.05, 'Пали се огнището…');
     this.engine = new Engine(canvas);
+    // при първо пускане качеството е според видеокартата (отделна → „Високо“, вградена → по-ниско)
+    this.settings = loadSettings({ touch, gpu: this.engine.gpu.quality });
     this.engine.setPixelRatioCap(this.settings.graphics.pixelRatioCap);
     this.engine.input.sensitivity = this.settings.controls.sensitivity;
     this.engine.input.invertY = this.settings.controls.invertY;
@@ -95,6 +96,7 @@ export class Game {
     progress(0.15, 'Расте гората…');
     await tick();
     this.world = new World3D(this.engine, { quality: this.settings.graphics.quality });
+    this.world.setShadows(this.settings.graphics.shadows);
     progress(0.55, 'Жителите се събуждат…');
     await tick();
     this.ui = mountUi(uiRoot);
@@ -638,6 +640,7 @@ export class Game {
       inGame: this.mode === 'play',
       live: { running: this.liveOn, label: this.liveOn ? (this.twitch ? `Канал: ${this.settings.live.channel}` : 'Пробен чат') : undefined },
       hints: this.tutorial.enabled,
+      gpu: { name: this.engine.gpu.name, recommended: this.engine.gpu.quality },
     };
   }
 
@@ -709,7 +712,7 @@ export class Game {
     this.engine.input.invertY = s.controls.invertY;
     if (s.graphics.quality !== prev.graphics.quality) this.world.setQuality(s.graphics.quality);
     if (s.graphics.pixelRatioCap !== prev.graphics.pixelRatioCap) this.engine.setPixelRatioCap(s.graphics.pixelRatioCap);
-    this.engine.renderer.shadowMap.enabled = s.graphics.shadows;
+    if (s.graphics.shadows !== prev.graphics.shadows) this.world.setShadows(s.graphics.shadows);
     this.audio.setVolumes(s.audio);
     if (JSON.stringify(s.ai) !== JSON.stringify(prev.ai)) { this.brainKit.setSettings(s.ai); void this.brainKit.connect(); }
     (this.vote as unknown as { voteSeconds: number }).voteSeconds = s.live.voteSeconds;

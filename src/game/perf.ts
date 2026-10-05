@@ -1,4 +1,5 @@
-// Автоматично качество: ако кадрите са малко дълго време, светът минава на по-леко качество (веднъж надолу на стъпка).
+// Автоматично качество: ако кадрите са малко дълго време, светът минава на по-леко качество (по една стъпка надолу).
+// (ИИ на същата видеокарта временно сваля кадрите — затова праговете са ниски и се чака няколко секунди.)
 import type { Game } from './Game';
 
 const ORDER = ['high', 'medium', 'low'] as const;
@@ -12,11 +13,13 @@ export class AutoQuality {
     this.cooldown -= dt;
     if (this.cooldown > 0) return;
     const fps = g.engine.fps;
-    this.low = fps < 28 ? this.low + dt : Math.max(0, this.low - dt * 0.5);
-    if (this.low < 6) return;
+    const q = g.settings.graphics.quality;
+    // „Високо“ е за ≥ 60 кадъра: под ~34 за 8 s → „Средно“; от „Средно“ надолу — под ~28 за 6 s
+    const limit = q === 'high' ? 34 : 28, hold = q === 'high' ? 8 : 6;
+    this.low = fps < limit ? this.low + dt : Math.max(0, this.low - dt * 0.5);
+    if (this.low < hold) return;
     this.low = 0;
     this.cooldown = 25;
-    const q = g.settings.graphics.quality;
     const i = ORDER.indexOf(q);
     if (i < 0 || i >= ORDER.length - 1) return;
     const next = ORDER[i + 1];

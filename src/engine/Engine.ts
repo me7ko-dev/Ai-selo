@@ -53,6 +53,8 @@ export class Engine {
     this.post = new PostFX(this.renderer, this.scene, this.camera);
     window.addEventListener('resize', () => this.resize());
     this.resize();
+    // за роботите със снимки (?shot=…): достъп до three (напр. пробни PBR тела)
+    if (typeof location !== 'undefined' && /[?&]shot=/.test(location.search)) (window as unknown as { __THREE: typeof THREE }).__THREE = THREE;
   }
 
   setPixelRatioCap(cap: number): void {
