@@ -4,7 +4,8 @@
 // ивицата на смяната се рисуват едновременно и шейдърът ги допълва с решетка (виж materials.ts).
 import * as THREE from 'three';
 
-export interface LodPart { geo: THREE.BufferGeometry; mat: THREE.Material; depth?: THREE.Material; castShadow: boolean }
+/** Част от модела: геометрия + материал; depth — за сенките; pre — проход само за дълбочина преди всичко (листата). */
+export interface LodPart { geo: THREE.BufferGeometry; mat: THREE.Material; depth?: THREE.Material; pre?: THREE.Material; castShadow: boolean }
 export interface LodVariant { lods: LodPart[][]; height: number; radius: number }
 export interface LodInstance { x: number; y: number; z: number; s: number; rot: number; v: number; r: number; g: number; b: number }
 
@@ -41,7 +42,7 @@ export class LodField {
   /** до това разстояние се рисуват всички (и зад камерата) — за сенките */
   keepNear = 22;
   /** по-далеч от това нивата без пълен детайл не хвърлят сянка (картата на сенките е около героя) */
-  shadowDist = 75;
+  shadowDist = 55;
   enabled = true;
 
   /** windows — готовите Vector4 на нивата (същите, които са дадени на материалите); стойностите се попълват тук. */
@@ -87,17 +88,23 @@ export class LodField {
     const cap = Math.max(1, this.count[v]);
     const mat = new THREE.InstancedBufferAttribute(new Float32Array(cap * 16), 16); mat.setUsage(THREE.DynamicDrawUsage);
     const col = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3); col.setUsage(THREE.DynamicDrawUsage);
-    const meshes = parts.map((pt, k) => {
-      const im = new THREE.InstancedMesh(pt.geo, pt.mat, cap);
+    const meshes: THREE.InstancedMesh[] = [];
+    const mk = (geo: THREE.BufferGeometry, m: THREE.Material, name: string, order: number) => {
+      const im = new THREE.InstancedMesh(geo, m, cap);
       im.instanceMatrix = mat; im.instanceColor = col;
       im.count = 0; im.frustumCulled = false; im.visible = false;
-      im.castShadow = shadow && pt.castShadow; im.receiveShadow = true;
-      if (pt.depth) im.customDepthMaterial = pt.depth;
-      im.name = `${this.name}_v${v}_l${l}_${k}${tag}`;
-      // по-далечните нива се рисуват след близките (близките закриват — по-малко работа)
-      im.renderOrder = l;
-      this.group.add(im);
+      im.name = name; im.renderOrder = order;
+      meshes.push(im); this.group.add(im);
       return im;
+    };
+    parts.forEach((pt, k) => {
+      const im = mk(pt.geo, pt.mat, `${this.name}_v${v}_l${l}_${k}${tag}`, l);
+      im.castShadow = shadow && pt.castShadow;
+      // далечните (извън картата на сенките) не четат сенки — по-евтино
+      im.receiveShadow = tag !== 'f';
+      if (pt.depth) im.customDepthMaterial = pt.depth;
+      // проходът само за дълбочина — преди всичко останало
+      if (pt.pre) { const p = mk(pt.geo, pt.pre, `${this.name}_v${v}_l${l}_${k}${tag}p`, -10 + l); p.castShadow = false; p.receiveShadow = false; }
     });
     return { meshes, mat, col, n: 0 };
   }
@@ -118,7 +125,7 @@ export class LodField {
     this.windows.push(window);
     partsPerVariant.forEach((parts, v) => this.variants[v].lods.push(parts));
     this.makeLevel(l, partsPerVariant);
-    for (const row of this.levels) for (const m of row[l].near.meshes) m.receiveShadow = receiveShadow;
+    for (const row of this.levels) for (const m of row[l].near.meshes) m.receiveShadow = receiveShadow && !m.name.endsWith('p');
     this.lastKey = '';
   }
 
@@ -192,7 +199,7 @@ export class LodField {
 
   /** Сенки на ниво (напр. „средното“ ниво без сенки при по-ниско качество). */
   setShadows(lod: number, on: boolean): void {
-    for (const row of this.levels) { const lv = row[lod]; if (!lv) continue; for (const m of lv.near.meshes) m.castShadow = on; }
+    for (const row of this.levels) { const lv = row[lod]; if (!lv) continue; for (const m of lv.near.meshes) if (!m.name.endsWith('p')) m.castShadow = on; }
   }
 
   /** Броят нарисувани екземпляри по нива (за доклада). */

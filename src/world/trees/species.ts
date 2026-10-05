@@ -74,7 +74,7 @@ export function conifer(o: ConiferOpts): TreeModel {
 
     // --- сухи чепове под короната (само отблизо)
     if (lod === 0 && cb > 3) {
-      for (let y = 2.2; y < cb - 0.3; y += rnd.range(0.35, 0.8)) {
+      for (let y = 2.2; y < cb - 0.3; y += rnd.range(0.5, 1.0)) {
         const az = rnd.next() * 6.283, len = rnd.range(0.25, 0.9) * Math.min(1, y / cb + 0.3);
         const a = trunkAt(y), r = radAt(y);
         const d = dirOf(az, rnd.range(-0.5, -0.1));
@@ -109,9 +109,9 @@ export function conifer(o: ConiferOpts): TreeModel {
           q.y += len * f * Math.sin(pitch) - sag * len * f * f + tipUp * len * f * f * f * f;
           return q;
         };
-        const aoIn = 0.32 + 0.25 * hRel, aoOut = 0.95;
+        const aoIn = 0.42 + 0.22 * hRel, aoOut = 0.97;
         // клонът се вижда само долу в короната (горе го скриват иглите)
-        if (lod === 0 && hRel < 0.55 && len > 1.2) {
+        if (lod === 0 && hRel < 0.4 && len > 1.6) {
           const br = 0.012 + 0.018 * Math.min(1, len / 3);
           tube(bark, [0, 0.5, 1].map((f) => ({ p: p(f), r: br * (1 - f * 0.85), ao: aoIn + (aoOut - aoIn) * f * 0.7, sway: f })), 3, 1, 0.6);
         }
@@ -168,6 +168,8 @@ export interface BroadleafOpts {
   twigs: number; twigLen: number;
   /** размер на картите с листа */
   leafSize: number; leafDensity: number;
+  /** водач (продължението на ствола в короната) — част от limbLen; 0 = няма */
+  leader?: number;
   name: string;
 }
 
@@ -189,18 +191,38 @@ export function broadleaf(o: BroadleafOpts): TreeModel {
     }
     tube(bark, trunk, lod === 0 ? 12 : 6, 2, 1.3, 0, lod === 0 ? (i, a) => (i < 2 ? 1 + 0.25 * Math.max(0, Math.sin(a * 4 + o.seed)) * (1 - i / 2) : 1) : undefined);
     const top = trunk[trunk.length - 1].p;
-    const crownC = new THREE.Vector3(top.x, o.forkH + o.limbLen * Math.cos(o.limbAngle) * 0.55, top.z);
+    const leaderLen = o.limbLen * (o.leader ?? 0);
+    const crownC = new THREE.Vector3(top.x, o.forkH + Math.max(leaderLen * 0.55, o.limbLen * Math.cos(o.limbAngle) * 0.55), top.z);
     const leafCards: { p: THREE.Vector3; d: THREE.Vector3; size: number }[] = [];
+    // водачът — стволът продължава нагоре в короната (дъб); главните клони излизат по него на различна височина
+    const leadPts: TubePt[] = [];
+    if (leaderLen > 0) {
+      const nl = lod === 0 ? 5 : 2;
+      for (let i = 0; i <= nl; i++) {
+        const f = i / nl;
+        leadPts.push({ p: new THREE.Vector3(top.x + Math.sin(f * 2.3 + o.seed) * 0.25, o.forkH + leaderLen * f, top.z + Math.cos(f * 1.9 + o.seed) * 0.25), r: o.trunkR * 0.7 * (1 - 0.8 * f), ao: 0.6 + 0.3 * f, sway: f * 0.4 });
+      }
+      tube(bark, [{ p: top, r: o.trunkR * 0.7 }, ...leadPts.slice(1)], lod === 0 ? 8 : 4, 1, 1.0);
+      const lt = leadPts[leadPts.length - 1].p;
+      for (let k = 0; k < (lod === 0 ? 4 : 2); k++) leafCards.push({ p: lt.clone().add(new THREE.Vector3(rnd.jit(0.8), rnd.jit(0.4), rnd.jit(0.8))), d: new THREE.Vector3(rnd.jit(0.7), 1, rnd.jit(0.7)).normalize(), size: o.leafSize * (lod === 0 ? 1.1 : 1.8) });
+    }
+    const leadAt = (f: number) => {
+      if (!leadPts.length) return top.clone();
+      const x = f * (leadPts.length - 1), i = Math.min(leadPts.length - 2, Math.floor(x));
+      return leadPts[i].p.clone().lerp(leadPts[i + 1].p, x - i);
+    };
     // главни клони
     const off = rnd.next() * 6.283;
     for (let l = 0; l < o.limbs; l++) {
-      const az = off + (l / o.limbs) * 6.283 + rnd.jit(0.4);
-      const ang = o.limbAngle * rnd.range(0.75, 1.2);
-      const len = o.limbLen * rnd.range(0.8, 1.15);
-      const r0 = o.trunkR * 0.62 * rnd.range(0.8, 1.05);
+      const az = off + (l / o.limbs) * 6.283 * 1.0 + rnd.jit(0.4);
+      // по-високите клони са по-къси и по-изправени → кръгла корона
+      const hf = leaderLen > 0 ? (l / Math.max(1, o.limbs - 1)) * 0.65 : 0;
+      const ang = o.limbAngle * rnd.range(0.8, 1.15) * (1 - hf * 0.35);
+      const len = o.limbLen * rnd.range(0.85, 1.12) * (1 - hf * 0.45);
+      const r0 = o.trunkR * 0.6 * rnd.range(0.8, 1.05) * (1 - hf * 0.4);
       const pts: TubePt[] = [];
       const nseg = lod === 0 ? 6 : 3;
-      let p = top.clone(), d = dirOf(az, Math.PI / 2 - ang);
+      let p = leadAt(hf), d = dirOf(az, Math.PI / 2 - ang);
       for (let i = 0; i <= nseg; i++) {
         const f = i / nseg;
         pts.push({ p: p.clone(), r: r0 * (1 - 0.75 * f), ao: 0.55 + 0.4 * f, sway: f * 0.5 });
@@ -216,8 +238,9 @@ export function broadleaf(o: BroadleafOpts): TreeModel {
         const ip = Math.min(pts.length - 2, Math.floor(f * (pts.length - 1)));
         const pa = pts[ip].p.clone().lerp(pts[ip + 1].p, f * (pts.length - 1) - ip);
         const pd = pts[ip + 1].p.clone().sub(pts[ip].p).normalize();
-        const taz = rnd.next() * 6.283;
-        const td = pd.clone().multiplyScalar(0.55).add(dirOf(taz, rnd.range(-0.3, 0.5))).normalize();
+        // клонката расте навън от короната и нагоре
+        const outw = pa.clone().sub(crownC).setY(0).normalize();
+        const td = pd.clone().multiplyScalar(0.45).addScaledVector(outw, 0.5).add(new THREE.Vector3(rnd.jit(0.5), rnd.range(0.05, 0.6), rnd.jit(0.5))).normalize();
         const tl = o.twigLen * rnd.range(0.7, 1.2) * (1.15 - f * 0.4);
         const tr = r0 * 0.35 * (1 - f * 0.5);
         const tq = [pa, pa.clone().addScaledVector(td, tl * 0.5).add(new THREE.Vector3(0, tl * 0.06, 0)), pa.clone().addScaledVector(td, tl).add(new THREE.Vector3(0, -tl * 0.05, 0))];
@@ -243,7 +266,7 @@ export function broadleaf(o: BroadleafOpts): TreeModel {
     for (const c of leafCards) maxD = Math.max(maxD, c.p.distanceTo(crownC));
     for (const c of leafCards) {
       const dd = c.p.distanceTo(crownC) / maxD;
-      const ao = 0.38 + 0.62 * Math.min(1, dd * 1.1) * (0.8 + 0.2 * Math.min(1, (c.p.y - o.forkH) / (o.limbLen + 0.1)));
+      const ao = 0.45 + 0.55 * Math.min(1, dd * 1.1) * (0.8 + 0.2 * Math.min(1, (c.p.y - o.forkH) / (o.limbLen + 0.1)));
       const sw = 0.6 + 0.4 * dd;
       card(lv, c.p.clone().addScaledVector(c.d, -c.size * 0.3), c.d, sideOf(c.d, rnd.jit(1.2)), c.size * 0.95, c.size, u0, u1, crownC, 0.7, ao, sw, 1, 0.05, 1);
       if (lod === 1) {
@@ -353,13 +376,13 @@ export function buildTreeSet(): TreeSet {
       conifer({ seed: 67, height: 16, kind: 'fir', crownBase: 0.12, width: 0.22 }),
     ],
     oaks: [
-      broadleaf({ seed: 101, name: 'oak_a', leaf: 'oak', forkH: 2.8, trunkR: 0.34, limbs: 4, limbLen: 5.2, limbAngle: 0.75, twigs: 7, twigLen: 2.4, leafSize: 1.75, leafDensity: 5 }),
-      broadleaf({ seed: 131, name: 'oak_b', leaf: 'oak', forkH: 3.4, trunkR: 0.32, limbs: 4, limbLen: 5.8, limbAngle: 0.62, twigs: 7, twigLen: 2.2, leafSize: 1.7, leafDensity: 5 }),
+      broadleaf({ seed: 101, name: 'oak_a', leaf: 'oak', forkH: 2.6, trunkR: 0.34, limbs: 6, limbLen: 5.0, limbAngle: 0.95, twigs: 6, twigLen: 2.3, leafSize: 1.75, leafDensity: 4, leader: 1.15 }),
+      broadleaf({ seed: 131, name: 'oak_b', leaf: 'oak', forkH: 3.0, trunkR: 0.32, limbs: 5, limbLen: 5.2, limbAngle: 0.8, twigs: 6, twigLen: 2.2, leafSize: 1.7, leafDensity: 4, leader: 1.3 }),
     ],
     fruit: [
-      broadleaf({ seed: 211, name: 'fruit', leaf: 'ash', forkH: 1.5, trunkR: 0.17, limbs: 4, limbLen: 3.0, limbAngle: 0.85, twigs: 5, twigLen: 1.5, leafSize: 1.3, leafDensity: 5 }),
+      broadleaf({ seed: 211, name: 'fruit', leaf: 'ash', forkH: 1.5, trunkR: 0.17, limbs: 5, limbLen: 3.0, limbAngle: 0.9, twigs: 5, twigLen: 1.5, leafSize: 1.3, leafDensity: 4, leader: 0.7 }),
     ],
-    walnut: broadleaf({ seed: 307, name: 'walnut', leaf: 'ash', forkH: 3.4, trunkR: 0.85, limbs: 6, limbLen: 7.0, limbAngle: 0.95, twigs: 10, twigLen: 3.0, leafSize: 2.1, leafDensity: 6 }),
+    walnut: broadleaf({ seed: 307, name: 'walnut', leaf: 'ash', forkH: 3.4, trunkR: 0.85, limbs: 7, limbLen: 7.0, limbAngle: 1.0, twigs: 9, twigLen: 3.0, leafSize: 2.1, leafDensity: 5, leader: 0.75 }),
     dead: [deadTree(401, 6.5), deadTree(409, 5.2)],
     bushes: [bush(501, 'ash'), bush(509, 'oak')],
   };

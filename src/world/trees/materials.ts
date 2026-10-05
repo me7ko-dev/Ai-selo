@@ -98,7 +98,8 @@ function uniformsFor(u: VegUniforms, o: VegMatOpts): Record<string, { value: unk
 
 function inject(sh: THREE.WebGLProgramParametersWithUniforms, uniforms: Record<string, { value: unknown }>, defs: string, leaf: boolean, depth: boolean): void {
   Object.assign(sh.uniforms, uniforms);
-  sh.vertexShader = defs + VERT_PARS + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n' + VERT_MAIN);
+  // invariant: предварителният проход (само дълбочина) и основният дават точно една и съща дълбочина
+  sh.vertexShader = 'invariant gl_Position;\n' + defs + VERT_PARS + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n' + VERT_MAIN);
   let fs = FRAG_PARS + sh.fragmentShader.replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n' + FRAG_DISCARD);
   if (!depth && leaf) {
     // нормалите на листата са „закръглени“ навън от короната — не ги обръщаме за задната страна
@@ -123,9 +124,12 @@ export function barkMaterial(u: VegUniforms, o: VegMatOpts, params: THREE.MeshSt
   return mat;
 }
 
-/** Листа / иглички: alpha-test карти, двустранни. */
-export function leafMaterial(u: VegUniforms, o: VegMatOpts, params: THREE.MeshStandardMaterialParameters): THREE.MeshStandardMaterial {
-  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, alphaTest: 0.42, alphaToCoverage: true, roughness: 0.82, metalness: 0, ...params });
+/**
+ * Листа / иглички: alpha-test карти, двустранни. prepass — има отделен проход само за дълбочина (prepassMaterial),
+ * затова тук не пишем дълбочина: всеки пиксел на короната се осветява веднъж, а не по веднъж за всеки слой листа.
+ */
+export function leafMaterial(u: VegUniforms, o: VegMatOpts, params: THREE.MeshStandardMaterialParameters, prepass = false): THREE.MeshStandardMaterial {
+  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, alphaTest: 0.42, alphaToCoverage: true, roughness: 0.82, metalness: 0, depthWrite: !prepass, ...params });
   const uni = uniformsFor(u, o);
   const defs = o.camFade !== false ? '#define VEG_CAMFADE\n' : '';
   mat.onBeforeCompile = (sh) => inject(sh, uni, defs, true, false);
@@ -134,12 +138,29 @@ export function leafMaterial(u: VegUniforms, o: VegMatOpts, params: THREE.MeshSt
   return mat;
 }
 
-/** Дълбочинен материал за сенките със същия вятър и LOD (map/alphaTest ги слага three от основния материал). */
-export function depthMaterial(u: VegUniforms, o: VegMatOpts): THREE.MeshDepthMaterial {
+/**
+ * Дълбочинен материал за сенките със същия вятър и LOD (map/alphaTest ги слага three от основния материал).
+ * solid — без alpha-test (картите хвърлят плътна сянка): за средното ниво — много по-евтино, а в гъстата гора
+ * сянката на короната е почти плътна така или иначе.
+ */
+export function depthMaterial(u: VegUniforms, o: VegMatOpts, solid = false): THREE.MeshDepthMaterial {
   const mat = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
   const uni = uniformsFor(u, o);
-  mat.onBeforeCompile = (sh) => inject(sh, uni, '', false, true);
-  mat.customProgramCacheKey = () => 'vegDepth';
+  mat.onBeforeCompile = (sh) => {
+    inject(sh, uni, '', false, true);
+    if (solid) sh.fragmentShader = sh.fragmentShader.replace('#include <alphatest_fragment>', '').replace('#include <map_fragment>', '').replace('#include <alphamap_fragment>', '');
+  };
+  mat.customProgramCacheKey = () => 'vegDepth' + (solid ? 's' : '');
+  return mat;
+}
+
+/** Предварителен проход за листата: само дълбочина (без цвят), със същия вятър, LOD и разтваряне като основния. */
+export function prepassMaterial(u: VegUniforms, o: VegMatOpts, leaf: THREE.MeshStandardMaterial): THREE.MeshDepthMaterial {
+  const mat = new THREE.MeshDepthMaterial({ map: leaf.map, alphaMap: leaf.alphaMap, alphaTest: 0.5, side: THREE.DoubleSide, colorWrite: false });
+  const uni = uniformsFor(u, o);
+  const defs = o.camFade !== false ? '#define VEG_CAMFADE\n' : '';
+  mat.onBeforeCompile = (sh) => inject(sh, uni, defs, false, true);
+  mat.customProgramCacheKey = () => 'vegPre' + defs;
   return mat;
 }
 

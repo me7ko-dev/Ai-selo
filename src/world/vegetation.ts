@@ -9,7 +9,7 @@ import { forestMask } from './plan';
 import { VILLAGE_CENTER } from '../data/layout';
 import { loadTex, pbr } from './tex';
 import { buildTreeSet, type TreeModel } from './trees/species';
-import { barkMaterial, leafMaterial, depthMaterial, type VegUniforms, type VegMatOpts } from './trees/materials';
+import { barkMaterial, leafMaterial, depthMaterial, prepassMaterial, type VegUniforms, type VegMatOpts } from './trees/materials';
 import { LodField, type LodInstance, type LodVariant, type LodPart } from './trees/lod';
 import { bakeImpostors, impostorGeometry, impostorMaterial } from './trees/impostor';
 import { rockGeometry, logGeometry, addTriplanar } from './trees/rocks';
@@ -29,7 +29,7 @@ export function treeFadeUniforms(): TreeFadeUniforms {
 // ---------------------------------------------------------------- граници на нивата по качество (м)
 interface QSet { tree: number[]; treeFar: number; bush: number[]; rock: number[]; midShadow: boolean }
 const Q: Record<VegQuality, QSet> = {
-  high: { tree: [38, 115], treeFar: 520, bush: [30, 170], rock: [36, 260], midShadow: true },
+  high: { tree: [28, 85], treeFar: 520, bush: [26, 170], rock: [32, 260], midShadow: true },
   medium: { tree: [26, 80], treeFar: 420, bush: [20, 120], rock: [24, 190], midShadow: false },
   low: { tree: [12, 48], treeFar: 300, bush: [12, 70], rock: [14, 110], midShadow: false },
 };
@@ -44,7 +44,7 @@ function baseY(t: TreeInst, sink: number, steepK: number): number {
   return heightAt(t.x, t.z) - sink * t.s - steep * steepK * t.s;
 }
 
-interface TreeMats { bark: THREE.MeshStandardMaterial; leaf: THREE.MeshStandardMaterial | null; bd: THREE.Material; ld: THREE.Material | null }
+interface TreeMats { bark: THREE.MeshStandardMaterial; leaf: THREE.MeshStandardMaterial | null; bd: THREE.Material; ld: THREE.Material | null; pre: THREE.Material | null }
 interface Simple { meshes: THREE.InstancedMesh[]; maxDist: number; win: THREE.Vector4 }
 
 export class Vegetation {
@@ -80,12 +80,13 @@ export class Vegetation {
 
   // ================================================================ строене
   /** Материалите на един модел за всяко ниво (прозорците wins са общи за полето). */
-  private treeMats(wins: THREE.Vector4[], model: TreeModel, barkP: THREE.MeshStandardMaterialParameters, bend: number, camFade = true): TreeMats[] {
-    return wins.map((w) => {
+  private treeMats(wins: THREE.Vector4[], model: TreeModel, barkP: THREE.MeshStandardMaterialParameters, bend: number, camFade = true, prepass = true): TreeMats[] {
+    return wins.map((w, l) => {
       const o: VegMatOpts = { lod: w, crownR: Math.max(2.2, model.radius * 0.6), top: model.height, bend, camFade };
       const bark = barkMaterial(this.u, o, { ...barkP });
-      const leaf = model.leaf ? leafMaterial(this.u, o, { map: this.leafTex[model.leaf], color: this.leafCol[model.leaf] }) : null;
-      return { bark, leaf, bd: depthMaterial(this.u, o), ld: model.leaf ? depthMaterial(this.u, o) : null };
+      const leaf = model.leaf ? leafMaterial(this.u, o, { map: this.leafTex[model.leaf], color: this.leafCol[model.leaf] }, prepass) : null;
+      // сенките на средното ниво — плътни карти (без alpha-test)
+      return { bark, leaf, bd: depthMaterial(this.u, o), ld: model.leaf ? depthMaterial(this.u, o, l > 0) : null, pre: leaf && prepass ? prepassMaterial(this.u, o, leaf) : null };
     });
   }
 
@@ -94,7 +95,7 @@ export class Vegetation {
       height: model.height, radius: model.radius,
       lods: model.lods.map((l, i) => {
         const parts: LodPart[] = [{ geo: l.bark, mat: mats[i].bark, depth: mats[i].bd, castShadow: shadow[i] }];
-        if (l.leaves && mats[i].leaf) parts.push({ geo: l.leaves, mat: mats[i].leaf!, depth: mats[i].ld!, castShadow: shadow[i] });
+        if (l.leaves && mats[i].leaf) parts.push({ geo: l.leaves, mat: mats[i].leaf!, depth: mats[i].ld!, pre: mats[i].pre ?? undefined, castShadow: shadow[i] });
         return parts;
       }),
     };
@@ -112,8 +113,14 @@ export class Vegetation {
     const u = this.u, q = Q.high;
     const set = buildTreeSet();
     // --- текстури
-    const coniferBark = pbr('pine_bark');
-    const broadBark = pbr('bark_brown_02');
+    // кора: цвят + нормали + грапавост (зеленият канал на arm); без aoMap/metalnessMap — оклузията е във върховете,
+    // а металът е 0 (две четения на текстура по-малко на всеки пиксел)
+    const barkOf = (id: string): THREE.MeshStandardMaterialParameters => {
+      const p = pbr(id);
+      return { map: p.map, normalMap: p.normalMap, roughnessMap: p.roughnessMap, roughness: 1, metalness: 0 };
+    };
+    const coniferBark = barkOf('pine_bark');
+    const broadBark = barkOf('bark_brown_02');
     const spruceTex = loadTex('trees/spruce_spray.png', { srgb: true });
     const oakTex = loadTex('trees/oak_cluster.png', { srgb: true });
     const ashTex = loadTex('trees/ash_cluster.png', { srgb: true });
@@ -128,7 +135,7 @@ export class Vegetation {
     this.leafCol = { spruce: new THREE.Color(0.5, 0.6, 0.55), fir: new THREE.Color(0.42, 0.53, 0.52), oak: new THREE.Color(0.85, 0.92, 0.78), ash: new THREE.Color(0.88, 0.95, 0.8) };
 
     // ================= иглолистна гора (смърч, ела) — кората е сиво-кафява (текстурата на бора е по-червена)
-    const coniferBarkP: THREE.MeshStandardMaterialParameters = { ...coniferBark, color: new THREE.Color(0.58, 0.55, 0.55) };
+    const coniferBarkP: THREE.MeshStandardMaterialParameters = { ...coniferBark, color: new THREE.Color(0.5, 0.47, 0.48) };
     const firBarkP: THREE.MeshStandardMaterialParameters = { ...coniferBark, color: new THREE.Color(0.66, 0.66, 0.68) };
     const coniferInsts: LodInstance[] = plan.pines.map((t) => {
       const hsh = h01(t.x, t.z);
@@ -155,7 +162,7 @@ export class Vegetation {
     const wp = plan.props.find((p) => p.type === 'walnut');
     if (wp) {
       const m = set.walnut;
-      const mats = this.treeMats([new THREE.Vector4(-2, -1, 1e5, 1e5 + 1)], m, broadBarkP, 0.15)[0];
+      const mats = this.treeMats([new THREE.Vector4(-2, -1, 1e5, 1e5 + 1)], m, broadBarkP, 0.15, true, false)[0];
       const mtx = new THREE.Matrix4().compose(new THREE.Vector3(wp.x, heightAt(wp.x, wp.z) - 0.15, wp.z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), wp.rot), new THREE.Vector3(1, 1, 1));
       const parts: [THREE.BufferGeometry, THREE.Material, THREE.Material][] = [[m.lods[0].bark, mats.bark, mats.bd]];
       if (m.lods[0].leaves && mats.leaf) parts.push([m.lods[0].leaves, mats.leaf, mats.ld!]);
