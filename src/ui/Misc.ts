@@ -30,6 +30,9 @@ export class DeathScreen {
   private respawn(): void { this.hide(); this.onRespawn(); }
 }
 
+type BannerKind = 'gold' | 'red' | 'quest';
+interface BannerItem { title: string; subtitle: string; ms: number; kind: BannerKind; key?: string }
+
 /** Голямо съобщение в средата с шевици: „Ламята е победена! Бистрица тече отново!“ */
 export class Banner {
   readonly el: HTMLElement;
@@ -43,25 +46,36 @@ export class Banner {
   }
 
   /** Чакащи надписи: победа + ново ниво идват в един кадър — вторият се показва след първия, вместо да го смени. */
-  private queue: [string, string, number, 'gold' | 'red' | 'quest'][] = [];
+  private queue: BannerItem[] = [];
+  private cur: BannerItem | null = null;
 
-  /** kind: 'gold' (победа/задача) | 'red' (опасност) | 'quest' (нова задача). */
-  show(title: string, subtitle = '', ms = 4500, kind: 'gold' | 'red' | 'quest' = 'gold'): void {
-    if (this.isOpen && this.timer !== null) {
-      if (this.queue.length < 4 && !this.queue.some((q) => q[0] === title && q[1] === subtitle)) this.queue.push([title, subtitle, ms, kind]);
+  /**
+   * kind: 'gold' (победа/задача) | 'red' (опасност) | 'quest' (нова задача).
+   * opt.key — чакащ надпис със същия ключ се заменя (няколко нови нива наведнъж → само последното);
+   * opt.urgent — показва се веднага, а текущият изчаква след него.
+   */
+  show(title: string, subtitle = '', ms = 4500, kind: BannerKind = 'gold', opt: { key?: string; urgent?: boolean } = {}): void {
+    const item: BannerItem = { title, subtitle, ms, kind, key: opt.key };
+    if (this.isOpen && this.timer !== null && this.cur) {
+      if (opt.urgent) { this.queue.unshift(this.cur); this.display(item); return; }
+      if (item.key && this.cur.key === item.key) { this.display(item); return; }
+      const same = this.queue.findIndex((q) => (item.key && q.key === item.key) || (q.title === title && q.subtitle === subtitle));
+      if (same >= 0) this.queue[same] = item;
+      else if (this.queue.length < 4) this.queue.push(item);
       return;
     }
-    this.display(title, subtitle, ms, kind);
+    this.display(item);
   }
-  private display(title: string, subtitle: string, ms: number, kind: 'gold' | 'red' | 'quest'): void {
-    this.t.innerHTML = `${rosetteHtml('0.7em')}<span>${esc(title)}</span>${rosetteHtml('0.7em')}`;
-    setText(this.s, subtitle);
-    this.s.classList.toggle('hidden', !subtitle);
-    this.el.className = `banner k-${kind}`;
+  private display(it: BannerItem): void {
+    this.cur = it;
+    this.t.innerHTML = `${rosetteHtml('0.7em')}<span>${esc(it.title)}</span>${rosetteHtml('0.7em')}`;
+    setText(this.s, it.subtitle);
+    this.s.classList.toggle('hidden', !it.subtitle);
+    this.el.className = `banner k-${it.kind}`;
     void this.el.offsetWidth; this.el.classList.add('go');
     this.isOpen = true;
     if (this.timer !== null) clearTimeout(this.timer);
-    this.timer = ms > 0 ? window.setTimeout(() => this.close(true), ms) : null;
+    this.timer = it.ms > 0 ? window.setTimeout(() => this.close(true), it.ms) : null;
   }
   /** Скрива надписа (и забравя чакащите). */
   hide(): void { this.queue = []; this.close(false); }
@@ -74,7 +88,7 @@ export class Banner {
       if (this.isOpen) return;
       this.el.classList.add('hidden');
       const q = next ? this.queue.shift() : undefined;
-      if (q) this.display(...q);
+      if (q) this.display(q);
     }, 450);
   }
 }

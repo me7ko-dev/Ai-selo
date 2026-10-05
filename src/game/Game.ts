@@ -244,9 +244,9 @@ export class Game {
     rpg.bus.on('notify', (e) => this.toast(e.text, e.kind));
     rpg.bus.on('sfx', (e) => this.sfx(e.name));
     rpg.bus.on('damage', (e) => { if (e.target === 'hero' && !e.blocked) this.ui.hud.flashDamage(); });
-    rpg.bus.on('levelup', (e) => { this.ui.banner.show(`Ниво ${e.level}`, e.title); this.sfx('levelup'); });
+    rpg.bus.on('levelup', (e) => { this.ui.banner.show(`Ниво ${e.level}`, e.title, 4500, 'gold', { key: 'level' }); this.sfx('levelup'); });
     rpg.bus.on('questDone', (e) => { this.ui.banner.show('Задачата е изпълнена', e.title); this.sfx('quest'); });
-    rpg.bus.on('lamiaDefeated', () => { this.ui.banner.show('Ламята е победена!', 'Бистрица тече отново. Тази вечер селото вдига сбор.'); this.sfx('victory'); });
+    rpg.bus.on('lamiaDefeated', () => { this.ui.banner.show('Ламята е победена!', 'Бистрица тече отново. Тази вечер селото вдига сбор.', 6000, 'gold', { urgent: true }); this.sfx('victory'); });
     // мишката се пуска, за да може да се натисне „Събуди се в хана“ (при заключена мишка кликът отива в платното)
     rpg.bus.on('died', () => {
       this.sfx('death');
