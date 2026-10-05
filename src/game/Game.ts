@@ -178,6 +178,8 @@ export class Game {
     const sim = new VillageSim({ seed });
     this.timeline = Timeline.create();
     this.attachSim(sim);
+    // селото вече е будно, когато странникът пристига (иначе в 06:30 всички още спят вкъщи)
+    for (let i = 0; i < 6; i++) sim.advance(10);
     this.rpg.dispose();
     this.rpg = this.makeRpg();
     const st = PLACES.start;
