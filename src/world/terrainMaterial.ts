@@ -97,6 +97,8 @@ const FRAG_PARS = /* glsl */`
 #define ROAD_DMAX ${ROAD_DMAX.toFixed(1)}
 #define RIVER_DMAX ${RIVER_DMAX.toFixed(1)}
 #define RIVER_HW ${RIVER_HALF_WIDTH.toFixed(1)}
+// обичайният цвят на ливадата (линеен) — спрямо него се оцветяват другите слоеве
+#define MEADOW_REF vec3(0.10, 0.15, 0.035)
 uniform sampler2DArray tAlb;
 uniform sampler2DArray tNrm;
 uniform sampler2D tRegion;
@@ -247,10 +249,12 @@ const FRAG_MAIN = /* glsl */`
   float tFar = smoothstep(uGrassFar * 0.5, uGrassFar, tDist);
   vec3 tRec = tMac.rgb / max(uLAvg[0], vec3(0.01));
   float tUnder = mix(1.0, 0.62, tMac.a * (1.0 - tFar));
-  vec3 tOther = vec3(0.88 + 0.24 * tNz.g);
-  vec3 c1 = A1.rgb * (t1.y < 0.5 ? mix(mix(vec3(1.0), tRec, 0.5), tRec * 0.86, tFar) * tUnder : tOther);
-  vec3 c2 = A2.rgb * (t2.y < 0.5 ? mix(mix(vec3(1.0), tRec, 0.5), tRec * 0.86, tFar) * tUnder : tOther);
-  vec3 c3 = A3.rgb * (t3.y < 0.5 ? mix(mix(vec3(1.0), tRec, 0.5), tRec * 0.86, tFar) * tUnder : tOther);
+  // другите слоеве: лек шум + малко от оттенъка на мястото (гората е по-тъмна и мъхеста, сухото — по-жълто)
+  vec3 tOther = mix(vec3(1.0), tMac.rgb / MEADOW_REF, 0.22) * (0.88 + 0.24 * tNz.g);
+  vec3 tForest = mix(vec3(1.0), tMac.rgb / max(uLAvg[1], vec3(0.01)), 0.5) * (0.88 + 0.24 * tNz.g);
+  vec3 c1 = A1.rgb * (t1.y < 0.5 ? mix(mix(vec3(1.0), tRec, 0.5), tRec * 0.74, tFar) * tUnder : t1.y < 1.5 ? tForest : tOther);
+  vec3 c2 = A2.rgb * (t2.y < 0.5 ? mix(mix(vec3(1.0), tRec, 0.5), tRec * 0.74, tFar) * tUnder : t2.y < 1.5 ? tForest : tOther);
+  vec3 c3 = A3.rgb * (t3.y < 0.5 ? mix(mix(vec3(1.0), tRec, 0.5), tRec * 0.74, tFar) * tUnder : t3.y < 1.5 ? tForest : tOther);
   vec3 tAlbC = c1 * b1 + c2 * b2 + c3 * b3;
   vec2 tNT = N1.xy * b1 + N2.xy * b2 + N3.xy * b3;
   float tRough = N1.z * b1 + N2.z * b2 + N3.z * b3;

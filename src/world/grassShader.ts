@@ -99,7 +99,8 @@ export const GRASS_MAIN = /* glsl */`
     if (gVis > 0.02) {
       float t = position.y, side = position.x;
       float H = uBlade.x * gGP.g * 2.0 * (0.5 + aB1.z * 0.9) * gVis;
-      float W = uBlade.y * (0.65 + aB1.w * 0.7) * (1.0 + gD * uBlade.z);
+      // ниската трева (село, гора, високо в планината) е и по-тънка
+      float W = uBlade.y * (0.65 + aB1.w * 0.7) * (1.0 + gD * uBlade.z) * clamp(gGP.g * 2.2, 0.55, 1.0);
       // вятър: вълни от пориви, които минават по ливадата, + трептене на всеки стрък
       vec4 nz = texture(tNoise, gRoot * 0.011 - uWindDir * uTime * (0.035 + uWind * 0.05));
       float gust = smoothstep(0.3, 0.9, nz.r * 0.75 + nz.b * 0.4);
@@ -229,10 +230,12 @@ uniform float uWetF;
 /** Добавя се след lights_physical_pars_fragment: просветляването (транслуцентност) на тънките листа срещу светлината. */
 export const GRASS_RE = /* glsl */`
 void RE_Direct_Grass(const in IncidentLight directLight, const in vec3 geometryPosition, const in vec3 geometryNormal, const in vec3 geometryViewDir, const in vec3 geometryClearcoatNormal, const in PhysicalMaterial material, inout ReflectedLight reflectedLight) {
-  // отблясъкът на тревата е мек (восъчен), не като на мокър камък — само част от физическия
-  vec3 spec0 = reflectedLight.directSpecular;
-  RE_Direct_Physical(directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight);
-  reflectedLight.directSpecular = spec0 + (reflectedLight.directSpecular - spec0) * 0.35;
+  // по-евтино от пълния GGX: дифузно (както при PBR) + мек восъчен отблясък + просветляване срещу светлината
+  float dotNL = saturate(dot(geometryNormal, directLight.direction));
+  vec3 irradiance = dotNL * directLight.color;
+  reflectedLight.directDiffuse += irradiance * BRDF_Lambert(material.diffuseColor);
+  vec3 hv = normalize(directLight.direction + geometryViewDir);
+  reflectedLight.directSpecular += irradiance * (pow(saturate(dot(geometryNormal, hv)), 18.0) * 0.05);
   float back = saturate(dot(directLight.direction, -geometryViewDir));
   float through = saturate(-dot(geometryNormal, directLight.direction));
   float sss = (pow(back, 5.0) * 2.4 + through * 0.55) * vGTrans;

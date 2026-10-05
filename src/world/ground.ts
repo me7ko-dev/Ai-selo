@@ -88,7 +88,7 @@ export function paintGround(plan: WorldPlan): GroundData {
   const FF = hex('#3c4c2e'), NEEDLE = hex('#55492f'), ROCK = hex(PAL.rock), ROCKD = hex(PAL.rockDark), SNOWISH = hex('#b9b3a6');
   const SWMP = hex('#4f5a38'), SCORCH = hex('#4a423b'), SAND = hex(PAL.sand), VIL = hex('#86a052');
   // естествените оттенъци (sRGB албедо) за терена и тревата — по-тъмни и по-малко наситени от картата
-  const M1 = hex('#5b7431'), M2 = hex('#4b6528'), MDRY = hex('#8c8748'), MLUSH = hex('#4f7c2b'), MVIL = hex('#66733a');
+  const M1 = hex('#5a6c33'), M2 = hex('#4a5c2b'), MDRY = hex('#878050'), MLUSH = hex('#527033'), MVIL = hex('#646e3e');
   const MFOR = hex('#4d4a30'), MSWAMP = hex('#4b5130'), MROCK = hex('#857f73'), MSCORCH = hex('#3b3531'), MSNOW = hex('#aaa69b');
 
   const heights = new Float32Array((N + 1) * (N + 1));
@@ -126,7 +126,7 @@ export function paintGround(plan: WorldPlan): GroundData {
     const fm = forestMask(x, z);
     if (fm > 0) {
       c = mix(c, mix(FF, NEEDLE, smoothstep(0.4, 0.7, n2)), fm * 0.85); m = mix(m, MFOR, fm * 0.85);
-      forest = fm; g *= 1 - fm * 0.72; gh *= 1 - fm * 0.4; dry += fm * 0.25; fl *= 1 - fm * 0.85;
+      forest = fm; g *= 1 - fm * 0.88; gh *= 1 - fm * 0.3; dry += fm * 0.2; fl *= 1 - fm * 0.85;
     }
     // поляната на самодивите — сочна, висока и цветна
     const dg = Math.hypot(x - GLADE.x, z - GLADE.z), glT = 1 - smoothstep(24, 38, dg);

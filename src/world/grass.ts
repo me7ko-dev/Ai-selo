@@ -189,7 +189,7 @@ export class GrassField {
       uBlade: { value: new THREE.Vector3(0.52, 0.018, 1 / 8) },
       uWet: { value: 0 }, uWetF: { value: 0 },
       uDryCol: { value: new THREE.Color('#a39462') },
-      uTransTint: { value: new THREE.Color(1.15, 1.25, 0.5) },
+      uTransTint: { value: new THREE.Color(0.95, 1.05, 0.45) },
       uCell: { value: CELL }, uFlower: { value: new THREE.Vector2(14, 34) },
       tHeight: { value: heightTex }, tGrass: { value: gt.grassParams }, tMacro: { value: gt.macro }, tLines: { value: gt.lines }, tNoise: { value: gt.noise },
     } as GrassField['uniforms'];
