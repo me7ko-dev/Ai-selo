@@ -30,8 +30,8 @@ export function treeFadeUniforms(): TreeFadeUniforms {
 interface QSet { tree: number[]; treeFar: number; bush: number[]; rock: number[]; midShadow: boolean }
 const Q: Record<VegQuality, QSet> = {
   high: { tree: [28, 85], treeFar: 520, bush: [26, 170], rock: [32, 260], midShadow: true },
-  medium: { tree: [26, 80], treeFar: 420, bush: [20, 120], rock: [24, 190], midShadow: false },
-  low: { tree: [12, 48], treeFar: 300, bush: [12, 70], rock: [14, 110], midShadow: false },
+  medium: { tree: [20, 65], treeFar: 420, bush: [18, 120], rock: [22, 190], midShadow: false },
+  low: { tree: [10, 40], treeFar: 300, bush: [10, 70], rock: [12, 110], midShadow: false },
 };
 const FADE = 6;
 
