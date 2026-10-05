@@ -11,7 +11,7 @@ export const N_GARMENTS = 20;
 
 /** Частите на косата (tools/build-characters.mjs → HAIR_PIECES). */
 export const HAIR = {
-  long: 1, buns: 2, parted: 3, buzzed: 4, buzzedF: 5, beard: 6, mustache: 7, browsM: 8, browsF: 9, kalpak: 10,
+  long: 1, buns: 2, parted: 3, buzzed: 4, buzzedF: 5, beard: 6, mustache: 7, browsM: 8, browsF: 9, kalpak: 10, flowing: 11,
 } as const;
 
 export type BodyKind = 'M' | 'F' | 'H';
@@ -42,6 +42,8 @@ export interface CharSpec {
   tool?: Tool;
   /** Слабо сияние (самодивите). */
   glow?: string;
+  /** Венец от цветя (вариант 0..2). */
+  wreath?: number;
   /** Вариант (за разминаване на анимациите и лицата). */
   seed: number;
 }
@@ -143,7 +145,7 @@ export function samodivaSpec(index: number): CharSpec {
     role: 'samodiva', body: 'F',
     cloth: [G.SHIRT, G.BODICE, G.SASH, G.TRIM],
     folk: [G.DRESS],
-    hair: [HAIR.long, HAIR.browsF],
+    hair: [HAIR.flowing, HAIR.browsF],
     colors: {
       [G.SHIRT]: ['#fbfbff', 1],
       [G.BODICE]: ['#f2f3ff', 1],
@@ -151,7 +153,8 @@ export function samodivaSpec(index: number): CharSpec {
       [G.TRIM]: [trim, 1],
       [G.DRESS]: ['#f6f7ff', 1],
     },
-    hairColors: { [HAIR.long]: hair, [HAIR.browsF]: hair },
+    hairColors: { [HAIR.flowing]: hair, [HAIR.browsF]: mixHex(hair, '#3a2418', 0.25) },
+    wreath: index % 3,
     skin: skinTint(['#f4e4d8', '#f0dccb', '#f6e8de'][index % 3]),
     height: 1.72 + (index % 3) * 0.03, build: 0.95, stoop: 0, old: false, female: true,
     glow: '#a9c4ff', seed: (index * 0.618) % 1,

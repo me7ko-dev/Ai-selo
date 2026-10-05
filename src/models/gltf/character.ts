@@ -7,7 +7,9 @@ import { charAssets, recolorMaterial, type BodyTemplate, type CharAssets } from 
 import { type CharSpec, BODY_HEIGHT, G, HAIR, paletteArray, hexToLinear } from './looks';
 import { chooseClip, locomotionClip, ONE_SHOTS, type AnimContext, type ClipChoice, type Overlay } from './animmap';
 import { buildSaber, buildScabbard, buildBow, buildTool } from '../items';
-import { mergeStatic } from '../shared';
+import { mergeStatic, cachedGeo, mat, part, sphGeo, haloSprite } from '../shared';
+
+const FLOWERS = [['#ffffff', '#f2d64a', '#e86a8a'], ['#f2d64a', '#ffffff', '#7aa0e8'], ['#e86a8a', '#ffffff', '#f2d64a']];
 
 type Weapon = 'saber' | 'ivan_saber' | 'bow' | null;
 
@@ -104,6 +106,7 @@ export class GltfCharacter implements HeroModel {
     this.socketL = this.makeHandSocket('l');
     this.hand = this.socketR;
     this.attachTool();
+    if (spec.wreath !== undefined) this.attachWreath(spec.wreath);
     const extra = spec.hair.includes(HAIR.kalpak) ? 0.1 : spec.folk.includes(G.SCARF) ? 0.03 : 0;
     this.height = spec.height + extra;
     this.seatHeight = 0.45 * this.scale;
@@ -189,6 +192,33 @@ export class GltfCharacter implements HeroModel {
     return s;
   }
 
+  /** Венец от полски цветя на главата (самодивите) + слабо сияние около тях. */
+  private attachWreath(v: number): void {
+    const head = this.bones.get('Head');
+    if (!head) return;
+    const s = new THREE.Object3D();
+    // осите на тялото в покой; венецът е над челото, леко наклонен назад
+    s.quaternion.copy(this.body.bindWorld.get('Head')!).invert();
+    const hp = this.body.bindPos.get('Head')!;
+    s.position.copy(new THREE.Vector3(0, hp.y + 0.15, hp.z + 0.005).sub(hp).applyQuaternion(s.quaternion));
+    head.add(s);
+    const wr = new THREE.Group();
+    wr.rotation.x = -0.32;
+    s.add(wr);
+    const R = 0.098;
+    part(wr, cachedGeo('wreath', () => new THREE.TorusGeometry(1, 0.11, 4, 14)), mat('#4f7a3a'), R, R, R, 0, 0, 0, Math.PI / 2, 0, 0, false);
+    const fl = FLOWERS[v % FLOWERS.length];
+    for (let i = 0; i < 11; i++) {
+      const a = (i / 11) * Math.PI * 2;
+      const c = fl[i % 3];
+      part(wr, sphGeo(0), mat(c, { emissive: c, emissiveIntensity: 0.3 }), R * 0.2, R * 0.13, R * 0.2, Math.sin(a) * R, R * 0.06, Math.cos(a) * R, 0, a, 0, false);
+    }
+    mergeStatic(wr);
+    const halo = haloSprite('#cfe0ff', 1.6, 0.12);
+    halo.position.set(0, -0.35, 0);
+    s.add(halo);
+  }
+
   // ───────────────────────────── сечива и оръжия ─────────────────────────────
   private attachTool(): void {
     const tool = this.spec.tool;
@@ -240,7 +270,7 @@ export class GltfCharacter implements HeroModel {
       this.bow = buildBow(); mergeStatic(this.bow);
       this.socketL.add(this.bow);
       this.bow.position.set(0, 0, 0.01);
-      this.bow.rotation.set(1.2, 0, 0);
+      this.bow.rotation.set(0, Math.PI / 2, 0); // изправен, дъгата напред
     }
     if (this.bow) this.bow.visible = kind === 'bow';
     for (const g of [this.saber, this.ivan, this.bow]) g?.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = true; });

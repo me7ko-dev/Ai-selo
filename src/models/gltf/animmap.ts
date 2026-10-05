@@ -68,7 +68,7 @@ export function chooseClip(anim: AnimName, ctx: AnimContext): ClipChoice {
     case 'sit': return loop(CLIPS.sit);
     case 'sleep': return { clip: CLIPS.death, loop: true, speed: 0, fade: 0.6, hold: 1, overlay: 'breathe' };
     case 'dance': return loop(CLIPS.dance, 'horo', ctx.role === 'samodiva' ? 0.8 : 0.9, 0.4);
-    case 'block': return loop(CLIPS.swordIdle, 'block', 1, 0.12);
+    case 'block': return loop(CLIPS.swordIdle, 'none', 1, 0.12);
     case 'attack':
       if (ctx.weapon === 'bow') return once(CLIPS.shoot, 1.1, 0.08, 0, 0.6, 'bow');
       return once(CLIPS.sword, 1.55, 0.08, 0.28, 1.12);

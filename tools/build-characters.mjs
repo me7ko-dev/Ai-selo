@@ -285,11 +285,11 @@ function folkTexture() {
     if (u < 0.5 && v >= 0.5) {
       // басма: дребни цветчета на точки
       const g = Math.round(base * 0.98 * weave);
-      const cx = (x % 32) - 16, cy = (y % 32) - 16, ox = ((x + 16) % 32) - 16, oy = ((y + 16) % 32) - 16;
+      const cx = (x % 20) - 10, cy = (y % 20) - 10, ox = ((x + 10) % 20) - 10, oy = ((y + 10) % 20) - 10;
       const r1 = Math.hypot(cx, cy), r2 = Math.hypot(ox, oy);
-      if (r1 < 3.2) put(x, y, 0, 0, GOLD, 0.8);
-      else if (r1 < 6 && Math.abs(Math.sin(Math.atan2(cy, cx) * 3)) > 0.35) put(x, y, 0, 0, WHITE, 0.8);
-      else if (r2 < 2.6) put(x, y, 0, 0, GREEN, 0.75);
+      if (r1 < 1.6) put(x, y, 0, 0, GOLD, 0.8);
+      else if (r1 < 3.6 && Math.abs(Math.sin(Math.atan2(cy, cx) * 2.5)) > 0.4) put(x, y, 0, 0, WHITE, 0.8);
+      else if (r2 < 1.3) put(x, y, 0, 0, GREEN, 0.75);
       else put(x, y, g);
       continue;
     }
@@ -455,13 +455,14 @@ function makeSkirt(sk, prof, { topY, hemY, flare, rings = 14, cols = 56, pleats 
   return grid(rings, cols, (i, j) => {
     const t = i / rings;                      // 0 горе → 1 подгъв
     const y = topY + (hemY - topY) * t;
-    const a = (j / cols) * Math.PI * 2;       // 0 = отпред (+Z), π/2 = ляво (+X)
+    const a = (j / cols) * Math.PI * 2 + Math.PI; // шевът (j = 0) е отзад; π = отпред (+Z), 3π/2 = ляво (+X)
     const sx = Math.sin(a), cz2 = Math.cos(a);
     // от кръста през ханша до подгъва
     const hipT = Math.min(1, t / 0.18);
     let rx = rx0 + (rxH - rx0) * Math.sin(hipT * Math.PI / 2), rz = rz0 + (rzH - rz0) * Math.sin(hipT * Math.PI / 2);
     const fl = Math.max(0, t - 0.15) / 0.85;
     rx += flare * fl * fl * 0.8 + flare * fl * 0.4; rz += flare * fl * fl * 0.8 + flare * fl * 0.4;
+    if (cz2 < 0) rz += 0.05 * fl * -cz2;      // отзад малко по-широко — петите не пробиват плата
     const pl = 1 + (0.012 + 0.05 * fl) * Math.sin(a * pleats) * Math.min(1, t * 4);
     const x = cx + sx * rx * pl, z = cz + cz2 * rz * pl;
     // тегла: горе таз (+ малко гръбнак), надолу към бедрата/прасците според страната
@@ -470,7 +471,8 @@ function makeSkirt(sk, prof, { topY, hemY, flare, rings = 14, cols = 56, pleats 
     const wl = leg * Math.max(0, 0.5 + side * 0.9) , wr = leg * Math.max(0, 0.5 - side * 0.9);
     const calf = Math.max(0, t - 0.75) * 0.6;
     const skin = skinW([[pel, 1 - Math.min(0.85, wl + wr)], [sp, t < 0.1 ? 0.3 * (1 - t / 0.1) : 0], [tl, wl * (1 - calf)], [tr, wr * (1 - calf)], [cl, wl * calf], [cr, wr * calf]]);
-    return { p: [x, y, z], skin, uv: inRect(uvRect, (j / cols) * 2 % 1, t * lenTex) };
+    // U огледално (1 → 0 → 1) — без шев в текстурата отзад
+    return { p: [x, y, z], skin, uv: inRect(uvRect, Math.abs(2 * j / cols - 1), Math.min(1, t * lenTex)) };
   }, gar, true);
 }
 
@@ -510,13 +512,15 @@ function makeApron(sk, surface, { topY, botY, halfW, rows = 10, cols = 8, gar = 
 }
 
 /** Слой над съществуваща дреха (елек, пояс): избрани триъгълници, издути по нормалата, с нови UV. */
-function shellFrom(p, keep, { offset, gar, uvRect, uvScale = 3 }) {
+function shellFrom(p, keep, { offset, gar, uvRect, yRange = [0, 2] }) {
   const o = filterTris(p, keep);
   for (let i = 0; i < o.n; i++) {
     for (let k = 0; k < 3; k++) o.pos[i * 3 + k] += o.nrm[i * 3 + k] * offset;
     const x = o.pos[i * 3], y = o.pos[i * 3 + 1], z = o.pos[i * 3 + 2];
+    // U = ъгъл около тялото (шевът е отзад), V = височина в yRange — непрекъснато, без повторение
     const ang = Math.atan2(x, z) / (Math.PI * 2) + 0.5;
-    o.uv.set(inRect(uvRect, (ang * uvScale) % 1, (y * uvScale) % 1), i * 2);
+    const v = Math.min(1, Math.max(0, (y - yRange[0]) / (yRange[1] - yRange[0])));
+    o.uv.set(inRect(uvRect, ang, v), i * 2);
     o.gar[i] = gar;
   }
   return o;
@@ -607,9 +611,9 @@ const bodies = {};
     const open = z > 0 && Math.abs(x) < 0.028 + Math.max(0, y - 1.28) * 0.42;
     const collar = y > 1.5 && Math.abs(x) < 0.1;
     return body.gar[i] === G.SHIRT && wOf(body, i, armSet) < 0.35 && y > 1.1 && y < 1.58 && !open && !collar;
-  }), { offset: 0.008, gar: G.VEST, uvRect: FOLK.cloth });
+  }), { offset: 0.008, gar: G.VEST, uvRect: FOLK.cloth, yRange: [1.0, 1.6] });
   // пояс: широка ивица от ризата на кръста
-  const sash = shellFrom(body, (t, a, b, c) => [a, b, c].every((i) => body.gar[i] === G.SHIRT && body.pos[i * 3 + 1] > 1.0 && body.pos[i * 3 + 1] < 1.16), { offset: 0.011, gar: G.SASH, uvRect: FOLK.sash, uvScale: 1 });
+  const sash = shellFrom(body, (t, a, b, c) => [a, b, c].every((i) => body.gar[i] === G.SHIRT && body.pos[i * 3 + 1] > 1.0 && body.pos[i * 3 + 1] < 1.16), { offset: 0.011, gar: G.SASH, uvRect: FOLK.sash, yRange: [1.0, 1.16] });
   for (let i = 0; i < sash.n; i++) sash.uv[i * 2 + 1] = FOLK.sash[1] + (FOLK.sash[3] - FOLK.sash[1]) * Math.min(0.999, Math.max(0, (sash.pos[i * 3 + 1] - 1.0) / 0.16));
   // кожена престилка (Иван): платно отпред от гърдите до коленете
   const leather = makeApron(sk, [body, legs], { topY: 1.42, botY: 0.6, halfW: 0.15, rows: 12, gar: G.LEATHER, uvRect: FOLK.cloth, flare: 0.15, gap: 0.016 });
@@ -668,7 +672,7 @@ const bodies = {};
     }
     computeNormalsKeepSeams(hood);
   }
-  hood = shellFrom(hood, () => true, { offset: 0, gar: G.SCARF, uvRect: FOLK.scarf, uvScale: 4 });
+  hood = shellFrom(hood, () => true, { offset: 0, gar: G.SCARF, uvRect: FOLK.scarf, yRange: [1.45, 1.8] });
   bodies.F = {
     sk, cloth: merge([body, arms, feet]), folk: merge([skirt, apron, hood, dress]), skin: merge([head, hands]), eyes: setG(eyes, 0),
   };
@@ -702,7 +706,7 @@ const bodies = {};
 }
 
 // ── коси (твърди, в пространството на Head) — един меш, всяка част с номер в _GARMENT (виж HAIR_PIECES) ──
-export const HAIR_PIECES = { hair_long: 1, hair_buns: 2, hair_parted: 3, hair_buzzed: 4, hair_buzzed_f: 5, beard: 6, mustache: 7, brows_m: 8, brows_f: 9, kalpak: 10 };
+export const HAIR_PIECES = { hair_long: 1, hair_buns: 2, hair_parted: 3, hair_buzzed: 4, hair_buzzed_f: 5, beard: 6, mustache: 7, brows_m: 8, brows_f: 9, kalpak: 10, hair_flowing: 11 };
 const hair = {
   hair_long: toAtlasHalf(rigidPart(hairSrc.Hair_Long, 1), 1),
   hair_buns: toAtlasHalf(rigidPart(hairSrc.Hair_Buns, 2), 1),
@@ -713,6 +717,27 @@ const hair = {
   brows_m: toAtlasHalf(rigidPart(hairSrc.Eyebrows_Regular, 8), 0),
   brows_f: toAtlasHalf(rigidPart(hairSrc.Eyebrows_Female, 9), 1),
 };
+// дълга пусната коса (самодивите): долната част на Hair_Long се издължава надолу (в посоката „надолу“ на тялото в покой)
+{
+  const node = meshNodes(hairSrc.Hair_Long)[0];
+  const sk = node.getSkin(), names = sk.listJoints().map((j) => j.getName());
+  const ibm = M4(sk.getInverseBindMatrices().getElement(names.indexOf('Head'), []));
+  const down = new THREE.Vector3(0, -1, 0).transformDirection(ibm).normalize();
+  const back = new THREE.Vector3(0, 0, -1).transformDirection(ibm).normalize();
+  const p = { ...hair.hair_long, pos: hair.hair_long.pos.slice(), nrm: hair.hair_long.nrm.slice(), uv: hair.hair_long.uv.slice(), gar: new Uint8Array(hair.hair_long.n).fill(11), idx: hair.hair_long.idx.slice() };
+  const v = new THREE.Vector3();
+  for (let i = 0; i < p.n; i++) {
+    v.fromArray(p.pos, i * 3);
+    const h = -v.dot(down);                  // височина над костта на главата
+    const h0 = 0.11;                         // от ушите надолу
+    if (h < h0) {
+      const e = (h0 - h) * 1.9;              // колко да се издължи
+      v.addScaledVector(down, e).addScaledVector(back, e * 0.28 * Math.max(0, -v.dot(back) < 0.02 ? 1 : 0.6));
+      p.pos.set([v.x, v.y, v.z], i * 3);
+    }
+  }
+  hair.hair_flowing = p;
+}
 // мустак = само горната устна от брадата (над устата и пред лицето)
 hair.mustache = filterTris(hair.beard, (t, a, b, c) => [a, b, c].every((i) => hair.beard.pos[i * 3 + 1] > 0.0 && hair.beard.pos[i * 3 + 2] > 0.085));
 hair.mustache.gar.fill(7);

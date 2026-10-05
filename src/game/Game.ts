@@ -32,6 +32,7 @@ import { AutoQuality } from './perf';
 import { buildSpotTable } from './spots';
 import { setSpotTable } from '../sim/schedules';
 import { Tutorial } from './tutorial';
+import { preloadCharacters } from '../models';
 
 export type Modal = null | 'dialogue' | 'inventory' | 'map' | 'chronicle' | 'time' | 'settings' | 'away' | 'dead' | 'watch' | 'intro';
 
@@ -91,11 +92,15 @@ export class Game {
     this.engine.setPixelRatioCap(this.settings.graphics.pixelRatioCap);
     this.engine.input.sensitivity = this.settings.controls.sensitivity;
     this.engine.input.invertY = this.settings.controls.invertY;
+    // хората (реалистичните модели) се свалят, докато се строи светът; при „Ниско“ или грешка — процедурните
+    const people = preloadCharacters({ quality: this.settings.graphics.quality });
     await tick();
     progress(0.15, 'Расте гората…');
     await tick();
     this.world = new World3D(this.engine, { quality: this.settings.graphics.quality });
-    progress(0.55, 'Жителите се събуждат…');
+    progress(0.55, 'Жителите се обличат…');
+    await people;
+    progress(0.62, 'Жителите се събуждат…');
     await tick();
     this.ui = mountUi(uiRoot);
     this.ui.touch.bind(this.engine.input);

@@ -122,6 +122,8 @@ export function preloadCharacters(opts: { quality?: string; onProgress?: (p: num
   if (loading) return loading;
   if (typeof document === 'undefined' || typeof window === 'undefined') return Promise.resolve(false);
   if (opts.quality === 'low') return Promise.resolve(false);
+  // за сравнение на бързината: VITE_PEOPLE=0 npm run build → само процедурните хора
+  if ((import.meta as unknown as { env?: Record<string, string> }).env?.VITE_PEOPLE === '0') return Promise.resolve(false);
   loading = (async () => {
     try {
       const [{ GLTFLoader }, { MeshoptDecoder }] = await Promise.all([
