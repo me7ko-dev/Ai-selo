@@ -110,5 +110,6 @@ export class DialogueController {
     this.gen++;
     this.busy = false;
     g.ui.dialogue.close();
+    void g.saveMain(); // жителят помни разговора и след презареждане
   }
 }

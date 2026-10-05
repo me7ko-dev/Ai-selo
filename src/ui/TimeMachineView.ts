@@ -301,7 +301,7 @@ export class TimeMachineView extends ModalView {
       if (!b || !b.parentId) break;
       until = b.forkTime; id = b.parentId;
     }
-    const from = snap >= 0 && t - snap > 30 ? ` Най-близкият запис на света е от ${dayTimeLabel(snap)}.` : '';
+    const from = snap >= 0 && t - snap > 30 ? ` Светът тръгва от записа в ${dayTimeLabel(snap)} и селото доживява до избрания момент (героят е както беше тогава).` : '';
     this.confirmEl.append(
       h('div.tm-confirm-t', { text: `Да се върнем ли към ${dayTimeLabel(t)}?` }),
       ...(from ? [h('p', { text: from.trim() })] : []),

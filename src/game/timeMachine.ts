@@ -108,10 +108,24 @@ export class TimeMachine {
     const parent = g.timeline.currentBranch;
     const br = g.timeline.fork(meta.time);
     g.loadGameState(snap.state as GameState);
+    // селото доживява от записа до избрания момент (по сценарий — повторимо)
+    let left = Math.min(2880, Math.max(0, time - g.sim.state.time));
+    if (left > 0) {
+      g.sim.setBrain(null);
+      while (left > 0) {
+        const s = Math.min(15, left);
+        const prev = g.sim.state.time;
+        g.sim.advance(s);
+        for (const k of g.timeline.snapshotDue(prev, g.sim.state.time)) await g.makeSnapshot(k);
+        left -= s;
+      }
+      g.sim.setBrain(g.brainKit.brain);
+      g.villagers.update(0.016, g.sim.state, true);
+    }
     g.sim.addChronicle('system', `Тук историята се разклони: „${br.label}“. (Ами ако…?)`, [], 6);
     await g.makeSnapshot('auto');
     void g.saveMain();
-    g.toast(`Нов клон на историята от ${formatDayClock(meta.time)}. Старият е запазен.`, 'quest');
+    g.toast(`Нов клон на историята от ${formatDayClock(g.sim.state.time)}. Старият е запазен.`, 'quest');
     void parent;
     g.closeModal(false);
   }
