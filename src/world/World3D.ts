@@ -12,6 +12,8 @@ import { buildHouse, buildProp } from './buildings';
 import { buildFences, buildRuins, buildSigns, buildSignPosts } from './extras';
 import { paintGround, paintMap, type GroundData } from './ground';
 import { buildTerrain } from './terrain';
+import { createTerrainMaterial, type TerrainMaterial } from './terrainMaterial';
+import { groundTextures, heightTexture } from './groundTex';
 import { SkySystem } from './sky';
 import { instanced, pineGeo, oakGeo, bushGeo, rockGeo, deadTreeGeo, fernGeo, mushroomGeo, logGeo, flowerGeo, fadingTreeMaterial, treeFadeUniforms, type InstGroup } from './vegetation';
 import { buildPond, buildRiver, buildSwampPools, updateWater, type WaterFrame } from './water';
@@ -47,7 +49,7 @@ export class World3D implements WorldQuery {
   readonly buildMs: Record<string, number> = {};
 
   private ground: GroundData;
-  private groundTex: THREE.CanvasTexture;
+  private terrainMat: TerrainMaterial;
   private solidMat = vertexColorMaterial();
   private windowMat = new THREE.MeshBasicMaterial({ vertexColors: true });
   private hotMat = new THREE.MeshBasicMaterial({ vertexColors: true });
@@ -100,12 +102,10 @@ export class World3D implements WorldQuery {
 
     // земята
     this.ground = paintGround(this.plan); mark('ground');
-    this.groundTex = new THREE.CanvasTexture(this.ground.canvas);
-    this.groundTex.colorSpace = THREE.SRGBColorSpace;
-    this.groundTex.anisotropy = Math.min(8, engine.renderer.capabilities.getMaxAnisotropy());
-    this.groundTex.generateMipmaps = true;
-    this.groundTex.minFilter = THREE.LinearMipmapLinearFilter;
-    const terrain = buildTerrain(this.groundTex);
+    const aniso = Math.min(8, engine.renderer.capabilities.getMaxAnisotropy());
+    const gt = groundTextures(this.ground, aniso);
+    this.terrainMat = createTerrainMaterial(this.ground, gt, { aniso: Math.min(4, aniso) });
+    const terrain = buildTerrain(this.terrainMat.material);
     this.root.add(terrain.group); mark('terrain');
 
     this.buildStatic(); mark('static');
@@ -115,7 +115,7 @@ export class World3D implements WorldQuery {
     this.pond = buildPond(waterNormals); this.root.add(this.pond);
     this.river = buildRiver(waterNormals); this.root.add(this.river.mesh);
     this.swamp = buildSwampPools(this.plan.swampPools, waterNormals); this.root.add(this.swamp);
-    this.grass = new GrassField(this.ground.grass, this.ground.base); this.root.add(this.grass.group);
+    this.grass = new GrassField(gt, heightTexture(terrain.heights, terrain.n1), this.ground, terrain.heights, terrain.n1); this.root.add(this.grass.group);
     this.root.add(this.rain.mesh, this.splashes.mesh, this.bolt.mesh, this.motes.points);
     this.festival = new Festival(this.solidMat, noiseTextures(engine.renderer).cloud);
     this.root.add(this.festival.group, this.festival.light);
@@ -254,7 +254,9 @@ export class World3D implements WorldQuery {
     this.treeFade.uFocus.value.copy(focus);
 
     this.grass.uniforms.uWind.value = Math.max(this.wp.wind, gm * 1.3);
-    this.grass.update(focus, t);
+    this.grass.update(focus, t, this.engine.camera, this.wp.rain);
+    this.terrainMat.setWet(this.wp.rain);
+    this.terrainMat.setRiverFront(this.riverOn ? this.riverFront : -1);
     this.skyLight.copy(wf.amb).multiplyScalar(1 / Math.PI);
     this.rain.update(t, cam, this.wp.rain, this.wp.wind, this.skyLight, fl);
     this.splashes.update(t, cam, this.wp.rain, this.skyLight);
@@ -305,6 +307,7 @@ export class World3D implements WorldQuery {
     } else {
       this.grass.setDensity(3); this.distScale = 1;
     }
+    this.terrainMat.setQuality(q !== 'low'); this.terrainMat.setGrassFar(this.grass.range);
     r.shadowMap.type = THREE.PCFSoftShadowMap;
     r.shadowMap.needsUpdate = true;
   }
