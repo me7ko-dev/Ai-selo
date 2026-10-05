@@ -108,6 +108,7 @@ export class Game {
     this.brainKit.onStatus((s: BrainStatus) => this.onAiStatus(s));
     this.villagers = new VillagerViews(this.engine.scene);
     this.ambient = new Ambient(this.engine.scene);
+    this.ambient.samodiviGone = () => !!this.rpg && this.mode === 'play' && this.rpg.samodivi.gone(this.sim.state.time);
     this.dialogue = new DialogueController(this);
     this.timeMachine = new TimeMachine(this);
     this.tutorial = new Tutorial(this);
@@ -266,6 +267,12 @@ export class Game {
       }
     });
     rpg.bus.on('pickup', () => this.refreshInventory());
+    // самодивите спират хорото; една от тях говори
+    rpg.bus.on('samodivi', (e) => {
+      this.ambient.samodiviReact(e.kind, this.rpg.heroPos.x, this.rpg.heroPos.z);
+      if (e.kind === 'bless') this.ui.banner.show('Благословията на самодивите', `„${e.line}“`, 8000, 'gold');
+      else this.ui.banner.show('Самодивите те проклеха!', `„${e.line}“`, 8000, 'red', { urgent: true });
+    });
     return rpg;
   }
 

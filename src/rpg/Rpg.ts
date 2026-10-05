@@ -21,6 +21,7 @@ import { EnemyManager, TALASAM, FOX, type CombatCtx, type Enemy } from './enemie
 import { Lamia, LAMIA, type BossCtx } from './lamia';
 import { PickupManager, type WorldItem } from './pickups';
 import { Arrows } from './fx';
+import { Samodivi, RING, samodiviDancing } from './samodivi';
 import type { HudState, InventoryState, PlayerSave, RpgEvents, HotbarCell } from './types';
 
 export type { EquipSlot, ItemId, ItemStackView } from './items';
@@ -39,6 +40,10 @@ export class Rpg {
   readonly inv: Inventory;
   readonly stats = new Stats();
   readonly quests: Quests;
+  /** Благословията/проклятието на самодивите. */
+  readonly samodivi = new Samodivi();
+  private samPrevT = -1;
+  private samRegenAcc = 0;
   private readonly hero: Hero;
   private readonly heroModel: HeroModel;
   private readonly cam: CameraRig;
@@ -160,7 +165,9 @@ export class Rpg {
       };
       for (let h = 0; h < 6; h++) if (input.pressed('Digit' + (h + 1))) this.useHotbar(h);
     }
+    this.hero.speedMul = this.samodivi.speedMul(totalGameMinutes);
     this.hero.update(dt, inp, this.cam.yaw, this.world, this.stats);
+    this.updateSamodivi(dt, totalGameMinutes);
 
     // тялото на Ламята е препятствие
     if (!this.lamia.defeated || this.lamia.state === 'dying') {
@@ -219,7 +226,7 @@ export class Rpg {
   }
 
   // ---------------- бой ----------------
-  private weaponDamage(): number { const b = this.inv.bonuses(); return this.stats.damage(b.weaponDamage, b.damage); }
+  private weaponDamage(): number { const b = this.inv.bonuses(); return Math.round(this.stats.damage(b.weaponDamage, b.damage) * this.samodivi.damageMul(this.host.time())); }
 
   private aimTarget(): { x: number; z: number } | null {
     const f = this.cam.forward(), fy = Math.atan2(f.x, f.z);
@@ -237,6 +244,9 @@ export class Rpg {
   }
 
   private onAttackHit(idx: number, mult: number, reach: number): void {
+    // замах към хорото на самодивите → обида
+    const dr = Math.abs(Math.hypot(this.hero.pos.x - RING.x, this.hero.pos.z - RING.z) - RING.r);
+    if (dr < reach + 1.5) this.offendSamodivi('attack');
     const crit = Math.random() < 0.1;
     const dmg = this.weaponDamage() * mult * (0.9 + Math.random() * 0.2) * (crit ? 1.5 : 1);
     const h = this.hero;
@@ -251,6 +261,7 @@ export class Rpg {
 
   private shoot(): void {
     const h = this.hero;
+    if (Math.hypot(h.pos.x - RING.x, h.pos.z - RING.z) < RING.r + 10) this.offendSamodivi('attack');
     const from = this.tmpV.set(h.pos.x + Math.sin(h.yaw) * 0.5, h.pos.y + 1.4, h.pos.z + Math.cos(h.yaw) * 0.5).clone();
     const t = this.aimTarget();
     let dir: THREE.Vector3;
@@ -456,10 +467,19 @@ export class Rpg {
     return { label: 'Лисицата идва нощем (22:00–04:00)', dist: d, act: () => { this.notify('Ела тук нощем — между 22:00 и 04:00.', 'info'); return true; } };
   }
 
+  private samodiviHint(): { label: string; dist: number; act: () => boolean } | null {
+    const t = this.host.time();
+    const dancing = this.samodiviDancingNow(t);
+    const zone = this.samodivi.zone(this.hero.pos.x, this.hero.pos.z, t, dancing);
+    if (zone === 'none' || !this.samodivi.canBow(t, dancing)) return null;
+    const d = Math.hypot(this.hero.pos.x - RING.x, this.hero.pos.z - RING.z);
+    return { label: 'Поклони се на самодивите', dist: Math.max(0, d - RING.r), act: () => this.bowToSamodivi() };
+  }
+
   interactHint(): { label: string; dist: number } | null {
     if (this.hero.dead) return null;
     const p = this.pickups.nearest(this.hero.pos.x, this.hero.pos.z, 2.2);
-    const c = this.coopHint();
+    const c = this.coopHint() ?? this.samodiviHint();
     if (p && (!c || p.dist <= c.dist)) return { label: p.it.label, dist: p.dist };
     if (c) return { label: c.label, dist: c.dist };
     return null;
@@ -468,16 +488,71 @@ export class Rpg {
   interact(): boolean {
     if (this.hero.dead || !this.controls) return false;
     const p = this.pickups.nearest(this.hero.pos.x, this.hero.pos.z, 2.2);
-    const c = this.coopHint();
+    const c = this.coopHint() ?? this.samodiviHint();
     if (p && (!c || p.dist <= c.dist)) return this.take(p.it);
     if (c) return c.act();
     return false;
   }
 
+  // ---------------- самодивите ----------------
+  private samodiviDancingNow(t: number): boolean { return samodiviDancing(t, this.host.getFlag('samodivi_until')); }
+
+  /** Всеки кадър: тъпкане на хорото, лекуване от благословията, изтичане. */
+  private updateSamodivi(dt: number, t: number): void {
+    const S = this.samodivi;
+    if (!this.hero.dead) {
+      const zone = S.zone(this.hero.pos.x, this.hero.pos.z, t, this.samodiviDancingNow(t));
+      if (zone === 'inside') this.offendSamodivi('trespass');
+      else if (zone === 'warn' && S.warn(t)) this.notify('Самодивите спират да пеят и те гледат строго. Не влизай в хорото им!', 'warn');
+      const r = S.regen(t);
+      if (r > 0 && this.stats.hp < this.stats.maxHp) {
+        this.samRegenAcc += dt * r;
+        if (this.samRegenAcc >= 1) { const k = Math.floor(this.samRegenAcc); this.samRegenAcc -= k; this.stats.heal(k); }
+      }
+    }
+    if (this.samPrevT >= 0) {
+      const ex = S.expired(this.samPrevT, t);
+      if (ex === 'bless') this.notify('Благословията на самодивите избледня с утрото.', 'info');
+      if (ex === 'curse') this.notify('Проклятието на самодивите се вдигна само. Нозете ти пак са леки.', 'info');
+    }
+    this.samPrevT = t;
+  }
+
+  /** [E] при хорото: поклон → благословия до зазоряване. */
+  bowToSamodivi(): boolean {
+    const t = this.host.time();
+    const line = this.samodivi.bow(t, this.samodiviDancingNow(t));
+    if (!line) return false;
+    this.stats.heal(this.stats.maxHp);
+    this.stats.restoreStamina(this.stats.maxStamina);
+    this.bus.emit('samodivi', { kind: 'bless', line });
+    this.notify('Благословията на самодивите: по-силни удари и раните зарастват сами до зазоряване.', 'level');
+    this.sfx('levelup');
+    this.host.deed({ kind: 'helped', text: 'Странникът се поклони на самодивите на поляната и те го благословиха.', importance: 6, affinity: 0, trust: 0, witnesses: [] });
+    return true;
+  }
+
+  /** Удар по самодива или тъпкане на хорото → проклятие (веднъж; после изчезват до сутринта). */
+  offendSamodivi(cause: 'attack' | 'trespass'): boolean {
+    const t = this.host.time();
+    const line = this.samodivi.offend(t, this.samodiviDancingNow(t), cause);
+    if (!line) return false;
+    this.bus.emit('samodivi', { kind: 'curse', line });
+    this.notify('Самодивите те проклеха! Нозете ти натежаха, ръката ти отслабна. Може би баба Гена знае как се маха…', 'warn');
+    this.sfx('thunder');
+    this.cam.shake(0.15);
+    this.host.deed({
+      kind: 'insulted',
+      text: cause === 'attack' ? 'Странникът посегна на самодива на поляната и самодивите го проклеха.' : 'Странникът нахълта в самодивското хоро и самодивите го проклеха.',
+      importance: 6, affinity: 0, trust: 0, witnesses: [],
+    });
+    return true;
+  }
+
   // ---------------- разговори ----------------
-  questOptions(villager: VillagerId): DialogueOption[] { return this.quests.options(villager); }
+  questOptions(villager: VillagerId): DialogueOption[] { return [...this.samodivi.options(villager, this.host.time()), ...this.quests.options(villager)]; }
   questChoose(villager: VillagerId, optionId: string): { say: string; options?: DialogueOption[]; end?: boolean } | null {
-    return this.quests.choose(villager, optionId);
+    return this.samodivi.choose(villager, optionId, this.host.time(), this.host) ?? this.quests.choose(villager, optionId);
   }
   onTalk(villager: VillagerId): void { this.quests.onTalk(villager); }
 
@@ -491,7 +566,7 @@ export class Rpg {
     });
     return {
       hp: Math.ceil(s.hp), maxHp: s.maxHp, stamina: Math.round(s.stamina), maxStamina: s.maxStamina,
-      level: s.level, title: s.title, xp: s.xp, xpNext: s.xpNext, gold: this.inv.gold,
+      level: s.level, title: this.samodivi.label(this.host.time()) ? `${s.title} · ${this.samodivi.label(this.host.time())}` : s.title, xp: s.xp, xpNext: s.xpNext, gold: this.inv.gold,
       hotbar,
       boss: L.active ? { heads: L.heads.map(h => ({ hp: Math.ceil(h.hp), max: h.max })), phase: L.phase, name: 'Ламята' } : null,
       dead: this.hero.dead,
@@ -595,6 +670,7 @@ export class Rpg {
       rosenPicked: [...this.rosenPicked],
       bellTaken: this.bellTaken,
       chestsOpened: [...this.chestsOpened],
+      samodivi: this.samodivi.serialize(),
     };
   }
 
@@ -606,6 +682,8 @@ export class Rpg {
     this.rosenPicked = new Set(s.rosenPicked ?? []);
     this.bellTaken = !!s.bellTaken;
     this.chestsOpened = new Set(s.chestsOpened ?? []);
+    this.samodivi.load(s.samodivi);
+    this.samPrevT = -1;
     this.lamia.load(s.lamia?.heads, !!s.lamia?.dead || !!this.host.getFlag('lamia_dead'));
     this.enemies.clear();
     this.pickups.clear();
@@ -646,6 +724,8 @@ export class Rpg {
     heal: () => { this.stats.hp = this.stats.maxHp; this.stats.stamina = this.stats.maxStamina; },
     hurt: (n: number) => this.damageHero(n, this.hero.pos.x + Math.sin(this.hero.yaw), this.hero.pos.z + Math.cos(this.hero.yaw), 0.5),
     toLamia: (dist = 34) => { const a = Math.atan2(-30, 18), c = this.lamia.center; this.teleport(c.x + Math.sin(a) * dist, c.z + Math.cos(a) * dist, a + Math.PI); },
+    samodivi: () => ({ ...this.samodivi.serialize(), blessed: this.samodivi.blessed(this.host.time()), cursed: this.samodivi.cursed(this.host.time()), dancing: this.samodiviDancingNow(this.host.time()), damageMul: this.samodivi.damageMul(this.host.time()), speedMul: this.samodivi.speedMul(this.host.time()), hint: this.interactHint()?.label ?? null }),
+    damage: () => this.weaponDamage(),
     attack: () => { (this.hero as unknown as { tryAttack(y: number, s: Stats): void }).tryAttack(this.cam.yaw, this.stats); },
   };
 }

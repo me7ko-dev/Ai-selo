@@ -4,6 +4,7 @@ import type { EquipSlot, ItemId, ItemKind, ItemStackView } from './items';
 import type { InventorySave } from './inventory';
 import type { QuestsSave, NotifyKind } from './quests';
 import type { StatsSave } from './stats';
+import type { SamodiviSave } from './samodivi';
 
 export type { EquipSlot, ItemId, ItemKind, ItemStackView, NotifyKind };
 
@@ -24,6 +25,8 @@ export interface RpgEvents extends Record<string, unknown> {
   damage: { amount: number; target: 'hero' | 'enemy'; x: number; y: number; z: number; blocked?: boolean; crit?: boolean };
   /** Звук: swing, hit, hurt, block, die, pickup, coin, levelup, growl, roar, bite, fire, rock, bow, quest, jump, chest, fox, heal */
   sfx: { name: string };
+  /** Самодивите: благословия (поклон) или проклятие (удар/тъпкане на хорото); line — какво казва самодивата. */
+  samodivi: { kind: 'bless' | 'curse'; line: string };
 }
 
 export interface HotbarCell { icon: IconKey; name: string; count: number; id: ItemId }
@@ -60,4 +63,6 @@ export interface PlayerSave {
   rosenPicked: number[];
   bellTaken: boolean;
   chestsOpened: string[];
+  /** Благословия/проклятие на самодивите (по-старите записи го нямат). */
+  samodivi?: SamodiviSave;
 }

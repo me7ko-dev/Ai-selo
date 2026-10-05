@@ -4,8 +4,8 @@ import * as THREE from 'three';
 import { createAnimalModel, createMonsterModel, createSamodivaModel, type AnimalKind, type CharacterModel } from '../models';
 import { PLACES, type Vec2 } from '../data/layout';
 import { heightAt } from '../world/height';
-import { minuteOfDay } from '../core/time';
 import type { WorldState } from '../sim/types';
+import { RING, samodiviDancing } from '../rpg/samodivi';
 
 interface Critter {
   model: CharacterModel;
@@ -25,6 +25,14 @@ export class Ambient {
   private critters: Critter[] = [];
   private samodivi: CharacterModel[] = [];
   private samodiviGroup = new THREE.Group();
+  /** Ъгълът на хорото (спира, докато самодивите гледат героя). */
+  private danceT = 0;
+  /** Реакция: спират и гледат героя (bless — после пак играят; curse — после изчезват). */
+  private samPause = 0;
+  private samReact: 'bless' | 'curse' | null = null;
+  private samHero = { x: 0, z: 0 };
+  /** Изчезнали ли са тази нощ (Game го свързва с проклятието в Rpg). */
+  samodiviGone: () => boolean = () => false;
   private kara: CharacterModel | null = null;
   private karaT = 0;
   private group = new THREE.Group();
@@ -63,6 +71,26 @@ export class Ambient {
     this.samodiviGroup.visible = false;
   }
 
+  /** Самодивите спират хорото и се обръщат към героя (поклон или обида). */
+  samodiviReact(kind: 'bless' | 'curse', heroX: number, heroZ: number): void {
+    this.samReact = kind;
+    this.samPause = kind === 'bless' ? 6 : 2.4;
+    this.samHero = { x: heroX, z: heroZ };
+    let best = 0, bd = Infinity;
+    this.samodivi.forEach((s, i) => {
+      const d = Math.hypot(s.root.position.x - heroX, s.root.position.z - heroZ);
+      if (d < bd) { bd = d; best = i; }
+      s.play('idle');
+    });
+    // най-близката говори: благославя (cast) или проклина (cast с размах)
+    this.samodivi[best]?.play('cast');
+  }
+
+  /** Къде са самодивите и виждат ли се (за пробите и за играта). */
+  samodiviInfo(): { visible: boolean; ring: { x: number; z: number; r: number }; positions: Vec2[] } {
+    return { visible: this.samodiviGroup.visible, ring: { ...RING }, positions: this.samodivi.map((s) => ({ x: s.root.position.x, z: s.root.position.z })) };
+  }
+
   /** Откъде да знаем къде е Петко (стадото го следва денем). */
   followPetko(fn: () => Vec2 | null): void { this.petko = fn; }
 
@@ -90,22 +118,30 @@ export class Ambient {
       c.pos.y = heightAt(c.pos.x, c.pos.z);
       c.model.root.position.copy(c.pos);
     }
-    // самодиви: нощем (или когато е извикана случката „самодиви“)
-    const m = minuteOfDay(state.time);
-    const night = m > 21 * 60 + 30 || m < 4 * 60 + 30;
-    const called = typeof state.flags['samodivi_until'] === 'number' && (state.flags['samodivi_until'] as number) > state.time;
-    const show = night || called;
+    // самодиви: нощем (или когато е извикана случката „самодиви“); след проклятие — изчезват до сутринта
+    const wasPaused = this.samPause > 0;
+    this.samPause = Math.max(0, this.samPause - dt);
+    if (wasPaused && this.samPause === 0) {
+      for (const s of this.samodivi) s.play('dance'); // след проклятие — за следващата нощ
+      this.samReact = null;
+    }
+    const show = samodiviDancing(state.time, state.flags['samodivi_until']) && (!this.samodiviGone() || this.samPause > 0);
     this.samodiviGroup.visible = show;
     if (show) {
-      const c = PLACES.glade.pos;
-      const cx = c.x + 6, cz = c.z + 10;
+      const paused = this.samPause > 0;
+      if (!paused) this.danceT += dt;
       for (let i = 0; i < this.samodivi.length; i++) {
         const s = this.samodivi[i];
-        const a = this.t * 0.35 + (i / this.samodivi.length) * Math.PI * 2;
-        const x = cx + Math.cos(a) * 5.5, z = cz + Math.sin(a) * 5.5;
-        s.root.position.set(x, heightAt(x, z) + 0.15 + Math.sin(this.t * 2 + i) * 0.05, z);
-        s.root.rotation.y = Math.atan2(-Math.sin(a), Math.cos(a)) + Math.PI / 2;
-        s.update(dt, 0.6);
+        const a = this.danceT * 0.35 + (i / this.samodivi.length) * Math.PI * 2;
+        const x = RING.x + Math.cos(a) * RING.r, z = RING.z + Math.sin(a) * RING.r;
+        s.root.position.set(x, heightAt(x, z) + 0.15 + Math.sin(this.t * 2 + i) * 0.05 + (paused && this.samReact === 'curse' ? 0.25 : 0), z);
+        if (paused) {
+          // гледат героя
+          const want = Math.atan2(this.samHero.x - x, this.samHero.z - z);
+          let d = want - s.root.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d));
+          s.root.rotation.y += d * Math.min(1, dt * 6);
+        } else s.root.rotation.y = Math.atan2(-Math.sin(a), Math.cos(a)) + Math.PI / 2;
+        s.update(dt, paused ? 0 : 0.6);
       }
     }
     // Караконджул: тъмна сянка обикаля мегдана

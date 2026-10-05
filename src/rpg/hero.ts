@@ -49,6 +49,8 @@ export class Hero {
   stagger = 0;
   dead = false;
   ranged = false;
+  /** Множител на скоростта (проклятието на самодивите го намалява). */
+  speedMul = 1;
   private bowCd = 0;
   private restT = 0;
   private knock = new THREE.Vector2();
@@ -144,7 +146,7 @@ export class Hero {
 
     // скорост
     const canRun = inp.run && moving && !this.blocking && !this.attacking && sp.stamina > 0.5;
-    let target = moving ? (canRun ? RUN_SPEED : WALK_SPEED) : 0;
+    let target = moving ? (canRun ? RUN_SPEED : WALK_SPEED) * this.speedMul : 0;
     if (this.blocking) target *= 0.4;
     if (this.attacking) target *= 0.25;
     if (this.stagger > 0) target = 0;
