@@ -29,7 +29,7 @@ export function treeFadeUniforms(): TreeFadeUniforms {
 // ---------------------------------------------------------------- граници на нивата по качество (м)
 interface QSet { tree: number[]; treeFar: number; bush: number[]; rock: number[]; midShadow: boolean }
 const Q: Record<VegQuality, QSet> = {
-  high: { tree: [28, 85], treeFar: 520, bush: [26, 170], rock: [32, 260], midShadow: true },
+  high: { tree: [24, 70], treeFar: 520, bush: [22, 140], rock: [28, 200], midShadow: true }, // по-къси за GTX 1650 (гората е най-скъпата)
   medium: { tree: [20, 65], treeFar: 420, bush: [18, 120], rock: [22, 190], midShadow: false },
   low: { tree: [10, 40], treeFar: 300, bush: [10, 70], rock: [12, 110], midShadow: false },
 };

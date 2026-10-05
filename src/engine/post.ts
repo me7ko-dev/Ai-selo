@@ -112,7 +112,8 @@ export class PostFX {
     // един проход: изглаждане (върху HDR; прагът следи експонацията) → блясък → AgX и корекция
     this.aa = q === 'low'
       ? new FXAAEffect()
-      : new SMAAEffect({ preset: q === 'high' ? SMAAPreset.HIGH : SMAAPreset.MEDIUM, edgeDetectionMode: EdgeDetectionMode.COLOR });
+      // SMAA MEDIUM: HIGH почти не се различава, а е по-скъп на GTX 1650
+      : new SMAAEffect({ preset: SMAAPreset.MEDIUM, edgeDetectionMode: EdgeDetectionMode.COLOR });
     const effects: Effect[] = q === 'low' ? [this.grade, this.aa] : [this.aa];
     if (q !== 'low') { if (this.bloom) effects.push(this.bloom); effects.push(this.grade); }
     const main = new EffectPass(this.camera, ...effects);
