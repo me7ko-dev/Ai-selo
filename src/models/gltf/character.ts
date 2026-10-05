@@ -143,6 +143,8 @@ export class GltfCharacter implements HeroModel {
       } else mat = A.materials.eyes;
       if (glow && part !== 'eyes') { mat.emissive.copy(glow); mat.emissiveIntensity = part === 'skin' ? 0.08 : 0.22; }
       m.material = mat;
+      // очите са мънички — без сянка (един draw call по-малко в картата на сенките)
+      if (part === 'eyes') { m.castShadow = false; m.receiveShadow = false; }
       m.frustumCulled = true;
       m.boundingSphere = sphere;
       if (part !== 'eyes') this.flashMats.push(mat);
