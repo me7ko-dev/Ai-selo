@@ -208,7 +208,7 @@ export class Rpg {
     // камера
     const look = {
       dx: this.controls && input.lookActive ? input.mouseDX : 0,
-      dy: this.controls && input.lookActive ? input.mouseDY : 0,
+      dy: this.controls && input.lookActive ? input.mouseDY * (input.invertY ? -1 : 1) : 0,
       wheel: this.controls ? input.wheel : 0,
       keyYaw: this.controls ? (input.down('ArrowLeft') ? -1 : 0) + (input.down('ArrowRight') ? 1 : 0) : 0,
       sensitivity: input.sensitivity,

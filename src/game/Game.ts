@@ -90,6 +90,7 @@ export class Game {
     this.engine = new Engine(canvas);
     this.engine.setPixelRatioCap(this.settings.graphics.pixelRatioCap);
     this.engine.input.sensitivity = this.settings.controls.sensitivity;
+    this.engine.input.invertY = this.settings.controls.invertY;
     await tick();
     progress(0.15, 'Расте гората…');
     await tick();
@@ -698,6 +699,7 @@ export class Game {
     this.settings = s;
     saveSettings(s);
     this.engine.input.sensitivity = s.controls.sensitivity;
+    this.engine.input.invertY = s.controls.invertY;
     if (s.graphics.quality !== prev.graphics.quality) this.world.setQuality(s.graphics.quality);
     if (s.graphics.pixelRatioCap !== prev.graphics.pixelRatioCap) this.engine.setPixelRatioCap(s.graphics.pixelRatioCap);
     this.engine.renderer.shadowMap.enabled = s.graphics.shadows;

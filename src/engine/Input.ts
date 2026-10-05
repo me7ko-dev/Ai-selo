@@ -8,6 +8,8 @@ export class Input {
   private clicked = new Set<number>();
   mouseDX = 0;
   mouseDY = 0;
+  /** Обърната мишка по вертикала (от настройките). */
+  invertY = false;
   wheel = 0;
   enabled = true;
   /** Чувствителност на мишката (от настройките). */
