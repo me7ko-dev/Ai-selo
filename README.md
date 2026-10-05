@@ -105,6 +105,8 @@ npm run check      # проверка на типовете
 npm run build      # сглобяване в dist/
 npm run shot       # робот прави снимки в docs/screenshots/ (след npm run build)
 ```
-Страници за проби на отделните части: `/dev/world.html`, `/dev/models.html`, `/dev/rpg.html`, `/dev/ui.html`.
+Страници за проби на отделните части: `/dev/world.html`, `/dev/models.html`, `/dev/chars.html` (хората: `?who=gena,maria,hero,s0&anim=walk`), `/dev/rpg.html`, `/dev/ui.html`.
 
-Технологии: Vite + TypeScript + three.js. Windows програмата е Electron (сглобява се в GitHub Actions). Всичко — светът, моделите, звукът и музиката — се създава от кода.
+Хората (жителите, Стоян, самодивите) са реалистични модели от свободните (CC0) пакети на Quaternius, облечени в носии: `node tools/build-characters.mjs <папка с пакетите>` сглобява `public/assets/chars/people.glb` и `anims.glb` (пуска се само когато се сменят хората). При графика „Ниско“ (телефони) играта ползва леките процедурни хора.
+
+Технологии: Vite + TypeScript + three.js. Windows програмата е Electron (сглобява се в GitHub Actions). Светът, звукът и музиката се създават от кода; текстурите и хората са със свободен лиценз (виж `public/assets/CREDITS.md`).
