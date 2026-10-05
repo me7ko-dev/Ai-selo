@@ -31,18 +31,19 @@ export function setWeathering(k: Kit): void {
 }
 
 // ---------------------------------------------------------------- облик на къщата
-export interface Look { plaster: THREE.Color; stone: string; quoin: string; timber: string; planks: string; door: string; shutter: string; roof: string }
+export interface Look { plaster: THREE.Color; stone: string; quoin: string; timber: string; planks: string; door: string; shutter: string; roof: THREE.Color }
 const PLASTER = ['#fbf8f1', '#eef3f7', '#f8eedb', '#f6ecdc', '#f2f2ee', '#fbf2e4', '#f4efe4', '#f9f4ec'];
 const STONE = ['#ffffff', '#ece5da', '#f6f0e6', '#e3dcd2'];
 const TIMBER = ['#8c6c56', '#7c604c', '#94755e', '#76594a'];
 const SHUTTER = ['#9a7a60', '#83988a', '#9c7c62', '#8597ae', '#a88a6c'];
-const ROOF = ['#f4e9e2', '#e0cfc6', '#eee0d8', '#d2c2ba', '#e8dad2'];
+// керемидите на снимката са доста оранжеви: малко повече зелено и синьо ги прави „печени“ и стари
+const ROOF = [0.98, 0.86, 0.93, 0.8, 0.9];
 export function lookFor(seed: number): Look {
   const r = new Rng(seed * 7 + 3);
   return {
     // варта е по-бяла от снимката на мазилката: изсветляваме ×1.3
     plaster: new THREE.Color(r.pick(PLASTER)).multiplyScalar(1.3), stone: r.pick(STONE), quoin: '#e8e4dc', timber: r.pick(TIMBER),
-    planks: '#b49c86', door: r.pick(['#8a6a52', '#7c5c46', '#94745a']), shutter: r.pick(SHUTTER), roof: r.pick(ROOF),
+    planks: '#b49c86', door: r.pick(['#8a6a52', '#7c5c46', '#94745a']), shutter: r.pick(SHUTTER), roof: (() => { const b = r.pick(ROOF); return new THREE.Color(b * 0.9, b * 1.0, b * 1.08); })(),
   };
 }
 
@@ -128,7 +129,7 @@ export function doorAt(k: Kit, x: number, o: DoorOpts): void {
 
 // ---------------------------------------------------------------- покрив
 export interface RoofOpts {
-  tint?: string;
+  tint?: THREE.ColorRepresentation;
   /** дъсчен покрив (навеси) вместо керемиди */
   boards?: boolean;
   timber?: string;
@@ -152,7 +153,7 @@ function halfTile(k: Kit, A: THREE.Vector3, B: THREE.Vector3, rA: number, rB: nu
   k.pop();
 }
 /** Редица капаци по било/ребро от A до B. */
-function capRow(k: Kit, A: V3, B: V3, r: number, tint: string): void {
+function capRow(k: Kit, A: V3, B: V3, r: number, tint: THREE.ColorRepresentation): void {
   const a = new THREE.Vector3(...A), b = new THREE.Vector3(...B);
   const len = a.distanceTo(b), n = Math.max(1, Math.round(len / 0.36));
   const up = new THREE.Vector3(0, 1, 0);
@@ -162,7 +163,7 @@ function capRow(k: Kit, A: V3, B: V3, r: number, tint: string): void {
   }
 }
 /** Редица керемиди по ръба на стрехата: от E0 до E1 (по ръба), надолу по наклона Sd, нормала N. */
-function eaveRow(k: Kit, E0: THREE.Vector3, E1: THREE.Vector3, Sd: THREE.Vector3, N: THREE.Vector3, tint: string): void {
+function eaveRow(k: Kit, E0: THREE.Vector3, E1: THREE.Vector3, Sd: THREE.Vector3, N: THREE.Vector3, tint: THREE.ColorRepresentation): void {
   const len = E0.distanceTo(E1), sp = 0.165, n = Math.floor(len / sp);
   const off = (len - n * sp) / 2 + sp / 2;
   const dir = new THREE.Vector3().subVectors(E1, E0).normalize();
@@ -230,6 +231,8 @@ export function roofOver(k: Kit, x0: number, x1: number, z0: number, z1: number,
   }
   // открити ребра (греди) под стряхата
   if (o.rafters !== false) {
+    // ребрата са в сянката на стряхата — по-тъмни, иначе изглеждат като дупки към небето
+    const timber = new THREE.Color(o.timber ?? '#6e4e3a').multiplyScalar(0.72);
     const reach = eave + 0.12, step = 0.62;
     const along = (xa: number, xb: number, z: number, s: number) => {
       const n = Math.max(1, Math.round((xb - xa) / step));
@@ -276,7 +279,7 @@ export function roofOver(k: Kit, x0: number, x1: number, z0: number, z1: number,
   }
   // капаци по билото и ребрата, редица керемиди по стрехите
   if (!o.boards) {
-    const capT = '#e8d6cc';
+    const capT = new THREE.Color(tint).multiplyScalar(0.92);
     if (R1[0] > R0[0]) capRow(k, [R0[0] - 0.12, R0[1] + 0.02, zm], [R1[0] + 0.12, R1[1] + 0.02, zm], 0.13, capT);
     if (kind === 'hip') {
       capRow(k, [x0, yt + 0.03, z0], R0, 0.12, capT); capRow(k, [x0, yt + 0.03, z1], R0, 0.12, capT);
