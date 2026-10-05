@@ -282,8 +282,11 @@ export function roofOver(k: Kit, x0: number, x1: number, z0: number, z1: number,
     const capT = new THREE.Color(tint).multiplyScalar(0.92);
     if (R1[0] > R0[0]) capRow(k, [R0[0] - 0.12, R0[1] + 0.02, zm], [R1[0] + 0.12, R1[1] + 0.02, zm], 0.13, capT);
     if (kind === 'hip') {
-      capRow(k, [x0, yt + 0.03, z0], R0, 0.12, capT); capRow(k, [x0, yt + 0.03, z1], R0, 0.12, capT);
-      capRow(k, [x1, yt + 0.03, z0], R1, 0.12, capT); capRow(k, [x1, yt + 0.03, z1], R1, 0.12, capT);
+      // ребрата спират малко преди билото (иначе при почти пирамидален покрив капаците стърчат на върха)
+      const near = (A: V3, R: V3): V3 => [A[0] + (R[0] - A[0]) * 0.93, A[1] + (R[1] - A[1]) * 0.93, A[2] + (R[2] - A[2]) * 0.93];
+      capRow(k, [x0, yt + 0.03, z0], near([x0, yt, z0], R0), 0.12, capT); capRow(k, [x0, yt + 0.03, z1], near([x0, yt, z1], R0), 0.12, capT);
+      capRow(k, [x1, yt + 0.03, z0], near([x1, yt, z0], R1), 0.12, capT); capRow(k, [x1, yt + 0.03, z1], near([x1, yt, z1], R1), 0.12, capT);
+      if (R1[0] - R0[0] < 0.8) k.cyl('roof', 0.05, 0.2, 0.32, 8, (R0[0] + R1[0]) / 2, R0[1] + 0.1, zm, { tint: capT, jitter: 0 });
     } else {
       for (const x of [x0 + 0.1, x1 - 0.1]) { capRow(k, [x, yt + 0.02, z0], [x, yt + rise + 0.02, zm], 0.11, capT); capRow(k, [x, yt + 0.02, z1], [x, yt + rise + 0.02, zm], 0.11, capT); }
     }
