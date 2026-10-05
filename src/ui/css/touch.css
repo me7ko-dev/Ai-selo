@@ -85,3 +85,14 @@ html.bl-touch #game { touch-action: none; }
 
 /* подсказките за клавиатура в разговора и въведението — не важат за пръсти */
 .bl-ui.bl-touch .dl-keys, .bl-ui.bl-touch .intro-keys { display: none; }
+
+/* началният екран на нисък екран (телефон легнал): по-малко заглавие, бутоните в две колони */
+@media (max-height: 520px) {
+  .bl-ui.bl-touch .start-center { top: 46%; }
+  .bl-ui.bl-touch .start-kicker, .bl-ui.bl-touch .start-tag { display: none; }
+  .bl-ui.bl-touch .start-title { font-size: 3.4em; }
+  .bl-ui.bl-touch .start-orn { margin: 0.1em auto; }
+  .bl-ui.bl-touch .start-sub { font-size: 1.2em; }
+  .bl-ui.bl-touch .start-menu { display: grid; grid-template-columns: 1fr 1fr; align-items: start; width: 30em; margin-top: 1.2em; gap: 0.6em 0.8em; }
+  .bl-ui.bl-touch .start-foot { bottom: 0.6em; }
+}
