@@ -366,7 +366,8 @@ export class SkySystem {
     near.map?.dispose(); near.map = null; far.map?.dispose(); far.map = null;
     if (q === 'high') {
       this.sun.castShadow = this.shadowsOn; this.sunFar.castShadow = this.shadowsOn;
-      near.mapSize.set(2048, 2048); far.mapSize.set(2048, 2048);
+      // далечната каскада е мека (±110 м) — 1024 стига и пести запълване на GTX 1650
+      near.mapSize.set(2048, 2048); far.mapSize.set(1024, 1024);
       this.shadowExtent = 20; this.farExtent = 110;
       near.normalBias = 0.03; far.normalBias = 0.14;
       this.envSize = 128;

@@ -90,7 +90,7 @@ export class PostFX {
       const c = ao.configuration;
       c.halfRes = true;
       c.depthAwareUpsampling = true;
-      c.aoSamples = 8;
+      c.aoSamples = 6; // 6 проби на половин резолюция — разликата не се вижда, ~0.5 ms по-евтино
       c.denoiseSamples = 4;
       c.denoiseRadius = 8;
       c.denoiseIterations = 1;
@@ -106,7 +106,7 @@ export class PostFX {
     if (q !== 'low') {
       this.bloom = new BloomEffect({
         mipmapBlur: true, luminanceThreshold: 1.2, luminanceSmoothing: 0.35, intensity: 0.55, radius: 0.72,
-        levels: q === 'high' ? 6 : 5,
+        levels: 5,
       });
     }
     // един проход: изглаждане (върху HDR; прагът следи експонацията) → блясък → AgX и корекция
