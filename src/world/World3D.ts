@@ -8,7 +8,10 @@ import { heightAt, riverInfo, riverWaterHeight, terrainHeight, POND_WATER_HEIGHT
 import { getPlan, type WorldPlan, GLADE, POND, SWAMP } from './plan';
 import { CameraBlockers } from './cameraBlock';
 import { Batch, vertexColorMaterial } from './geom';
-import { buildHouse, buildProp } from './buildings';
+import { buildProp } from './buildings';
+import { Kit } from './arch/kit';
+import { archMaterials, archTick, setArchQuality } from './arch/materials';
+import { buildHouse, setWeathering } from './arch/house';
 import { buildFences, buildRuins, buildSigns, buildSignPosts } from './extras';
 import { paintGround, paintMap, type GroundData } from './ground';
 import { buildTerrain } from './terrain';
@@ -124,7 +127,11 @@ export class World3D implements WorldQuery {
     const key = (x: number, z: number) => `${Math.floor(x / CHUNK)},${Math.floor(z / CHUNK)}`;
     const S = (x: number, z: number) => { const k = key(x, z); return solid.get(k) ?? solid.set(k, new Batch()).get(k)!; };
     const Wn = (x: number, z: number) => { const k = key(x, z); return windows.get(k) ?? windows.set(k, new Batch()).get(k)!; };
-    for (const h of this.plan.houses) buildHouse(S(h.x, h.z), Wn(h.x, h.z), h);
+    const kits = new Map<string, Kit>();
+    const K = (x: number, z: number) => { const k = key(x, z); let kit = kits.get(k); if (!kit) { kit = new Kit(); setWeathering(kit); kits.set(k, kit); } return kit; };
+    for (const h of this.plan.houses) buildHouse(K(h.x, h.z), h);
+    const mats = archMaterials();
+    for (const [k, kit] of kits) for (const m of kit.meshes(mats, `bld_${k}`)) this.addStatic(m);
     for (const p of this.plan.props) buildProp(S(p.x, p.z), hot, p);
     for (const f of this.plan.fences) buildFences(S(f.pts[0][0], f.pts[0][1]), [f]);
     if (this.plan.ruins.length) buildRuins(S(this.plan.ruins[0][0], this.plan.ruins[0][1]), this.plan.ruins);
@@ -193,6 +200,7 @@ export class World3D implements WorldQuery {
     this.windowMat.color.setRGB(0.03 + lit * 1.0, 0.03 + lit * 0.75, 0.035 + lit * 0.45);
     const flick = 0.8 + 0.12 * Math.sin(t * 9.3) + 0.08 * Math.sin(t * 17.1 + 2);
     this.hotMat.color.setScalar(0.85 + 0.15 * flick);
+    archTick(lit, flick);
     this.forgeLight.intensity = (3 + night * 9) * flick;
 
     // вода
@@ -253,6 +261,7 @@ export class World3D implements WorldQuery {
 
   setQuality(q: Quality): void {
     this.quality = q;
+    setArchQuality(q);
     const r = this.engine.renderer;
     const sun = this.sky.sun;
     if (q === 'low') {
