@@ -15,7 +15,7 @@ export const HAIR = {
 } as const;
 
 export type BodyKind = 'M' | 'F' | 'H';
-export type Role = 'villager' | 'hero' | 'samodiva';
+export type Role = 'villager' | 'hero' | 'samodiva' | 'talasam';
 export type Tool = NonNullable<VillagerLook['tool']>;
 
 export interface CharSpec {
@@ -159,6 +159,38 @@ export function samodivaSpec(index: number): CharSpec {
     height: 1.72 + (index % 3) * 0.03, build: 0.95, stoop: 0, old: false, female: true,
     glow: '#a9c4ff', seed: (index * 0.618) % 1,
   };
+}
+
+/**
+ * Таласъмът — неспокоен дух на умрял: прегърбен, сиво-зелена кожа, сплъстена коса и брада, изгнили селски дрехи
+ * (риза, елек, избелял пояс), светещи очи, островърхи уши и нокти (добавят се в character.ts).
+ */
+export function talasamSpec(): CharSpec {
+  return {
+    role: 'talasam', body: 'M',
+    cloth: [G.SHIRT, G.TROUSERS, G.BOOTS, G.LEGWRAP, G.CUFF],
+    folk: [G.VEST, G.SASH],
+    hair: [HAIR.long, HAIR.browsM, HAIR.beard],
+    colors: {
+      [G.SHIRT]: ['#4a4c3c', 1],
+      [G.TROUSERS]: ['#2a2b22', 1],
+      [G.BOOTS]: ['#1c1914', 0.9],
+      [G.LEGWRAP]: ['#3a3a2e', 1],
+      [G.CUFF]: ['#2a2620', 0.8],
+      [G.VEST]: ['#2c3326', 1],
+      [G.SASH]: ['#4e2e26', 1],
+    },
+    hairColors: { [HAIR.long]: '#16180f', [HAIR.browsM]: '#16180f', [HAIR.beard]: '#1a1c12' },
+    skin: rawTint('#6e7562'),
+    height: 1.74, build: 0.9, stoop: 0.85, old: false, female: false,
+    seed: 0.71,
+  };
+}
+
+/** Като skinTint, но без ограничението за „естествен“ цвят (за създанията). */
+export function rawTint(hex: string): [number, number, number] {
+  const want = hexToLinear(hex), base = hexToLinear(SKIN_BASE);
+  return [0, 1, 2].map((i) => Math.max(0.05, Math.min(3, want[i] / base[i]))) as [number, number, number];
 }
 
 /** Смес на два цвята „#rrggbb“ (t = 0 → a). */

@@ -60,7 +60,7 @@ export function chooseClip(anim: AnimName, ctx: AnimContext): ClipChoice {
   // поднос в ръката — лакътят свит напред (иначе подносът виси до крака)
   const carry: Overlay = ctx.tool === 'tray' ? 'carry' : 'none';
   switch (anim) {
-    case 'idle': return loop(CLIPS.idle, carry, ctx.old || ctx.role === 'samodiva' ? 0.8 : 1);
+    case 'idle': return loop(CLIPS.idle, carry, ctx.old || ctx.role === 'samodiva' ? 0.8 : ctx.role === 'talasam' ? 0.7 : 1);
     case 'walk': return loop(ctx.old ? CLIPS.walkOld : CLIPS.walk, carry, 1, 0.25);
     case 'run': return loop(CLIPS.jog, 'none', 1, 0.2);
     case 'talk': return loop(CLIPS.talk, carry, ctx.old ? 0.85 : 1);
@@ -70,6 +70,7 @@ export function chooseClip(anim: AnimName, ctx: AnimContext): ClipChoice {
     case 'dance': return loop(CLIPS.dance, 'horo', ctx.role === 'samodiva' ? 0.8 : 0.9, 0.4);
     case 'block': return loop(CLIPS.swordIdle, 'none', 1, 0.12);
     case 'attack':
+      if (ctx.role === 'talasam') return once(CLIPS.cross, 0.95, 0.1, 0.0, 0.72); // замах с нокти
       if (ctx.weapon === 'bow') return once(CLIPS.shoot, 1.1, 0.08, 0, 0.6, 'bow');
       return once(CLIPS.sword, 1.55, 0.08, 0.28, 1.12);
     case 'attack2':

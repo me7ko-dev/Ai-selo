@@ -17,7 +17,7 @@ export { countTris } from './shared';
 import { mergeStatic } from './shared';
 import { charactersReady } from './gltf/assets';
 import { GltfCharacter } from './gltf/character';
-import { villagerSpec, heroSpec, samodivaSpec } from './gltf/looks';
+import { villagerSpec, heroSpec, samodivaSpec, talasamSpec } from './gltf/looks';
 export { preloadCharacters, charactersReady } from './gltf/assets';
 
 /** Реалистичен модел, ако хората са заредени; при грешка — null (тогава процедурният). */
@@ -38,7 +38,8 @@ export function createHeroModel(): HeroModel {
 
 export function createMonsterModel(kind: MonsterKind): CharacterModel {
   if (kind === 'karakondzhul') return new Karakondzhul();
-  return kind === 'talasam' ? new Talasam() : new Quadruped('fox_talasam');
+  if (kind === 'talasam') return gltfOr(() => new GltfCharacter(talasamSpec())) ?? new Talasam();
+  return new Quadruped('fox_talasam');
 }
 
 export function createSamodivaModel(index = 0): CharacterModel {

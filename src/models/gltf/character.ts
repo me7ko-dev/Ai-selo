@@ -9,6 +9,9 @@ import { chooseClip, locomotionClip, ONE_SHOTS, type AnimContext, type ClipChoic
 import { buildSaber, buildScabbard, buildBow, buildTool } from '../items';
 import { mergeStatic, cachedGeo, mat, part, sphGeo, haloSprite } from '../shared';
 
+let clawMat: THREE.MeshStandardMaterial | null = null;
+function pmatClaw(): THREE.MeshStandardMaterial { return clawMat ??= new THREE.MeshStandardMaterial({ color: '#cfc4a2', roughness: 0.35, metalness: 0 }); }
+
 const FLOWERS = [['#ffffff', '#f2d64a', '#e86a8a'], ['#f2d64a', '#ffffff', '#7aa0e8'], ['#e86a8a', '#ffffff', '#f2d64a']];
 
 type Weapon = 'saber' | 'ivan_saber' | 'bow' | null;
@@ -107,6 +110,7 @@ export class GltfCharacter implements HeroModel {
     this.hand = this.socketR;
     this.attachTool();
     if (spec.wreath !== undefined) this.attachWreath(spec.wreath);
+    if (spec.role === 'talasam') this.attachTalasam();
     const extra = spec.hair.includes(HAIR.kalpak) ? 0.1 : spec.folk.includes(G.SCARF) ? 0.03 : 0;
     this.height = spec.height + extra;
     this.seatHeight = 0.45 * this.scale;
@@ -141,7 +145,8 @@ export class GltfCharacter implements HeroModel {
         mat.color.setRGB(spec.skin[0], spec.skin[1], spec.skin[2], THREE.LinearSRGBColorSpace);
         this.ownMats.push(mat);
       } else mat = A.materials.eyes;
-      if (glow && part !== 'eyes') { mat.emissive.copy(glow); mat.emissiveIntensity = part === 'skin' ? 0.08 : 0.22; }
+      // самодивите светят леко; таласъмът — едва-едва (само силуетът в нощната гора)
+      if (glow && part !== 'eyes') { mat.emissive.copy(glow); mat.emissiveIntensity = (part === 'skin' ? 0.08 : 0.22) * (spec.role === 'talasam' ? 0.35 : 1); }
       m.material = mat;
       // очите са мънички — без сянка (един draw call по-малко в картата на сенките)
       if (part === 'eyes') { m.castShadow = false; m.receiveShadow = false; }
@@ -219,6 +224,52 @@ export class GltfCharacter implements HeroModel {
     const halo = haloSprite('#cfe0ff', 1.6, 0.12);
     halo.position.set(0, -0.35, 0);
     s.add(halo);
+  }
+
+  /** Точка на главата с осите на тялото в покой (X наляво, Y нагоре, Z напред), на (dx, dy, dz) от костта Head. */
+  private headPoint(dx: number, dy: number, dz: number): THREE.Object3D | null {
+    const head = this.bones.get('Head');
+    if (!head) return null;
+    const s = new THREE.Object3D();
+    s.quaternion.copy(this.body.bindWorld.get('Head')!).invert();
+    s.position.set(dx, dy, dz).applyQuaternion(s.quaternion);
+    head.add(s);
+    return s;
+  }
+
+  /** Таласъм: светещи очи (+ ореол), островърхи уши, дълги нокти. */
+  private attachTalasam(): void {
+    const eyes: THREE.SkinnedMesh[] = [];
+    this.armature.traverse((o) => { if ((o as THREE.SkinnedMesh).isSkinnedMesh && o.name.endsWith('_eyes')) eyes.push(o as THREE.SkinnedMesh); });
+    const eyeMat = new THREE.MeshStandardMaterial({ color: '#c8e05a', emissive: '#d8ff5a', emissiveIntensity: 2.2, roughness: 0.3 });
+    this.ownMats.push(eyeMat);
+    for (const e of eyes) e.material = eyeMat;
+    const glowAt = this.headPoint(0, 0.075, 0.1);
+    if (glowAt) { const h = haloSprite('#d8ff5a', 0.11, 0.35); glowAt.add(h); }
+    // цветът на кожата от talasamSpec (#7c8a70), малко по-тъмен — ушите нямат текстура
+    const skin = new THREE.MeshStandardMaterial({ color: '#6c785f', roughness: 0.9, metalness: 0 });
+    if (this.spec.glow) { skin.emissive.set(this.spec.glow); skin.emissiveIntensity = 0.08; }
+    this.ownMats.push(skin); this.flashMats.push(skin);
+    const ears = this.headPoint(0, 0.065, -0.005);
+    if (ears) {
+      for (const sx of [1, -1]) {
+        // лист, изтеглен назад и нагоре
+        const ear = new THREE.Mesh(cachedGeo('talasamEar', () => { const g = new THREE.ConeGeometry(0.022, 0.11, 6); g.scale(1, 1, 0.45); g.translate(0, 0.055, 0); return g; }), skin);
+        ear.position.set(sx * 0.072, 0, -0.005);
+        ear.rotation.set(-0.75, 0, -sx * 1.05);
+        ear.castShadow = true;
+        ears.add(ear);
+      }
+    }
+    const nail = pmatClaw();
+    for (const side of [this.socketR, this.socketL]) {
+      for (let i = 0; i < 4; i++) {
+        const c = new THREE.Mesh(cachedGeo('talasamClaw', () => { const g = new THREE.ConeGeometry(0.006, 0.05, 5); g.translate(0, 0.025, 0); return g; }), nail);
+        c.position.set((i - 1.5) * 0.018, 0.035, 0.012);
+        c.rotation.set(0.5, 0, 0);
+        side.add(c);
+      }
+    }
   }
 
   // ───────────────────────────── сечива и оръжия ─────────────────────────────
