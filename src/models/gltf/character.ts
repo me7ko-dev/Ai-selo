@@ -8,6 +8,7 @@ import { type CharSpec, BODY_HEIGHT, G, HAIR, paletteArray, hexToLinear } from '
 import { chooseClip, locomotionClip, ONE_SHOTS, type AnimContext, type ClipChoice, type Overlay } from './animmap';
 import { buildSaber, buildScabbard, buildBow, buildTool } from '../items';
 import { mergeStatic, cachedGeo, mat, part, sphGeo, haloSprite } from '../shared';
+import { atmoState } from '../../engine/atmo';
 
 /** Призрачно сияние по контура (ръбовете към камерата) — таласъмът се вижда в нощната гора, без да свети целият. */
 function addRim(m: THREE.MeshStandardMaterial, color: string, strength: number): void {
@@ -762,7 +763,9 @@ export class GltfCharacter implements HeroModel {
     }
     if (!this.baseEmissive.length) this.baseEmissive = this.flashMats.map((m) => ({ c: m.emissive.clone(), i: m.emissiveIntensity }));
     const c = new THREE.Color(color ?? 0xff5040);
-    for (const m of this.flashMats) { m.emissive.copy(c); m.emissiveIntensity = 0.22; } // лек оттенък, не плътен цвят
+    // лек оттенък, не плътен цвят: делим на експонацията (нощем окото е „отворено“ и 0.22 ставаше плътно червено)
+    const k = 0.22 / Math.max(1, atmoState.exposure);
+    for (const m of this.flashMats) { m.emissive.copy(c); m.emissiveIntensity = k; }
     this.flashT = 0.16;
   }
 

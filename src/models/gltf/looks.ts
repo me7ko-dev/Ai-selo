@@ -134,7 +134,8 @@ export function heroSpec(): CharSpec {
     },
     hairColors: { [HAIR.buzzed]: '#3a2414', [HAIR.browsM]: '#3a2414', [HAIR.beard]: '#4a2c18' },
     skin: skinTint('#d9ab84'), height: 1.8, build: 1, stoop: 0, old: false, female: false, seed: 0.37,
-    cape: '#6b4a2f',
+    // наметалото е изключено: в играта скинирането му се чупи (разтяга се през целия екран) — виж PLAN §8
+    // cape: '#6b4a2f',
   };
 }
 

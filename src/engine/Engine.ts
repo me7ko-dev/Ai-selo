@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { Input } from './Input';
 import { setMaxAnisotropy } from '../world/tex';
-import { installAtmo } from './atmo';
+import { installAtmo, atmoState } from './atmo';
 import { PostFX, type PostQuality } from './post';
 import { gpuName, qualityForGpu, type GpuQuality } from './gpu';
 
@@ -140,6 +140,7 @@ export class Engine {
     const k = 1 - Math.exp(-dt * 1.6);
     this.exposure = Math.exp(Math.log(this.exposure) + (Math.log(Math.max(1e-3, this.exposureTarget)) - Math.log(this.exposure)) * k);
     this.post.exposure = this.exposure;
+    atmoState.exposure = this.exposure;
     this.post.render(dt);
     this.input.endFrame();
   }

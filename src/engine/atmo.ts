@@ -51,6 +51,8 @@ export const atmoState = {
   wetness: 0,
   /** сила на дъжда 0..1 */
   rain: 0,
+  /** текущата експонация на окото (Engine) — за неща, които трябва да изглеждат еднакво ярки денем и нощем */
+  exposure: 1,
 };
 
 export function setAtmoVec(slot: number, x: number, y: number, z: number, w: number): void {
