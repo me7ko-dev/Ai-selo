@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import type { WorldQuery } from '../core/world-query';
 import type { HeroModel, AnimName } from '../models/types';
+import { RIDE_WALK, RIDE_GALLOP } from './horses';
 
 export interface HeroInput {
   fwd: number;      // -1..1 (W/S)
@@ -29,6 +30,8 @@ export const RUN_SPEED = 8.2;
 const GRAVITY = 22;
 const JUMP_V = 7;
 export const HERO_RADIUS = 0.4;
+/** На кон героят е по-широк (конят не минава през тесни места). */
+export const RIDE_RADIUS = 0.75;
 
 export class Hero {
   readonly pos = new THREE.Vector3();
@@ -56,6 +59,11 @@ export class Hero {
   private knock = new THREE.Vector2();
   private baseAnim: AnimName | '' = '';
   private lockCd = 0;
+  /** На кон ли е (Rpg го включва/изключва). */
+  mounted = false;
+  /** Колко над земята е моделът на ездача (седлото минус височината на седналия). */
+  seatOffset = 0;
+  private rideT = 0;
 
   /** Rpg задава: ударът стига целта (комбо индекс, множител, обхват). */
   onAttackHit: (idx: number, mult: number, reach: number) => void = () => {};
@@ -117,6 +125,7 @@ export class Hero {
     this.bowCd = Math.max(0, this.bowCd - dt);
     this.lockCd = Math.max(0, this.lockCd - dt);
     if (this.dead) { this.applyPhysics(dt, 0, 0, world); this.model.update(dt, 0); this.syncModel(); return; }
+    if (this.mounted) { this.updateMounted(dt, inp, camYaw, world, sp); return; }
 
     // посока спрямо камерата
     const fx = -Math.sin(camYaw), fz = -Math.cos(camYaw);
@@ -193,6 +202,53 @@ export class Hero {
     this.syncModel();
   }
 
+  /** Езда: W/S/A/D накъдето гледа камерата, Shift — галоп; конят набира скорост и се обръща постепенно, не върви встрани. */
+  private updateMounted(dt: number, inp: HeroInput, camYaw: number, world: WorldQuery, sp: StaminaPool): void {
+    this.blocking = false; this.attackIdx = -1; this.queued = false;
+    const fx = -Math.sin(camYaw), fz = -Math.cos(camYaw);
+    const rx = Math.cos(camYaw), rz = -Math.sin(camYaw);
+    let dx = fx * inp.fwd + rx * inp.right, dz = fz * inp.fwd + rz * inp.right;
+    const dl = Math.hypot(dx, dz);
+    if (dl > 1) { dx /= dl; dz /= dl; }
+    const moving = dl > 0.05;
+    let along = 0;
+    if (moving) {
+      const want = Math.atan2(dx, dz);
+      let d = want - this.yaw; d = Math.atan2(Math.sin(d), Math.cos(d));
+      const fast = this.speed > 7;
+      this.yaw += d * Math.min(1, dt * (fast ? 2.6 : 4));
+      along = Math.max(0, Math.cos(d)) * Math.min(1, dl);
+    }
+    let target = moving ? (inp.run ? RIDE_GALLOP : RIDE_WALK) * along * this.speedMul : 0;
+    if (world.waterAt(this.pos.x, this.pos.z)) target *= 0.6;
+    const cur = Math.hypot(this.vel.x, this.vel.y);
+    const k = 1 - Math.exp(-dt * (target > cur ? 1.8 : 3.2)); // конят набира бавно, спира по-бързо
+    const sp2 = cur + (target - cur) * k;
+    this.vel.set(Math.sin(this.yaw) * sp2, Math.cos(this.yaw) * sp2);
+    this.restT += dt;
+    if (this.restT > 0.6) sp.stamina = Math.min(sp.maxStamina, sp.stamina + 26 * dt);
+    const px = this.pos.x, pz = this.pos.z;
+    this.applyPhysics(dt, this.vel.x, this.vel.y, world, 0, RIDE_RADIUS);
+    // препятствие: конят спира (иначе „бута“ стената в галоп)
+    const real = dt > 0 ? Math.hypot(this.pos.x - px, this.pos.z - pz) / dt : sp2;
+    if (real < sp2 * 0.6) this.vel.multiplyScalar(Math.max(0.2, real / Math.max(0.01, sp2)));
+    this.speed = Math.min(sp2, real);
+    this.rideT += dt * (2 + this.speed * 0.9);
+    if (this.baseAnim !== 'ride') { this.model.play('ride', { loop: true }); this.baseAnim = 'ride'; }
+    this.model.update(dt, 0);
+    this.syncModel();
+  }
+
+  /** Качване/слизане от коня. */
+  setMounted(on: boolean, seatOffset = 0): void {
+    this.mounted = on;
+    this.seatOffset = on ? seatOffset : 0;
+    this.attackIdx = -1; this.blocking = false; this.vel.set(0, 0); this.speed = 0; this.vy = 0;
+    this.baseAnim = '';
+    if (!on) this.model.play('idle', { loop: true });
+    this.syncModel();
+  }
+
   private tryAttack(camYaw: number, sp: StaminaPool): void {
     if (this.ranged) {
       if (this.bowCd > 0 || sp.stamina < BOW_COST) return;
@@ -228,7 +284,7 @@ export class Hero {
     else this.yaw = Math.atan2(-Math.sin(camYaw), -Math.cos(camYaw));
   }
 
-  private applyPhysics(dt: number, vx: number, vz: number, world: WorldQuery, groundBias = 0): void {
+  private applyPhysics(dt: number, vx: number, vz: number, world: WorldQuery, groundBias = 0, radius = HERO_RADIUS): void {
     // отблъскване
     vx += this.knock.x * 6; vz += this.knock.y * 6;
     this.knock.multiplyScalar(Math.exp(-dt * 8));
@@ -240,7 +296,7 @@ export class Hero {
       nx = this.pos.x; nz = this.pos.z; this.vel.set(0, 0);
       if (this.lockCd <= 0) { this.onLocked(msg); this.lockCd = 4; }
     }
-    const c = world.collide(nx, nz, HERO_RADIUS);
+    const c = world.collide(nx, nz, radius);
     this.pos.x = c.x; this.pos.z = c.z;
     const g = world.heightAt(this.pos.x, this.pos.z) + groundBias;
     this.vy -= GRAVITY * dt;
@@ -252,6 +308,11 @@ export class Hero {
 
   private syncModel(): void {
     this.model.root.position.copy(this.pos);
+    if (this.mounted) {
+      // подрусване в седлото: в галоп — по-силно
+      const bob = this.speed > 7.5 ? 0.07 * Math.abs(Math.sin(this.rideT)) : this.speed > 0.4 ? 0.025 * Math.abs(Math.sin(this.rideT)) : 0;
+      this.model.root.position.y += this.seatOffset + bob;
+    }
     this.model.root.rotation.y = this.yaw;
   }
 }

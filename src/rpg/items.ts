@@ -11,7 +11,7 @@ export type ItemId =
   | 'saber' | 'ivan_saber' | 'bow'
   | 'kalpak' | 'yamurluk' | 'gloves' | 'tsarvuli' | 'martenitsa'
   | 'rosen' | 'rosen_potion' | 'banitsa' | 'tea'
-  | 'fox_tail' | 'lamia_scale' | 'claw' | 'bell' | 'coin';
+  | 'fox_tail' | 'lamia_scale' | 'claw' | 'bell' | 'saddle' | 'coin';
 
 export type ItemKind = 'weapon' | 'armor' | 'consumable' | 'quest' | 'loot' | 'trophy' | 'gold';
 
@@ -57,6 +57,7 @@ export const ITEMS: Record<ItemId, ItemDef> = {
   lamia_scale: D({ id: 'lamia_scale', name: 'Люспа от Ламята', desc: 'Тежка зелена люспа, твърда като желязо. Доказателство за победата.', icon: 'lamia_scale', kind: 'trophy', stack: 5, value: 200 }),
   claw: D({ id: 'claw', name: 'Таласъмски нокът', desc: 'Черен извит нокът. Ковачът дава грошове за такива.', icon: 'claw', kind: 'loot', stack: 20, value: 3 }),
   bell: D({ id: 'bell', name: 'Звънче', desc: 'Медно звънче от козя шия, намерено в нивата на Иван. Чие ли е?', icon: 'bell', kind: 'quest', stack: 1 }),
+  saddle: D({ id: 'saddle', name: 'Седло', desc: 'Дървено седло от Калин: кожена седалка, стремена и шарена черга. Застани до опитомен кон и натисни [E], за да го оседлаеш.', icon: 'saddle', kind: 'loot', stack: 3, value: 30 }),
   coin: D({ id: 'coin', name: 'грошове', desc: 'Сребърни грошове.', icon: 'coin', kind: 'gold', stack: 99999 }),
 };
 

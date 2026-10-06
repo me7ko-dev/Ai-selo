@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import type { AnimName, AnimalKind } from './types';
 import { RigModel } from './rig';
-import { mat, part, cylGeo, sphGeo, lowSph, coneGeo, boxGeo, capGeo, joint, glow, haloSprite, cachedGeo, shevicaTex } from './shared';
+import { mat, part, cylGeo, sphGeo, lowSph, coneGeo, boxGeo, capGeo, joint, glow, haloSprite, cachedGeo, shevicaTex, mergeStatic } from './shared';
 import { furFrom } from './skin';
 import { charactersReady } from './gltf/assets';
 
@@ -16,7 +16,18 @@ const GALLOP = [0, 0.35, 2.4, 2.8], TROT = [0, Math.PI, Math.PI, 0];
 const LEG_IDS = [FLU, FLL, FRU, FRL, BLU, BLL, BRU, BRL];
 
 export type QuadKind = AnimalKind | 'fox_talasam';
-const MANE = '#211813';
+
+/** Масти на конете (name — в мъжки род): тяло, долни части на краката, грива/опашка, бяла звезда на челото. */
+export type HorseCoat = 'bay' | 'chestnut' | 'black' | 'grey' | 'white' | 'palomino';
+export const HORSE_COATS: Record<HorseCoat, { name: string; body: string; legC: string; mane: string; star: boolean }> = {
+  bay: { name: 'дорест', body: '#7a5034', legC: '#241a14', mane: '#211813', star: true },
+  chestnut: { name: 'алест', body: '#8f4a24', legC: '#5e3118', mane: '#6a3418', star: true },
+  black: { name: 'вран', body: '#2a2420', legC: '#1a1714', mane: '#121010', star: true },
+  grey: { name: 'сив', body: '#9c968e', legC: '#4a4642', mane: '#3e3a36', star: false },
+  white: { name: 'бял', body: '#e4dfd6', legC: '#b4ada2', mane: '#d6d0c4', star: false },
+  palomino: { name: 'жълтеникав', body: '#c49a56', legC: '#7e5e34', mane: '#efe3c4', star: true },
+};
+const MANE = HORSE_COATS.bay.mane;
 
 interface QuadSpec {
   len: number; r: number; leg: number; legR: number; neck: number; neckTilt: number; head: number;
@@ -38,11 +49,22 @@ export class Quadruped extends RigModel {
   private bodyY: number;
   readonly kind: QuadKind;
 
-  constructor(kind: Exclude<QuadKind, 'chicken'>) {
+  /** Седлото и чергата под него (конете) — показват се, когато конят е оседлан. */
+  private saddle: THREE.Object3D | null = null;
+  private bridle: THREE.Object3D | null = null;
+  private mane = MANE;
+  /** Височина на седлото (м) — там сяда ездачът. */
+  readonly seatY: number;
+  /** С ездач: не пасе. */
+  ridden = false;
+
+  constructor(kind: Exclude<QuadKind, 'chicken'>, coat: HorseCoat = 'bay') {
     super();
     this.kind = kind;
     this.realistic = charactersReady();
-    const S = this.sp = SPECS[kind];
+    const C = HORSE_COATS[coat];
+    const S = this.sp = kind === 'horse' ? { ...SPECS.horse, body: C.body, face: C.body, legC: C.legC } : SPECS[kind];
+    if (kind === 'horse') this.mane = C.mane;
     const r = this.root;
     const bodyY = this.bodyY = S.leg + S.r * 0.55;
     const body = joint(r, 0, bodyY, 0, 'body');
@@ -65,6 +87,7 @@ export class Quadruped extends RigModel {
     }
     for (const j of [body, neck, head, tail, tail2, ...legJ]) this.addJoint(j);
     this.height = bodyY + S.r + S.neck * 0.6 + S.head;
+    this.seatY = bodyY + S.r * 0.95 + 0.07;
 
     const bm = mat(S.body), lm = mat(S.legC), fm = mat(S.face);
     const fox = kind === 'fox_talasam';
@@ -115,7 +138,7 @@ export class Quadruped extends RigModel {
     }
     if (kind === 'dog') part(neck, cylGeo(1, 6, true), mat('#b3262b', { side: THREE.DoubleSide }), S.r * 0.44, 0.025, S.r * 0.44, 0, 0.04, 0, 0, 0, 0, false);
     if (kind === 'horse') {
-      const maneM = mat(MANE);
+      const maneM = mat(this.mane);
       // грива по тила (на кичури) + перчем между ушите
       for (let i = 0; i < 6; i++) {
         const f = i / 5;
@@ -123,13 +146,31 @@ export class Quadruped extends RigModel {
       }
       part(head, coneGeo(5), maneM, S.head * 0.22, S.head * 0.55, S.head * 0.12, 0, S.head * 0.55, S.head * 0.25, 1.9, 0, 0, false);
       // бяла звезда на челото
-      part(head, sphGeo(0), mat('#efe9df'), S.head * 0.22, S.head * 0.3, S.head * 0.08, 0, S.head * 0.45, S.head * 0.82, -0.3, 0, 0, false);
+      if (C.star) part(head, sphGeo(0), mat('#efe9df'), S.head * 0.22, S.head * 0.3, S.head * 0.08, 0, S.head * 0.45, S.head * 0.82, -0.3, 0, 0, false);
       // по-плътни гърди и задница
       part(body, sphGeo(1), bm, S.r * 1.02, S.r * 1.0, S.r * 1.15, 0, -S.r * 0.02, -S.len * 0.33);
-      // черга с шевици (червено-черна) на гърба
+      // седло (скрито, докато конят не е оседлан): черга с шевици, кожена седалка с лък отпред и облегалка, колан, стремена
+      const sd = this.saddle = joint(body, 0, 0, 0, 'saddle');
+      this.noMerge.add(sd);
       const st = shevicaTex('#a8282a');
       const bl = st ? mat('#ffffff', { map: st, side: THREE.DoubleSide, flat: false }) : mat('#a8282a', { side: THREE.DoubleSide });
-      part(body, capGeo(14, 6, Math.PI * 0.5), bl, S.r * 1.07, S.r * 1.03, S.len * 0.38, 0, 0, S.len * 0.04, 0, 0, 0, false);
+      part(sd, capGeo(14, 6, Math.PI * 0.5), bl, S.r * 1.07, S.r * 1.03, S.len * 0.3, 0, 0, S.len * 0.04, 0, 0, 0, false);
+      const leather = mat('#4a2c1a'), dark = mat('#2a1a10'), iron = mat('#5a5650');
+      part(sd, capGeo(12, 5, Math.PI * 0.4), leather, S.r * 0.86, S.r * 0.4, S.len * 0.2, 0, S.r * 0.72, S.len * 0.04);
+      part(sd, sphGeo(1), leather, S.r * 0.3, S.r * 0.3, S.r * 0.18, 0, S.r * 1.02, S.len * 0.2);   // лък отпред
+      part(sd, sphGeo(1), leather, S.r * 0.42, S.r * 0.24, S.r * 0.14, 0, S.r * 0.98, -S.len * 0.13); // облегалка
+      part(sd, cylGeo(1, 16, true), dark, S.r * 1.03, 0.07, S.r * 0.99, 0, 0, S.len * 0.05, Math.PI / 2, 0, 0, false); // колан
+      for (const sx of [1, -1]) {
+        part(sd, boxGeo(), dark, 0.025, S.r * 1.1, 0.04, sx * S.r * 1.04, S.r * 0.1, S.len * 0.06, 0, 0, sx * 0.12, false);
+        part(sd, cachedGeo('stirrup', () => new THREE.TorusGeometry(1, 0.18, 5, 10)), iron, 0.06, 0.06, 0.06, sx * S.r * 1.1, -S.r * 0.48, S.len * 0.06, 0, Math.PI / 2, 0, false);
+      }
+      // оглавник на муцуната (с седлото)
+      const br = this.bridle = joint(head, 0, 0, 0, 'bridle');
+      this.noMerge.add(br);
+      br.visible = false;
+      part(br, cylGeo(1, 10, true), dark, S.head * 0.36, 0.03, S.head * 0.36, 0, -S.head * 0.15, S.head * 1.2, Math.PI / 2 - 0.15, 0, 0, false);
+      sd.visible = false;
+      mergeStatic(sd); mergeStatic(br);
     }
     // опашка
     if (fox) {
@@ -141,8 +182,8 @@ export class Quadruped extends RigModel {
       const eh = haloSprite('#8fe8ff', 0.3, 0.5); eh.position.set(0, S.head * 0.2, S.head * 0.85); head.add(eh);
     } else if (kind === 'horse') {
       // опашка от косми: разширява се надолу
-      part(tail, cylGeo(1.8, 7), mat(MANE), 0.05, S.tail * 0.52, 0.04, 0, 0, 0);
-      part(tail2, cylGeo(1.2, 7), mat(MANE), 0.09, S.tail * 0.58, 0.07, 0, 0, 0);
+      part(tail, cylGeo(1.8, 7), mat(this.mane), 0.05, S.tail * 0.52, 0.04, 0, 0, 0);
+      part(tail2, cylGeo(1.2, 7), mat(this.mane), 0.09, S.tail * 0.58, 0.07, 0, 0, 0);
     } else if (kind === 'sheep' || kind === 'goat') {
       part(tail, sphGeo(0), kind === 'sheep' ? bm : bm, S.r * 0.25, S.tail, S.r * 0.2, 0, S.tail * 0.3, 0, 0, 0, 0, false);
     } else {
@@ -163,12 +204,18 @@ export class Quadruped extends RigModel {
 
   protected stride(run: boolean): number { return this.sp.stepLen * (run ? 2.2 : 1); }
 
+  /** Оседлан ли е (само конете имат седло). */
+  setSaddled(on: boolean): void {
+    if (this.saddle) this.saddle.visible = on;
+    if (this.bridle) this.bridle.visible = on;
+  }
+
   /** Козината/вълната по цвета на частта (тялото, краката, муцуната, белите петна, опашката на лисицата). */
   protected skinFor(m: THREE.MeshLambertMaterial): THREE.Material | undefined {
     const hex = '#' + m.color.getHexString(), S = this.sp, sheep = this.kind === 'sheep';
     if (hex === S.body) return furFrom(sheep ? 'wool' : 'fur', hex, m, sheep ? [3, 3] : this.kind === 'horse' ? [4, 4] : [2, 2]);
     if (hex === S.legC || hex === S.face) return furFrom(sheep ? 'hide' : 'fur', hex, m);
-    if (['#e8e0d0', '#ece2d0', '#d8cfbd', '#e6d9c4', '#d98a4a', '#3a281a', MANE, '#efe9df'].includes(hex)) return furFrom('fur', hex, m);
+    if (['#e8e0d0', '#ece2d0', '#d8cfbd', '#e6d9c4', '#d98a4a', '#3a281a', this.mane, '#efe9df'].includes(hex)) return furFrom('fur', hex, m);
     return undefined;
   }
 
@@ -185,7 +232,7 @@ export class Quadruped extends RigModel {
 
   protected pose(a: AnimName, t: number, o: Float32Array): void {
     const T = this.time, S = this.sp;
-    const graze = this.kind === 'sheep' || this.kind === 'goat' || this.kind === 'horse';
+    const graze = (this.kind === 'sheep' || this.kind === 'goat' || this.kind === 'horse') && !this.ridden;
     const horse = this.kind === 'horse';
     switch (a) {
       case 'idle': case 'work': {

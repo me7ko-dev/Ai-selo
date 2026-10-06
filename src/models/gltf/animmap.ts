@@ -4,7 +4,7 @@ import type { AnimName } from '../types';
 import type { Role, Tool } from './looks';
 
 /** Процедурна добавка върху клипа (ръце за хоро, махане, ковашки чук, блок…). */
-export type Overlay = 'none' | 'horo' | 'wave' | 'hammer' | 'block' | 'bow' | 'breathe' | 'carry';
+export type Overlay = 'none' | 'horo' | 'wave' | 'hammer' | 'block' | 'bow' | 'breathe' | 'carry' | 'ride';
 
 export interface ClipChoice {
   clip: string;
@@ -66,6 +66,7 @@ export function chooseClip(anim: AnimName, ctx: AnimContext): ClipChoice {
     case 'talk': return loop(CLIPS.talk, carry, ctx.old ? 0.85 : 1);
     case 'work': return workClip(ctx.tool);
     case 'sit': return loop(CLIPS.sit);
+    case 'ride': return loop(CLIPS.sit, 'ride', 0.6, 0.35); // седнал, краката разкрачени около коня
     case 'sleep': return { clip: CLIPS.death, loop: true, speed: 0, fade: 0.6, hold: 1, overlay: 'breathe' };
     case 'dance': return loop(CLIPS.dance, 'horo', ctx.role === 'samodiva' ? 0.8 : 0.9, 0.4);
     case 'block': return loop(CLIPS.swordIdle, 'none', 1, 0.12);

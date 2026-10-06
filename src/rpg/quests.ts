@@ -60,6 +60,7 @@ export const BANITSA_PRICE = 5;
 export const TEA_PRICE = 3;
 export const POTION_PRICE = 25;
 export const CLAW_PRICE = 2;
+export const SADDLE_PRICE = 30;
 export const ROSEN_NEEDED = 3;
 export const CLUES_NEEDED = 2;
 
@@ -185,6 +186,7 @@ export class Quests {
         break;
       case 'kalin':
         if (this.ctx.host.getFlag('lamia_dead') && !this.bowGiven) out.push(o('kalin_bow', 'Калине, като че ли искаш да ми кажеш нещо?'));
+        if (this.ctx.buy) out.push(o('saddle_buy', `Ще ми направиш ли седло за кон? (${SADDLE_PRICE} гроша)`));
         break;
       case 'maria': break;
     }
@@ -248,6 +250,13 @@ export class Quests {
         if (v !== 'gena' || s.rosen !== 'done' || !c.buy) return null;
         const ok = c.buy('rosen_potion', POTION_PRICE);
         return { say: ok ? 'Ей, сварих една и за теб. Пий я, когато ти причернее пред очите.' : `Билките не растат на дърво, чедо… е, растат, ама грошове трябват. ${POTION_PRICE}.` };
+      }
+      case 'saddle_buy': {
+        if (v !== 'kalin' || !c.buy) return null;
+        const ok = c.buy('saddle', SADDLE_PRICE);
+        return { say: ok
+          ? 'Ето, от бук и волска кожа, а чергата я тъка Мария. Диви коне пасат на ливадата западно от входа на селото, по поляните на юг, към Бистрица и под Старата крепост. Приближи се кротко — не тичай — и конят ще ти се довери.'
+          : `Седлото иска хубав бук и кожа, а те не са без пари. ${SADDLE_PRICE} гроша — ела, като ги събереш.` };
       }
       case 'sell_claws': {
         if (v !== 'ivan' || !c.sellAll) return null;

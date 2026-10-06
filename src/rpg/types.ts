@@ -1,4 +1,5 @@
 // Общи типове на RPG частта (без three.js): събития, данни за интерфейса, запис на играча.
+import type { HorsesSave } from './horses';
 import type { IconKey } from '../data/icons';
 import type { EquipSlot, ItemId, ItemKind, ItemStackView } from './items';
 import type { InventorySave } from './inventory';
@@ -65,4 +66,6 @@ export interface PlayerSave {
   chestsOpened: string[];
   /** Благословия/проклятие на самодивите (по-старите записи го нямат). */
   samodivi?: SamodiviSave;
+  /** Конете на героя (по-старите записи го нямат). */
+  horses?: HorsesSave;
 }

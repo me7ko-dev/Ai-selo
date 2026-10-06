@@ -4,15 +4,16 @@
 // Подписите на функциите са договорът — не ги сменяй.
 import * as THREE from 'three';
 import type { VillagerLook } from '../data/villagers';
-import type { CharacterModel, HeroModel, LamiaModel, AnimalKind, MonsterKind } from './types';
+import type { CharacterModel, HeroModel, LamiaModel, AnimalKind, MonsterKind, HorseModel } from './types';
 import { buildVillager } from './villager';
 import { Hero } from './hero';
 import { Samodiva, Talasam } from './creatures';
 import { Karakondzhul } from './karakondzhul';
-import { Quadruped, buildAnimal } from './animals';
+import { Quadruped, buildAnimal, type HorseCoat } from './animals';
 import { Lamia } from './lamia';
 import { buildRosen, buildChest, buildSaber, buildBow, buildPotion, buildFeather, buildEgg } from './items';
-export type { AnimName, CharacterModel, HeroModel, LamiaModel, AnimalKind, MonsterKind } from './types';
+export type { AnimName, CharacterModel, HeroModel, LamiaModel, AnimalKind, MonsterKind, HorseModel } from './types';
+export { HORSE_COATS, type HorseCoat } from './animals';
 export { countTris } from './shared';
 import { mergeStatic } from './shared';
 import { charactersReady } from './gltf/assets';
@@ -47,6 +48,9 @@ export function createSamodivaModel(index = 0): CharacterModel {
 }
 
 export function createAnimalModel(kind: AnimalKind): CharacterModel { return buildAnimal(kind); }
+
+/** Кон с дадена маст (седлото се показва със setSaddled). */
+export function createHorseModel(coat: HorseCoat = 'bay'): HorseModel { return new Quadruped('horse', coat); }
 
 export function createLamiaModel(): LamiaModel { return new Lamia(); }
 

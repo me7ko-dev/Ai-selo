@@ -22,6 +22,7 @@ import { Lamia, LAMIA, type BossCtx } from './lamia';
 import { PickupManager, type WorldItem } from './pickups';
 import { Arrows } from './fx';
 import { Samodivi, RING, samodiviDancing } from './samodivi';
+import { HorseManager, HORSE_REACH, type Horse } from './horses';
 import type { HudState, InventoryState, PlayerSave, RpgEvents, HotbarCell } from './types';
 
 export type { EquipSlot, ItemId, ItemStackView } from './items';
@@ -51,6 +52,8 @@ export class Rpg {
   private readonly lamia: Lamia;
   private readonly pickups: PickupManager;
   private readonly arrows: Arrows;
+  /** Конете (диви стада и конете на героя). */
+  readonly horses: HorseManager;
   private readonly fog = new FogGrid();
   private controls = true;
   private time = 0;
@@ -79,6 +82,7 @@ export class Rpg {
     this.lamia = new Lamia(scene, world);
     this.pickups = new PickupManager(scene);
     this.arrows = new Arrows(scene);
+    this.horses = new HorseManager(scene, world);
 
     const qctx: QuestCtx = {
       host,
@@ -164,9 +168,11 @@ export class Rpg {
         block: input.mouseDown(2),
       };
       for (let h = 0; h < 6; h++) if (input.pressed('Digit' + (h + 1))) this.useHotbar(h);
+      if (input.pressed('KeyH')) this.callHorse();
     }
     this.hero.speedMul = this.samodivi.speedMul(totalGameMinutes);
     this.hero.update(dt, inp, this.cam.yaw, this.world, this.stats);
+    this.horses.update(dt, this.hero, !this.hero.mounted && this.hero.speed > 6.5);
     this.updateSamodivi(dt, totalGameMinutes);
 
     // тялото на Ламята е препятствие
@@ -222,7 +228,7 @@ export class Rpg {
     };
     const L = this.lamia;
     const nearBoss = L.active && Math.hypot(L.pos.x - this.hero.pos.x, L.pos.z - this.hero.pos.z) < 22;
-    this.cam.update(dt, this.hero.pos, this.world, look, L.state === 'dead' ? [] : [{ x: L.pos.x, z: L.pos.z, r: LAMIA.bodyR + 0.8, h: 7 }], nearBoss ? 1.3 : 0);
+    this.cam.update(dt, this.hero.pos, this.world, look, L.state === 'dead' ? [] : [{ x: L.pos.x, z: L.pos.z, r: LAMIA.bodyR + 0.8, h: 7 }], nearBoss ? 1.3 : this.hero.mounted ? 0.9 : 0);
   }
 
   // ---------------- бой ----------------
@@ -281,6 +287,11 @@ export class Rpg {
   private damageHero(amount: number, fx: number, fz: number, knock: number): void {
     const h = this.hero;
     if (h.dead || h.invuln > 0) return;
+    if (h.mounted) {
+      const r = this.horses.ridden;
+      this.dismount(true);
+      if (r) this.notify(`${r.def.name} се изправи на задни крака и те хвърли! На кон не се бие.`, 'warn');
+    }
     const blocked = h.blocking && h.facingToward(fx, fz);
     let dmg = mitigate(amount, this.inv.bonuses().armor);
     if (blocked) {
@@ -299,6 +310,7 @@ export class Rpg {
   }
 
   private die(): void {
+    if (this.hero.mounted) this.dismount(true);
     this.hero.die();
     this.deadT = 0;
     this.sfx('die');
@@ -476,10 +488,71 @@ export class Rpg {
     return { label: 'Поклони се на самодивите', dist: Math.max(0, d - RING.r), act: () => this.bowToSamodivi() };
   }
 
+  // ---------------- конете ----------------
+  /** [E] до кон: опитоми / оседлай / яхни; на кон — слез. */
+  private horseHint(): { label: string; dist: number; act: () => boolean } | null {
+    const r = this.horses.ridden;
+    if (r) return { label: `Слез от ${r.def.name}`, dist: 0, act: () => { this.dismount(); return true; } };
+    const n = this.horses.nearest(this.hero.pos.x, this.hero.pos.z, HORSE_REACH);
+    if (!n) return null;
+    const h = n.h, name = h.def.name;
+    if (!h.owned) return { label: `Опитоми ${name}`, dist: n.d, act: () => this.tameHorse(h) };
+    if (!h.saddled) {
+      if (this.inv.count('saddle') > 0) return { label: `Оседлай ${name}`, dist: n.d, act: () => this.saddleHorse(h) };
+      return { label: `${name} няма седло`, dist: n.d, act: () => { this.notify(`За да яздиш ${name}, ти трябва седло. Калин дърводелецът прави седла.`, 'info'); return true; } };
+    }
+    return { label: `Яхни ${name}`, dist: n.d, act: () => this.mount(h) };
+  }
+
+  private tameHorse(h: Horse): boolean {
+    this.horses.tame(h);
+    this.sfx('quest');
+    const mine = this.horses.owned().length;
+    this.notify(`${HorseManager.label(h)} ти се довери — ${HorseManager.fem(h) ? 'вече е твоя' : 'вече е твой'}!${mine === 1 ? ' Оседлай с седло от Калин и натисни [E], за да яздиш. С [H] го викаш.' : ''}`, 'quest');
+    if (mine === 1) this.host.deed({ kind: 'helped', text: `Странникът опитоми ${h.def.name} на ливадата.`, importance: 3, affinity: 0, trust: 0, witnesses: [] });
+    return true;
+  }
+
+  private saddleHorse(h: Horse): boolean {
+    if (!this.inv.remove('saddle', 1)) return false;
+    this.horses.saddle(h);
+    this.sfx('equip');
+    this.notify(`Оседла ${h.def.name}. Натисни [E], за да ${HorseManager.fem(h) ? 'я' : 'го'} яхнеш.`, 'item');
+    return true;
+  }
+
+  private mount(h: Horse): boolean {
+    if (this.hero.attacking || !this.hero.grounded) return false;
+    this.horses.mount(h);
+    const seat = (this.heroModel as unknown as { seatHeight?: number }).seatHeight ?? 0.45;
+    this.hero.setPosition(h.pos.x, h.pos.z, this.world, h.yaw);
+    this.hero.setMounted(true, h.model.seatY - seat);
+    this.sfx('jump');
+    return true;
+  }
+
+  /** Слизане от коня (thrown — хвърлен при удар: без звук на скок). */
+  dismount(thrown = false): void {
+    if (!this.hero.mounted) return;
+    const p = this.horses.dismount();
+    this.hero.setMounted(false);
+    if (p) this.hero.setPosition(p.x, p.z, this.world, this.hero.yaw);
+    if (!thrown) this.sfx('jump');
+  }
+
+  /** [H]: подсвирване — твоят кон идва. */
+  callHorse(): void {
+    if (this.hero.dead || this.hero.mounted) return;
+    const h = this.horses.call(this.hero.pos.x, this.hero.pos.z);
+    if (!h) { this.notify('Нямаш кон. Опитоми див кон — пасат на ливадите край селото.', 'info'); return; }
+    this.notify(`Подсвирна на ${h.def.name}.`, 'info');
+  }
+
   interactHint(): { label: string; dist: number } | null {
     if (this.hero.dead) return null;
+    if (this.hero.mounted) { const r = this.horseHint(); return r ? { label: r.label, dist: 0 } : null; }
     const p = this.pickups.nearest(this.hero.pos.x, this.hero.pos.z, 2.2);
-    const c = this.coopHint() ?? this.samodiviHint();
+    const c = this.coopHint() ?? this.samodiviHint() ?? this.horseHint();
     if (p && (!c || p.dist <= c.dist)) return { label: p.it.label, dist: p.dist };
     if (c) return { label: c.label, dist: c.dist };
     return null;
@@ -487,8 +560,9 @@ export class Rpg {
 
   interact(): boolean {
     if (this.hero.dead || !this.controls) return false;
+    if (this.hero.mounted) { this.dismount(); return true; }
     const p = this.pickups.nearest(this.hero.pos.x, this.hero.pos.z, 2.2);
-    const c = this.coopHint() ?? this.samodiviHint();
+    const c = this.coopHint() ?? this.samodiviHint() ?? this.horseHint();
     if (p && (!c || p.dist <= c.dist)) return this.take(p.it);
     if (c) return c.act();
     return false;
@@ -652,6 +726,7 @@ export class Rpg {
     }
     if (this.quests.wantsRosen()) ROSEN_SPOTS.forEach((s, i) => { if (!this.rosenPicked.has(i)) out.push({ x: s.x, z: s.z, label: 'Росен', kind: 'item' }); });
     if (this.quests.wantsBell() && !this.bellTaken) out.push({ x: BELL_POS.x, z: BELL_POS.z, label: 'Звънче', kind: 'item' });
+    for (const h of this.horses.owned()) if (h.def.id !== this.horses.riding) out.push({ x: h.pos.x, z: h.pos.z, label: h.def.name, kind: 'item' });
     return out;
   }
 
@@ -671,6 +746,7 @@ export class Rpg {
       bellTaken: this.bellTaken,
       chestsOpened: [...this.chestsOpened],
       samodivi: this.samodivi.serialize(),
+      horses: this.horses.serialize(),
     };
   }
 
@@ -691,7 +767,14 @@ export class Rpg {
     this.stats.clamp();
     if (this.hero.dead) this.hero.revive();
     const p = s.pos ?? START;
+    this.hero.setMounted(false);
+    this.horses.load(s.horses);
     this.teleport(p.x, p.z, p.yaw);
+    const r = this.horses.ridden;
+    if (r) {
+      r.pos.set(p.x, this.world.heightAt(p.x, p.z), p.z);
+      this.hero.setMounted(true, r.model.seatY - ((this.heroModel as unknown as { seatHeight?: number }).seatHeight ?? 0.45));
+    }
     this.syncWorldItems();
     this.emitBoss();
   }
@@ -704,7 +787,7 @@ export class Rpg {
 
   dispose(): void {
     this.heroModel.root.removeFromParent(); this.heroModel.dispose();
-    this.enemies.dispose(); this.lamia.dispose(); this.pickups.dispose(); this.arrows.dispose();
+    this.enemies.dispose(); this.lamia.dispose(); this.pickups.dispose(); this.arrows.dispose(); this.horses.dispose();
     this.bus.clear();
   }
 
@@ -726,6 +809,10 @@ export class Rpg {
     toLamia: (dist = 34) => { const a = Math.atan2(-30, 18), c = this.lamia.center; this.teleport(c.x + Math.sin(a) * dist, c.z + Math.cos(a) * dist, a + Math.PI); },
     samodivi: () => ({ ...this.samodivi.serialize(), blessed: this.samodivi.blessed(this.host.time()), cursed: this.samodivi.cursed(this.host.time()), dancing: this.samodiviDancingNow(this.host.time()), damageMul: this.samodivi.damageMul(this.host.time()), speedMul: this.samodivi.speedMul(this.host.time()), hint: this.interactHint()?.label ?? null }),
     damage: () => this.weaponDamage(),
+    horses: () => this.horses.list.map(h => ({ id: h.def.id, owned: h.owned, saddled: h.saddled, state: h.state, x: +h.pos.x.toFixed(1), z: +h.pos.z.toFixed(1) })),
+    /** Героят застава до коня (dist м пред муцуната му). */
+    toHorse: (id: string, dist = 2) => { const h = this.horses.get(id); if (h) this.teleport(h.pos.x + Math.sin(h.yaw) * dist, h.pos.z + Math.cos(h.yaw) * dist, h.yaw + Math.PI); },
+    riding: () => this.horses.riding,
     attack: () => { (this.hero as unknown as { tryAttack(y: number, s: Stats): void }).tryAttack(this.cam.yaw, this.stats); },
   };
 }

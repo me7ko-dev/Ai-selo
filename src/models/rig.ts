@@ -156,7 +156,7 @@ export abstract class RigModel implements CharacterModel {
   /** Продължителност на еднократна анимация (с). */
   protected duration(anim: AnimName): number { return anim === 'die' ? 1.2 : anim === 'wave' ? 1.6 : anim === 'cast' ? 1.0 : anim === 'jump' ? 0.75 : anim === 'hit' ? 0.4 : 0.6; }
   /** Замяна на неподдържани анимации. */
-  protected mapAnim(anim: AnimName): AnimName { return anim; }
+  protected mapAnim(anim: AnimName): AnimName { return anim === 'ride' ? 'sit' : anim; }
   /** Дължина на една двойна крачка (м) за ходене/тичане. */
   protected stride(run: boolean): number { return run ? 2.2 : 1.3; }
   /** Вторично движение (наметало, коса, мигане) — след позата. */

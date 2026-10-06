@@ -3,4 +3,4 @@ export type IconKey =
   | 'saber' | 'ivan_saber' | 'bow' | 'rosen' | 'potion' | 'banitsa' | 'tea' | 'bread' | 'apple'
   | 'kalpak' | 'cloak' | 'vest' | 'tsarvuli' | 'gloves' | 'martenitsa' | 'ring'
   | 'fox_tail' | 'lamia_scale' | 'claw' | 'coin' | 'bell' | 'egg' | 'key' | 'letter' | 'wood' | 'iron' | 'feather' | 'map'
-  | 'quest' | 'sun' | 'moon' | 'heart' | 'shield' | 'sword' | 'star' | 'empty';
+  | 'saddle' | 'horse' | 'quest' | 'sun' | 'moon' | 'heart' | 'shield' | 'sword' | 'star' | 'empty';

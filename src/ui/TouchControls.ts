@@ -29,6 +29,7 @@ const TOP_BUTTONS: [string, string, string][] = [
   ['map', 'Карта', 'KeyM'],
   ['chr', 'Летопис', 'KeyJ'],
   ['time', 'Време', 'KeyT'],
+  ['horse', 'Кон', 'KeyH'],
   ['menu', 'Меню', 'Escape'],
 ];
 

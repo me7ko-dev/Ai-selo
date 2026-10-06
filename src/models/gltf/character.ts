@@ -129,7 +129,7 @@ export class GltfCharacter implements HeroModel {
     const extra = spec.hair.includes(HAIR.kalpak) ? 0.1 : spec.folk.includes(G.SCARF) ? 0.03 : 0;
     this.height = spec.height + extra;
     this.seatHeight = 0.45 * this.scale;
-    for (const n of ['spine_01', 'spine_02', 'spine_03', 'neck_01', 'Head', 'upperarm_l', 'lowerarm_l', 'upperarm_r', 'lowerarm_r']) {
+    for (const n of ['spine_01', 'spine_02', 'spine_03', 'neck_01', 'Head', 'upperarm_l', 'lowerarm_l', 'upperarm_r', 'lowerarm_r', 'thigh_l', 'calf_l', 'thigh_r', 'calf_r']) {
       const b = this.bones.get(n);
       if (b) { this.ovBones.push(b); this.ovBase.push(b.quaternion.clone()); }
     }
@@ -533,6 +533,18 @@ export class GltfCharacter implements HeroModel {
       case 'carry': {
         this.aim('upperarm_r', tmpV2.set(-0.12, -0.95, 0.2), w);
         this.aim('lowerarm_r', tmpV2.set(0.1, 0.05, 1), w);
+        break;
+      }
+      case 'ride': {
+        // на седлото: бедрата напред-встрани около коня, прасците надолу; ръцете напред към юздите
+        this.aim('thigh_l', tmpV2.set(0.42, -0.5, 0.75), w);
+        this.aim('calf_l', tmpV2.set(0.18, -1, -0.12), w);
+        this.aim('thigh_r', tmpV2.set(-0.42, -0.5, 0.75), w);
+        this.aim('calf_r', tmpV2.set(-0.18, -1, -0.12), w);
+        this.aim('upperarm_l', tmpV2.set(0.22, -0.85, 0.35), w);
+        this.aim('lowerarm_l', tmpV2.set(-0.2, -0.35, 1), w);
+        this.aim('upperarm_r', tmpV2.set(-0.22, -0.85, 0.35), w);
+        this.aim('lowerarm_r', tmpV2.set(0.2, -0.35, 1), w);
         break;
       }
       case 'breathe': {

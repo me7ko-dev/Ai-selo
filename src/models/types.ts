@@ -4,7 +4,7 @@ import type * as THREE from 'three';
 
 export type AnimName =
   | 'idle' | 'walk' | 'run' | 'attack' | 'attack2' | 'hit' | 'die' | 'talk' | 'work' | 'sit' | 'sleep'
-  | 'dance' | 'jump' | 'cast' | 'wave' | 'block';
+  | 'dance' | 'jump' | 'cast' | 'wave' | 'block' | 'ride';
 
 export interface CharacterModel {
   readonly root: THREE.Group;
@@ -33,6 +33,15 @@ export interface LamiaModel extends CharacterModel {
   setHeadAlive(i: number, alive: boolean): void;
   /** Анимация на атака с една глава (захапка/огън). */
   headAttack(i: number, kind?: 'bite' | 'fire'): void;
+}
+
+export interface HorseModel extends CharacterModel {
+  /** Седло, черга и оглавник. */
+  setSaddled(on: boolean): void;
+  /** Височина на седлото (м) — там сяда ездачът. */
+  readonly seatY: number;
+  /** С ездач: не навежда глава да пасе. */
+  ridden: boolean;
 }
 
 export type AnimalKind = 'sheep' | 'goat' | 'chicken' | 'dog' | 'cat' | 'horse';
