@@ -264,6 +264,7 @@ test('хората: реалистичните модели изпълняват
     const hero = createHeroModel();
     all.push(['hero', hero]);
     for (let i = 0; i < 3; i++) all.push(['samodiva' + i, createSamodivaModel(i)]);
+    all.push(['talasam', createMonsterModel('talasam')]);
     for (const [name, m] of all) {
       assert.ok(m.root.name.startsWith('gltf-'), name + ': реалистичен');
       assert.ok(m.height > 1.4 && m.height < 2.2, name + ': височина ' + m.height);
