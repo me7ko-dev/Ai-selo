@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { AnimName, HeroModel } from '../types';
-import { charAssets, recolorMaterial, type BodyTemplate, type CharAssets } from './assets';
+import { charAssets, recolorMaterial, skinShader, type BodyTemplate, type CharAssets } from './assets';
 import { type CharSpec, BODY_HEIGHT, G, HAIR, paletteArray, hexToLinear } from './looks';
 import { chooseClip, locomotionClip, ONE_SHOTS, type AnimContext, type ClipChoice, type Overlay } from './animmap';
 import { buildSaber, buildScabbard, buildBow, buildTool } from '../items';
@@ -51,6 +51,68 @@ function subset(geo: THREE.BufferGeometry, labels: number[], key: string): THREE
   out.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1e4);
   subsetCache.set(k, out);
   return out;
+}
+
+/** Еднакви ли са обратните матрици на два скелета (т.е. мешовете могат да делят един). */
+function sameInverses(a: THREE.Skeleton, b: THREE.Skeleton): boolean {
+  for (let i = 0; i < a.boneInverses.length; i++) {
+    const x = a.boneInverses[i].elements, y = b.boneInverses[i]?.elements;
+    if (!y) return false;
+    for (let k = 0; k < 16; k++) if (Math.abs(x[k] - y[k]) > 1e-5) return false;
+  }
+  return true;
+}
+
+/** Сегментите на наметалото: дължина (м) и наклон назад в покой (z/y). */
+const CAPE_SEGS = [{ len: 0.3, k: 0.55 }, { len: 0.3, k: 0.2 }, { len: 0.3, k: 0.12 }];
+
+/**
+ * Геометрията на наметалото (в пространството на тялото в покой) по точките на веригата pts (горе → подгъв).
+ * Дъга около гърба (краищата идат напред към раменете), разширява се надолу, с леки гънки.
+ * Тегла: горният ръб — spine_03 (индекс 0), надолу — костите на веригата (1..3) с плавен преход на ставите.
+ */
+function capeGeometry(pts: THREE.Vector3[]): THREE.BufferGeometry {
+  const segs = CAPE_SEGS;
+  const rows = 14, cols = 12, total = segs.reduce((a, s) => a + s.len, 0);
+  const n = (rows + 1) * (cols + 1);
+  const pos = new Float32Array(n * 3), uv = new Float32Array(n * 2), si = new Uint16Array(n * 4), sw = new Float32Array(n * 4);
+  const c = new THREE.Vector3();
+  for (let r = 0; r <= rows; r++) {
+    const t = r / rows, s = t * total;
+    let seg = 0, acc = 0;
+    while (seg < segs.length - 1 && s > acc + segs[seg].len) { acc += segs[seg].len; seg++; }
+    const f = Math.min(1, (s - acc) / segs[seg].len);
+    c.copy(pts[seg]).lerp(pts[seg + 1], f);
+    const hw = 0.14 + 0.13 * Math.pow(t, 0.8), A = 1.05 - 0.45 * Math.pow(t, 0.6);
+    const R = hw / Math.sin(A);
+    for (let j = 0; j <= cols; j++) {
+      const u = (j / cols) * 2 - 1, a = u * A;
+      const fold = 1 + 0.035 * t * Math.sin(u * Math.PI * 3);
+      const k = r * (cols + 1) + j;
+      pos[k * 3] = c.x + Math.sin(a) * R * fold;
+      pos[k * 3 + 1] = c.y + (r === 0 ? 0.015 * Math.cos((u * Math.PI) / 2) : 0);
+      pos[k * 3 + 2] = c.z + (1 - Math.cos(a)) * R * fold;
+      uv[k * 2] = (j / cols) * 0.5; uv[k * 2 + 1] = t * 0.5;
+      let w: [number, number][];
+      if (s < 0.06) w = [[0, 1 - s / 0.06], [1, s / 0.06]];
+      else { const g = THREE.MathUtils.smoothstep(f, 0.6, 1) * 0.5; w = [[seg + 1, 1 - g], [Math.min(seg + 2, segs.length), g]]; }
+      for (let q = 0; q < 2; q++) { si[k * 4 + q] = w[q][0]; sw[k * 4 + q] = w[q][1]; }
+    }
+  }
+  const idx: number[] = [];
+  for (let r = 0; r < rows; r++) for (let j = 0; j < cols; j++) {
+    const a = r * (cols + 1) + j, b = a + 1, cc = a + cols + 1, d = cc + 1;
+    idx.push(a, cc, b, b, cc, d);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  g.setAttribute('skinIndex', new THREE.BufferAttribute(si, 4));
+  g.setAttribute('skinWeight', new THREE.BufferAttribute(sw, 4));
+  g.setAttribute('_garment', new THREE.BufferAttribute(new Float32Array(n).fill(G.CLOAK), 1));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
 }
 
 const tmpQ = new THREE.Quaternion(), tmpQ2 = new THREE.Quaternion(), tmpQ3 = new THREE.Quaternion();
@@ -103,6 +165,21 @@ export class GltfCharacter implements HeroModel {
   /** Костите, които добавките пипат, и тяхната „чиста“ поза от анимацията (виж update). */
   private ovBones: THREE.Bone[] = [];
   private ovBase: THREE.Quaternion[] = [];
+  // ── отдалеченост (LOD): далечните хора — без сенки, без очи, анимацията по-рядко ──
+  private skinMesh: THREE.SkinnedMesh | null = null;
+  private eyes: THREE.SkinnedMesh | null = null;
+  private hairMesh: THREE.Mesh | null = null;
+  private lodMeshes: THREE.Mesh[] = [];
+  private seen = false;
+  private everSeen = false;
+  private unseen = 0;
+  private camDist2 = 0;
+  private lodLevel = 0;
+  private lodFrame = Math.floor(Math.random() * 4);
+  private lodAcc = 0;
+  // ── наметалото на Стоян (верига от 3 кости, люлее се процедурно) ──
+  private cape: THREE.Bone[] = [];
+  private capeLift = 0;
 
   constructor(readonly spec: CharSpec) {
     const A = charAssets();
@@ -126,6 +203,8 @@ export class GltfCharacter implements HeroModel {
     this.attachTool();
     if (spec.wreath !== undefined) this.attachWreath(spec.wreath);
     if (spec.role === 'talasam') this.attachTalasam();
+    if (spec.cape) this.attachCape(spec.cape);
+    this.watchCamera();
     const extra = spec.hair.includes(HAIR.kalpak) ? 0.1 : spec.folk.includes(G.SCARF) ? 0.03 : 0;
     this.height = spec.height + extra;
     this.seatHeight = 0.45 * this.scale;
@@ -146,6 +225,11 @@ export class GltfCharacter implements HeroModel {
     const meshes: THREE.SkinnedMesh[] = [];
     this.armature.traverse((o) => { if ((o as THREE.SkinnedMesh).isSkinnedMesh) meshes.push(o as THREE.SkinnedMesh); });
     const sphere = new THREE.Sphere(new THREE.Vector3(0, 0.9, 0), 1.5);
+    // SkeletonUtils.clone дава на всеки меш свое копие на скелета — връщаме един общ (шаблонът е с общ скелет)
+    const shared = meshes[0]?.skeleton;
+    for (const m of meshes) {
+      if (m.skeleton !== shared && m.skeleton.bones.every((b, i) => b === shared.bones[i]) && sameInverses(m.skeleton, shared)) m.bind(shared, m.bindMatrix);
+    }
     for (const m of meshes) {
       const part = m.name.split('_').pop();
       let mat: THREE.MeshStandardMaterial;
@@ -158,7 +242,10 @@ export class GltfCharacter implements HeroModel {
       } else if (part === 'skin') {
         mat = (spec.female ? A.materials.skinF : A.materials.skinM).clone();
         mat.color.setRGB(spec.skin[0], spec.skin[1], spec.skin[2], THREE.LinearSRGBColorSpace);
+        mat.onBeforeCompile = skinShader;
+        mat.customProgramCacheKey = () => 'skin-wrap-v1';
         this.ownMats.push(mat);
+        this.skinMesh = m;
       } else mat = A.materials.eyes;
       // самодивите светят леко; таласъмът — едва-едва (само силуетът в нощната гора)
       if (glow && part !== 'eyes') { mat.emissive.copy(glow); mat.emissiveIntensity = (part === 'skin' ? 0.08 : 0.22) * (spec.role === 'talasam' ? 0.35 : 1); }
@@ -168,7 +255,9 @@ export class GltfCharacter implements HeroModel {
       m.frustumCulled = true;
       m.boundingSphere = sphere;
       if (part !== 'eyes') this.flashMats.push(mat);
-      this.skeletons.push(m.skeleton);
+      else this.eyes = m;
+      if (!this.skeletons.includes(m.skeleton)) this.skeletons.push(m.skeleton);
+      this.lodMeshes.push(m);
     }
   }
 
@@ -187,6 +276,8 @@ export class GltfCharacter implements HeroModel {
     h.castShadow = true; h.receiveShadow = true;
     h.name = 'hair';
     head.add(h);
+    this.hairMesh = h;
+    this.lodMeshes.push(h);
   }
 
   /** Ширина на торса (пълен/слаб). */
@@ -415,9 +506,14 @@ export class GltfCharacter implements HeroModel {
   }
 
   update(dt: number, moveSpeed?: number): void {
-    if (dt > 0.1) dt = 0.1;
-    this.time += dt;
     if (moveSpeed !== undefined) this.moveSpeed = moveSpeed;
+    // далечните/невидимите — по-рядко (времето се трупа, нищо не се губи)
+    const step = this.lodStep();
+    this.lodAcc += dt;
+    if (step > 1 && (++this.lodFrame % step) !== 0) return;
+    dt = Math.min(this.lodAcc, step > 1 ? 0.25 : 0.1);
+    this.lodAcc = 0;
+    this.time += dt;
     if (this.isLoop && this.locoClip && this.action) {
       const v = this.locoSpeed(this.current);
       const want = locomotionClip(v, this.locoClip, this.spec.old);
@@ -446,7 +542,106 @@ export class GltfCharacter implements HeroModel {
     this.mixer.update(dt);
     for (let i = 0; i < this.ovBones.length; i++) this.ovBase[i].copy(this.ovBones[i].quaternion);
     this.applyOverlays(dt);
+    if (this.cape.length) this.swayCape(dt);
     if (this.flashT > 0) { this.flashT -= dt; if (this.flashT <= 0) this.flash(null as unknown as number); }
+  }
+
+  // ───────────────────────────── отдалеченост (LOD) ─────────────────────────────
+  /** Разстоянието до камерата се разбира при рисуването (само перспективната камера, не сенките). */
+  private watchCamera(): void {
+    const m = this.skinMesh ?? this.lodMeshes[0];
+    if (!m) return;
+    m.onBeforeRender = (_r, _s, cam) => {
+      if (!(cam as THREE.PerspectiveCamera).isPerspectiveCamera) return;
+      const a = cam.matrixWorld.elements, b = this.root.matrixWorld.elements;
+      this.camDist2 = (a[12] - b[12]) ** 2 + (a[13] - b[13]) ** 2 + (a[14] - b[14]) ** 2;
+      this.seen = true; this.everSeen = true;
+    };
+  }
+
+  /** През колко кадъра се анимира: 1 близо, 2 над ~22 м, 3 над ~45 м, 4 извън кадъра. Сенки и очи — по разстояние. */
+  private lodStep(): number {
+    if (!this.everSeen) return 1;
+    if (this.seen) this.unseen = 0; else this.unseen++;
+    this.seen = false;
+    const d2 = this.camDist2;
+    // нива с хистерезис: 0 близо, 1 без очи (> 12 м), 2 и без сенки (> 25 м)
+    const lvl = this.lodLevel;
+    const want = d2 > (lvl >= 2 ? 23 * 23 : 25 * 25) ? 2 : d2 > (lvl >= 1 ? 11 * 11 : 12 * 12) ? 1 : 0;
+    if (want !== lvl) {
+      this.lodLevel = want;
+      if (this.eyes) this.eyes.visible = want === 0;
+      for (const m of this.lodMeshes) m.castShadow = want < 2;
+    }
+    if (this.spec.role === 'hero') return 1;
+    if (this.unseen > 2) return 4;
+    return d2 > 45 * 45 ? 3 : d2 > 22 * 22 ? 2 : 1;
+  }
+
+  // ───────────────────────────── наметало ─────────────────────────────
+  /**
+   * Наметало от раменете до под коленете: решетка, скинната към spine_03 (горният ръб) и към верига от 3 кости,
+   * които всеки кадър се насочват „надолу и назад“ — повече при тичане, с леко полюшване. Отстои от гърба и от
+   * ножницата на сабята.
+   */
+  private attachCape(color: string): void {
+    const sp = this.bones.get('spine_03'), neck = this.body.bindPos.get('neck_01');
+    if (!sp || !neck) return;
+    const bw = this.body.bindWorld.get('spine_03')!, bp = this.body.bindPos.get('spine_03')!;
+    const inv = bw.clone().invert();
+    const top = new THREE.Vector3(0, neck.y - 0.05, neck.z - 0.1);
+    const segs = CAPE_SEGS;
+    // кости: cape0 на горния ръб (дете на spine_03), cape1..cape3 по веригата; оста +Y на всяка сочи по сегмента
+    const bones: THREE.Bone[] = [];
+    let parent: THREE.Object3D = sp;
+    const pts = [top.clone()];
+    const dirOf = (i: number) => new THREE.Vector3(0, -1, -segs[i].k).normalize();
+    for (let i = 0; i <= segs.length; i++) {
+      const b = new THREE.Bone();
+      b.name = 'cape' + i;
+      if (i === 0) {
+        b.position.copy(top).sub(bp).applyQuaternion(inv);
+        b.quaternion.copy(inv).multiply(new THREE.Quaternion().setFromUnitVectors(Y, dirOf(0)));
+      } else {
+        b.position.set(0, segs[i - 1].len, 0);
+        // в покой всеки сегмент е със своя наклон
+        if (i < segs.length) b.quaternion.setFromUnitVectors(dirOf(i - 1), dirOf(i));
+        pts.push(pts[i - 1].clone().addScaledVector(dirOf(i - 1), segs[i - 1].len));
+      }
+      parent.add(b);
+      parent = b;
+      bones.push(b);
+      this.bones.set(b.name, b);
+    }
+    this.cape = bones;
+    const geo = cachedGeo('cape-' + this.spec.body, () => capeGeometry(pts));
+    const pal = paletteArray({ ...this.spec.colors, [G.CLOAK]: [color, 1] });
+    const m = recolorMaterial(this.A.materials.folk, pal);
+    this.ownMats.push(m); this.flashMats.push(m);
+    const mesh = new THREE.SkinnedMesh(geo, m);
+    mesh.name = 'cape';
+    mesh.castShadow = true; mesh.receiveShadow = true;
+    this.armature.add(mesh);
+    this.root.updateMatrixWorld(true);
+    const skel = new THREE.Skeleton([sp, ...bones]);
+    mesh.bind(skel, mesh.matrixWorld);
+    mesh.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0.9, 0), 1.5);
+    this.skeletons.push(skel);
+    this.lodMeshes.push(mesh);
+  }
+
+  private swayCape(dt: number): void {
+    const moving = this.current === 'walk' || this.current === 'run' ? this.moveSpeed : 0;
+    const seated = this.current === 'sit' || this.current === 'ride';
+    const want = Math.min(0.95, moving * 0.14) + (seated ? 0.6 : 0) + (this.current === 'attack' || this.current === 'attack2' ? 0.25 : 0);
+    this.capeLift += (want - this.capeLift) * (1 - Math.exp(-dt * 3.5));
+    const L = this.capeLift, t = this.time;
+    const flap = Math.sin(t * 7.5) * 0.06 * Math.min(1, moving / 3);
+    const sway = Math.sin(t * 1.3) * 0.03;
+    const k = CAPE_SEGS;
+    this.aim('cape0', tmpV2.set(sway * 0.5, -1, -(k[0].k + L * 0.5)), 1);
+    this.aim('cape1', tmpV2.set(sway, -1, -(k[1].k + L * 1.0 + flap * 0.5)), 1);
+    this.aim('cape2', tmpV2.set(sway * 1.5, -1, -(k[2].k + L * 1.25 + flap)), 1);
   }
 
   // ───────────────────────────── процедурни добавки ─────────────────────────────

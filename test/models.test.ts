@@ -282,6 +282,11 @@ test('хората: реалистичните модели изпълняват
       let draws = 0;
       m.root.traverse((o) => { if ((o as THREE.Mesh).isMesh) draws++; });
       assert.ok(draws <= 16, `${name}: ${draws} меша`);
+      // всички мешове на тялото — с един скелет (едно качване на костите на кадър); наметалото има своя малък
+      const sks = new Set<THREE.Skeleton>();
+      m.root.traverse((o) => { const s = o as THREE.SkinnedMesh; if (s.isSkinnedMesh && s.name !== 'cape') sks.add(s.skeleton); });
+      assert.equal(sks.size, 1, name + ': един общ скелет');
+      if (name === 'hero') assert.ok(m.root.getObjectByName('cape'), 'Стоян е с наметало');
       m.flash(0xff0000); m.update(0.5); m.dispose();
     }
     // еднократните се връщат към предишната; die остава

@@ -46,6 +46,8 @@ export interface CharSpec {
   wreath?: number;
   /** Вариант (за разминаване на анимациите и лицата). */
   seed: number;
+  /** Наметало на гърба (цвят) — Стоян. */
+  cape?: string;
 }
 
 /** Височина на темето на телата в people.glb (в покой). */
@@ -132,6 +134,7 @@ export function heroSpec(): CharSpec {
     },
     hairColors: { [HAIR.buzzed]: '#3a2414', [HAIR.browsM]: '#3a2414', [HAIR.beard]: '#4a2c18' },
     skin: skinTint('#d9ab84'), height: 1.8, build: 1, stoop: 0, old: false, female: false, seed: 0.37,
+    cape: '#6b4a2f',
   };
 }
 

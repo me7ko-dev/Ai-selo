@@ -113,6 +113,86 @@ function bindPose(armature: THREE.Object3D): { rot: Map<string, THREE.Quaternion
   return { rot, pos };
 }
 
+
+// ───────────────────────────── материали ─────────────────────────────
+interface SheenOpts { sheen: number; sheenRoughness: number; sheenColor: string }
+
+/** Физичен материал със същите текстури и настройки (MeshStandardMaterial → MeshPhysicalMaterial с „мъх“). */
+function physical(m: THREE.MeshStandardMaterial, o?: SheenOpts): THREE.MeshPhysicalMaterial {
+  const p = new THREE.MeshPhysicalMaterial({
+    name: m.name, color: m.color, map: m.map, normalMap: m.normalMap, normalScale: m.normalScale,
+    roughnessMap: m.roughnessMap, metalnessMap: m.metalnessMap, roughness: m.roughness, metalness: m.metalness,
+    side: m.side, transparent: m.transparent, alphaTest: m.alphaTest, emissive: m.emissive,
+  });
+  p.userData = { ...m.userData };
+  if (o) { p.sheen = o.sheen; p.sheenRoughness = o.sheenRoughness; p.sheenColor.set(o.sheenColor); }
+  m.dispose();
+  return p;
+}
+
+// Кожата: светлината „обвива“ ръба (wrap) и там става червеникава — както светлината минава под кожата;
+// отражението е меко и слабо (F0 ≈ 0.028), без пластмасов блясък.
+const SKIN_WRAP = /* glsl */`
+	float wrapNL = saturate( ( dot( geometryNormal, directLight.direction ) + 0.4 ) / 1.4 );
+	vec3 sssTint = mix( vec3( 1.0 ), vec3( 1.0, 0.58, 0.45 ), saturate( 1.0 - dotNL * 3.0 ) * step( 1e-3, wrapNL ) );
+	reflectedLight.directDiffuse += wrapNL * directLight.color * sssTint * BRDF_Lambert( material.diffuseColor );
+`;
+const LAMBERT_LINE = 'reflectedLight.directDiffuse += irradiance * BRDF_Lambert( material.diffuseColor );';
+
+function skinMaterial(m: THREE.MeshStandardMaterial): THREE.MeshPhysicalMaterial {
+  const s = physical(m, { sheen: 0.25, sheenRoughness: 0.55, sheenColor: '#ffd9c4' });
+  s.roughness = 0.82; s.metalness = 0;
+  s.specularIntensity = 0.55;
+  s.normalScale.set(0.75, 0.75);
+  s.userData.skin = true;
+  return s;
+}
+
+/**
+ * Добавя „обвиващата“ светлина на кожата към материала (вика се и от копията с onBeforeCompile).
+ * old > 0 — бръчки (чело, около очите, бузите) като фини гънки в нормалата (в пространството на тялото в покой).
+ */
+export function skinShader(sh: THREE.WebGLProgramParametersWithUniforms): void {
+  const chunk = THREE.ShaderChunk.lights_physical_pars_fragment;
+  if (chunk.includes(LAMBERT_LINE)) {
+    sh.fragmentShader = sh.fragmentShader.replace('#include <lights_physical_pars_fragment>', chunk.replace(LAMBERT_LINE, SKIN_WRAP));
+  }
+}
+
+/**
+ * GLTF с квантувани позиции (KHR_mesh_quantization) дава на всеки меш свой skin (обратните матрици носят
+ * мащаба на квантуването) → 4 скелета на човек. Тук мащабът се „запича“ в геометрията и всички мешове на тялото
+ * ползват скелета на първия.
+ */
+function shareSkeleton(armature: THREE.Object3D): void {
+  const meshes: THREE.SkinnedMesh[] = [];
+  armature.traverse((o) => { if ((o as THREE.SkinnedMesh).isSkinnedMesh) meshes.push(o as THREE.SkinnedMesh); });
+  if (meshes.length < 2) return;
+  const ref = meshes[0].skeleton;
+  const d = new THREE.Matrix4(), inv = new THREE.Matrix4(), m2 = new THREE.Matrix4();
+  for (const m of meshes.slice(1)) {
+    const sk = m.skeleton;
+    if (sk === ref) continue;
+    if (sk.bones.length !== ref.bones.length || sk.bones.some((b, i) => b !== ref.bones[i])) continue;
+    // D = IBM_ref⁻¹ · IBM_меш (еднакво за всички кости, ако разликата е само квантуването)
+    d.copy(inv.copy(ref.boneInverses[0]).invert()).multiply(sk.boneInverses[0]);
+    let same = true;
+    for (let i = 1; i < sk.bones.length && same; i++) {
+      m2.copy(inv.copy(ref.boneInverses[i]).invert()).multiply(sk.boneInverses[i]);
+      for (let k = 0; k < 16; k++) if (Math.abs(m2.elements[k] - d.elements[k]) > 1e-3) { same = false; break; }
+    }
+    if (!same) continue;
+    const g = m.geometry;
+    const pos = g.getAttribute('position');
+    const out = new Float32Array(pos.count * 3);
+    const v = new THREE.Vector3();
+    for (let i = 0; i < pos.count; i++) { v.fromBufferAttribute(pos, i).applyMatrix4(d); out[i * 3] = v.x; out[i * 3 + 1] = v.y; out[i * 3 + 2] = v.z; }
+    g.setAttribute('position', new THREE.BufferAttribute(out, 3));
+    g.boundingBox = null; g.boundingSphere = null;
+    m.bind(ref, m.bindMatrix);
+  }
+}
+
 /**
  * Зарежда хората. Вика се веднъж при старта (преди да се направят жителите); onProgress(0..1).
  * quality 'low' → не зарежда нищо (процедурните модели са по-леки за телефони).
@@ -169,18 +249,21 @@ export function initCharacterAssets(people: LoadedGltf, anims: LoadedGltf, quali
     m.receiveShadow = true;
   });
   const need = (n: string) => { const m = mats.get(n); if (!m) throw new Error('липсва материал ' + n); return m; };
+  // вълната и ленът имат мек „мъх“ по ръбовете (sheen); кожата — топла, с разсейване под повърхността (wrap)
   const materials = {
-    peasant: need('cloth_peasant'), ranger: need('cloth_ranger'), folk: need('folk'),
-    skinM: need('skin_m'), skinF: need('skin_f'), eyes: need('eyes'), hair: need('hair'),
+    peasant: physical(need('cloth_peasant'), { sheen: 0.55, sheenRoughness: 0.75, sheenColor: '#d8cfc0' }),
+    ranger: physical(need('cloth_ranger'), { sheen: 0.45, sheenRoughness: 0.8, sheenColor: '#b8a890' }),
+    folk: physical(need('folk'), { sheen: 0.7, sheenRoughness: 0.7, sheenColor: '#cfc6b8' }),
+    skinM: skinMaterial(need('skin_m')), skinF: skinMaterial(need('skin_f')),
+    eyes: need('eyes'),
+    hair: physical(need('hair'), { sheen: 0.5, sheenRoughness: 0.45, sheenColor: '#a89880' }),
   };
-  // тъканите и косата — матови; кожата — мека, без пластмасов блясък
   for (const m of Object.values(materials)) {
     for (const t of [m.map, m.normalMap, m.roughnessMap]) if (t) t.anisotropy = 4;
     m.envMapIntensity = 1;
   }
   materials.folk.roughness = 0.95;
   materials.hair.roughness = 0.55;
-  for (const s of [materials.skinM, materials.skinF]) { s.roughness = 1; s.metalness = 0; s.normalScale.set(0.8, 0.8); }
   materials.eyes.roughness = 0.2;
 
   const animPelvis = (anims.userData?.pelvisHeight as number) ?? 0.9167;
@@ -191,6 +274,7 @@ export function initCharacterAssets(people: LoadedGltf, anims: LoadedGltf, quali
     if (!armature) throw new Error('липсва тяло ' + kind);
     armature.removeFromParent();
     armature.position.set(0, 0, 0);
+    shareSkeleton(armature);
     const boneNames = new Set<string>();
     armature.traverse((o) => { if ((o as THREE.Bone).isBone) boneNames.add(o.name); });
     const ph = pelvisZ(armature);
