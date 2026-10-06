@@ -1,4 +1,4 @@
-// Проби за мозъка на жителите: сценарий (детерминиран, български), готови отговори, опашка, Ollama (фалшив сървър).
+// Проби за мозъка на жителите: сценарий (детерминиран, български), готови отговори, опашка, Ollama и Genesis (фалшиви сървъри).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
@@ -7,10 +7,14 @@ import { VILLAGERS, VILLAGER_IDS, type VillagerId } from '../src/data/villagers'
 import { ScriptedBrain, TALK_OPTION_IDS } from '../src/sim/brain/ScriptedBrain';
 import { dialogueOptions } from '../src/sim/brain/options';
 import { OllamaBrain, connectedLabel } from '../src/sim/brain/OllamaBrain';
+import { GenesisBrain, FAIL_STREAK } from '../src/sim/brain/AiBrain';
+import { GENESIS_LIMITS, genesisLabel, shortModel } from '../src/sim/brain/genesisApi';
+import { chatSchema, jsonShape } from '../src/sim/brain/prompt';
+import { mergeSettings } from '../src/save/settings';
 import { BrainQueue, PRIORITY } from '../src/sim/brain/queue';
 import { createBrain } from '../src/sim/brain/index';
 import { cleanLine } from '../src/sim/brain/validate';
-import type { Persona, TalkRequest, ChatRequest, AiSettings } from '../src/sim/brain/Brain';
+import { DEFAULT_AI, DEFAULT_GENESIS_URL, type Persona, type TalkRequest, type ChatRequest, type AiSettings } from '../src/sim/brain/Brain';
 import type { Memory } from '../src/sim/types';
 
 const persona = (id: VillagerId, mood = 'спокоен'): Persona => {
@@ -235,7 +239,7 @@ async function fakeOllama(handler: Handler): Promise<{ url: string; close: () =>
 const json = (res: ServerResponse, obj: unknown, status = 200) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); };
 const chatContent = (content: string) => ({ model: 'qwen3.5:4b', message: { role: 'assistant', content }, done: true });
 const tags = (names: string[]) => ({ models: names.map((n) => ({ name: n, model: n })) });
-const settings = (url: string, extra: Partial<AiSettings> = {}): AiSettings => ({ enabled: true, url, model: 'qwen3.5:4b', timeoutMs: 2000, ...extra });
+const settings = (url: string, extra: Partial<AiSettings> = {}): AiSettings => ({ ...DEFAULT_AI, enabled: true, provider: 'ollama', url, model: 'qwen3.5:4b', timeoutMs: 2000, ...extra });
 
 test('Ollama: свързан, валиден отговор → ai:true', async () => {
   let lastBody: Record<string, unknown> = {};
@@ -341,7 +345,7 @@ test('Ollama: не работи → причина „Ollama не отговар
   const r = await h.brain.talk(talkReq('maria', { optionId: 'greet' }));
   assert.equal(r.ai, false);
   assert.deepEqual(r, h.scripted.talkNow(talkReq('maria', { optionId: 'greet' })));
-  h.ollama?.dispose();
+  h.ai.dispose();
 });
 
 test('Ollama: https страница + http адрес → обяснение, без заявка', async () => {
@@ -445,5 +449,262 @@ test('ScriptedBrain: свободни въпроси — кметът, „оби
   for (let seed = 0; seed < 20; seed++) {
     const t = sb.talkNow(talkReq('maria', { input: 'Какво ново?', optionId: undefined, memories: [rumorMem], seed })).say;
     assert.doesNotMatch(t, /Чух, че дядо Пею ми каза|“\./, t);
+  }
+});
+
+// ——— Фалшив Genesis (OpenAI-съвместим: /v1/health, /v1/chat/completions) ———
+const fakeGenesis = fakeOllama;
+const HEALTH = { app: 'genesis', api: 1, ok: true };
+const GMODEL = 'groq/llama-3.1-8b-instant';
+const completion = (content: string, model = GMODEL) => ({ model, choices: [{ message: { role: 'assistant', content } }] });
+const gsettings = (url: string, extra: Partial<AiSettings> = {}): AiSettings => ({ ...DEFAULT_AI, enabled: true, provider: 'genesis', genesisUrl: url, timeoutMs: 2000, ...extra });
+const GOOD_TALK = JSON.stringify({ say: 'Добре дошъл, странниче! Седни да си починеш.', action: 'none', mood: 'весела', remember: 'Странникът дойде при мен сутринта.' });
+const chatReqOf = (seed = 1): ChatRequest => ({ a: persona('ivan'), b: persona('maria'), topic: 'love', situation: SITS[0], memoriesA: [], memoriesB: [], relationAB: { affinity: 70, trust: 50 }, relationBA: { affinity: 30, trust: 40 }, seed });
+const GOOD_CHAT = JSON.stringify({ lines: [{ who: 'ivan', text: 'Хм. Хубава шевица.' }, { who: 'maria', text: 'Благодаря ти, Иване!' }], summary: 'Иван похвали шевицата на Мария.', affinityDelta: 3 });
+
+test('jsonShape: формата на отговора се извежда от JSON схемата', () => {
+  assert.deepEqual(jsonShape(chatSchema('ivan', 'maria')), {
+    lines: [{ who: 'ivan|maria', text: '…' }, { who: 'ivan|maria', text: '…' }], summary: '…', affinityDelta: 0,
+  });
+  assert.equal(shortModel('openrouter/meta-llama/llama-3.3-70b-instruct:free'), 'openrouter/llama-3.3-70b-instruct');
+  assert.equal(genesisLabel(GMODEL), 'ИИ: Genesis (groq/llama-3.1-8b-instant)');
+  assert.ok(shortModel('x/' + 'a'.repeat(80)).length <= 34);
+  assert.ok(genesisLabel('x/' + 'a'.repeat(80)).length <= 48);
+});
+
+test('настройки: старите записи остават с Ollama; Genesis се пази; непознат вид → Ollama', () => {
+  const old = mergeSettings({ ai: { enabled: true, url: 'http://127.0.0.1:11434', model: 'gemma4:e2b', timeoutMs: 15000 } });
+  assert.equal(old.ai.provider, 'ollama');
+  assert.equal(old.ai.model, 'gemma4:e2b');
+  assert.equal(old.ai.genesisUrl, DEFAULT_GENESIS_URL);
+  assert.equal(DEFAULT_GENESIS_URL, 'http://127.0.0.1:8770');
+  const g = mergeSettings({ ai: { provider: 'genesis', genesisUrl: 'http://localhost:8770' } });
+  assert.equal(g.ai.provider, 'genesis');
+  assert.equal(g.ai.genesisUrl, 'http://localhost:8770');
+  assert.equal(mergeSettings({ ai: { provider: 'openai', genesisUrl: '' } }).ai.provider, 'ollama');
+  assert.equal(mergeSettings({ ai: { genesisUrl: '   ' } }).ai.genesisUrl, DEFAULT_GENESIS_URL);
+  assert.equal(mergeSettings({}).ai.provider, 'ollama');
+});
+
+test('Genesis: /v1/health → свързан; отговорът става реплика на жителя; надписът показва модела', async () => {
+  let lastBody: Record<string, unknown> = {};
+  const srv = await fakeGenesis((req, body, res) => {
+    if (req.url === '/v1/health') return json(res, HEALTH);
+    assert.equal(req.method, 'POST');
+    assert.equal(req.url, '/v1/chat/completions');
+    lastBody = JSON.parse(body);
+    json(res, completion(GOOD_TALK));
+  });
+  const gb = new GenesisBrain(gsettings(srv.url), new ScriptedBrain());
+  const labels: string[] = [];
+  gb.onStatus((s) => labels.push(s.label));
+  const st = await gb.connect();
+  assert.equal(st.connected, true);
+  assert.equal(st.label, 'ИИ: Genesis (свързан)');
+  const r = await gb.talk(talkReq('gena', { optionId: 'greet', input: 'Здравей' }));
+  assert.equal(r.ai, true);
+  assert.equal(r.say, 'Добре дошъл, странниче! Седни да си починеш.');
+  assert.equal(r.mood, 'весела');
+  assert.equal(r.remember, 'Странникът дойде при мен сутринта.');
+  // OpenAI-съвместимо тяло: без полетата на Ollama, с json_object и формата в подканата
+  assert.deepEqual(lastBody.response_format, { type: 'json_object' });
+  assert.equal(lastBody.temperature, 0.8);
+  assert.ok(typeof lastBody.max_tokens === 'number' && lastBody.max_tokens > 0);
+  for (const k of ['format', 'stream', 'think', 'keep_alive', 'options']) assert.equal(k in lastBody, false, k);
+  const msgs = lastBody.messages as { role: string; content: string }[];
+  assert.deepEqual(msgs.map((m) => m.role), ['system', 'user']);
+  assert.match(msgs[0].content, /САМО с един JSON обект/);
+  assert.ok(msgs[0].content.includes('"action":"none|end|give_quest|walk_away"'), msgs[0].content);
+  assert.match(msgs[0].content, /Отговаряй САМО на български/);
+  // моделът от отговора — в надписа
+  assert.equal(gb.status().label, 'ИИ: Genesis (groq/llama-3.1-8b-instant)');
+  assert.equal(gb.status().model, GMODEL);
+  assert.ok(labels.includes('ИИ: Genesis (groq/llama-3.1-8b-instant)'));
+  // разговорите с играча са винаги с ИИ (без ограничение)
+  const r2 = await gb.talk(talkReq('gena', { optionId: 'news', input: 'Какво ново?' }));
+  assert.equal(r2.ai, true);
+  gb.dispose(); await srv.close();
+});
+
+test('Genesis: JSON, скрит в текст (```json, <think>) — пак се чете', async () => {
+  const answers = [
+    'Ето отговора:\n```json\n' + GOOD_TALK + '\n```',
+    '<think>{"say":"hmm"} Let me answer in Bulgarian.</think>\n' + GOOD_TALK,
+    'Разбира се! ' + GOOD_TALK + ' Надявам се да помогне.',
+  ];
+  let i = 0;
+  const srv = await fakeGenesis((req, _b, res) => {
+    if (req.url === '/v1/health') return json(res, HEALTH);
+    json(res, completion(answers[i++]));
+  });
+  const gb = new GenesisBrain(gsettings(srv.url), new ScriptedBrain());
+  await gb.connect();
+  for (let k = 0; k < answers.length; k++) {
+    const r = await gb.talk(talkReq('radka', { optionId: 'news', seed: k }));
+    assert.equal(r.ai, true, `отговор ${k}`);
+    assert.equal(r.say, 'Добре дошъл, странниче! Седни да си починеш.');
+  }
+  gb.dispose(); await srv.close();
+});
+
+test('Genesis: английски / ракия / лош JSON → резерв по сценарий (ai:false)', async () => {
+  const answers = [
+    JSON.stringify({ say: 'Hello traveler, welcome to our village!', action: 'none', mood: 'happy', remember: '' }),
+    JSON.stringify({ say: 'Ела в хана, ще те черпя с ракия.', action: 'none', mood: 'весела', remember: '' }),
+    'Sorry, I cannot help with that.',
+  ];
+  let i = 0;
+  const srv = await fakeGenesis((req, _b, res) => {
+    if (req.url === '/v1/health') return json(res, HEALTH);
+    json(res, completion(answers[i++ % answers.length]));
+  });
+  const sb = new ScriptedBrain();
+  const gb = new GenesisBrain(gsettings(srv.url), sb);
+  await gb.connect();
+  for (let k = 0; k < answers.length; k++) {
+    const req = talkReq('radka', { optionId: 'news', seed: k });
+    const r = await gb.talk(req);
+    assert.equal(r.ai, false, `отговор ${k}`);
+    assert.deepEqual(r, sb.talkNow(req));
+  }
+  assert.equal(gb.status().connected, true, 'лош отговор не разкача');
+  gb.dispose(); await srv.close();
+});
+
+test('Genesis: не работи → причина „Пусни в терминал: genesis api“; чужда програма на порта → обяснение', async () => {
+  const srv = await fakeGenesis((_r, _b, res) => json(res, {}));
+  const url = srv.url;
+  // друга програма на адреса
+  const other = new GenesisBrain(gsettings(url), new ScriptedBrain());
+  const st0 = await other.connect();
+  assert.equal(st0.connected, false);
+  assert.match(st0.reason ?? '', /друга програма, не Genesis/);
+  other.dispose();
+  await srv.close();
+  // спрян Genesis
+  const sb = new ScriptedBrain();
+  const gb = new GenesisBrain(gsettings(url), sb);
+  const st = await gb.connect();
+  assert.equal(st.connected, false);
+  assert.equal(st.label, 'ИИ: няма връзка — жителите говорят по сценарий');
+  assert.equal(st.reason, `Genesis не отговаря на ${url.replace('http://', '')}. Пусни в терминал: genesis api`);
+  const req = talkReq('maria', { optionId: 'greet' });
+  const r = await gb.talk(req);
+  assert.equal(r.ai, false);
+  assert.deepEqual(r, sb.talkNow(req));
+  gb.dispose();
+});
+
+test('Genesis: бавен отговор → изтичане → резерв, без да разкача', async () => {
+  const srv = await fakeGenesis((req, _b, res) => {
+    if (req.url === '/v1/health') return json(res, HEALTH);
+    setTimeout(() => { try { json(res, completion(GOOD_TALK)); } catch { /* затворено */ } }, 1500);
+  });
+  const sb = new ScriptedBrain();
+  const gb = new GenesisBrain(gsettings(srv.url, { timeoutMs: 150 }), sb);
+  await gb.connect();
+  const req = talkReq('ivan', { optionId: 'self' });
+  const t0 = Date.now();
+  const r = await gb.talk(req);
+  assert.ok(Date.now() - t0 < 1200, 'не изчака изтичането');
+  assert.equal(r.ai, false);
+  assert.deepEqual(r, sb.talkNow(req));
+  assert.equal(gb.status().connected, true);
+  gb.dispose(); await srv.close();
+});
+
+test('Genesis: грешки от сървъра (квотите свършили) → резерв; няколко подред → „няма връзка“ с обяснение', async () => {
+  let chats = 0;
+  const srv = await fakeGenesis((req, _b, res) => {
+    if (req.url === '/v1/health') return json(res, HEALTH);
+    chats++;
+    json(res, { error: { message: 'all providers exhausted' } }, 503);
+  });
+  const sb = new ScriptedBrain();
+  const gb = new GenesisBrain(gsettings(srv.url), sb);
+  await gb.connect();
+  for (let k = 0; k < FAIL_STREAK; k++) {
+    const req = talkReq('peyu', { optionId: 'news', seed: k });
+    assert.deepEqual(await gb.talk(req), sb.talkNow(req));
+  }
+  const st = gb.status();
+  assert.equal(st.connected, false);
+  assert.match(st.reason ?? '', /HTTP 503/);
+  // вече не праща заявки, докато проверката не мине пак
+  await gb.talk(talkReq('peyu', { optionId: 'self' }));
+  assert.equal(chats, FAIL_STREAK);
+  gb.dispose(); await srv.close();
+});
+
+test('Genesis: пести квотите — жителите помежду си не по-често от веднъж на chatGapMs; с играча — винаги', async () => {
+  let chats = 0;
+  const srv = await fakeGenesis((req, body, res) => {
+    if (req.url === '/v1/health') return json(res, HEALTH);
+    chats++;
+    const sys = (JSON.parse(body) as { messages: { content: string }[] }).messages[0].content;
+    json(res, completion(sys.includes('"lines"') ? GOOD_CHAT : GOOD_TALK));
+  });
+  let now = 1_000_000;
+  const sb = new ScriptedBrain();
+  const gb = new GenesisBrain(gsettings(srv.url), sb, { now: () => now });
+  await gb.connect();
+  assert.ok(GENESIS_LIMITS.chatGapMs >= 20_000 && GENESIS_LIMITS.chatGapMs <= 30_000);
+  const c1 = await gb.chat(chatReqOf(1));
+  assert.equal(c1.ai, true);
+  assert.equal(c1.lines.length, 2);
+  now += GENESIS_LIMITS.chatGapMs - 1000;
+  const req2 = chatReqOf(2);
+  const c2 = await gb.chat(req2);
+  assert.equal(c2.ai, false, 'твърде скоро — по сценарий');
+  assert.deepEqual(c2, sb.chatNow(req2));
+  assert.equal(chats, 1);
+  // с играча — веднага, без ограничение
+  assert.equal((await gb.talk(talkReq('ivan', { optionId: 'self' }))).ai, true);
+  now += 1500;
+  assert.equal((await gb.chat(chatReqOf(3))).ai, true);
+  assert.equal(chats, 3);
+  gb.dispose(); await srv.close();
+});
+
+test('createBrain: Genesis от настройките; смяна Genesis → Ollama → Genesis в движение', async () => {
+  const srv = await fakeGenesis((req, _b, res) => {
+    if (req.url === '/v1/health') return json(res, HEALTH);
+    json(res, completion(GOOD_TALK));
+  });
+  const h = createBrain(gsettings(srv.url));
+  assert.equal(h.ai.provider, 'genesis');
+  assert.equal((await h.connect()).label, 'ИИ: Genesis (свързан)');
+  assert.equal((await h.brain.talk(talkReq('kalin', { optionId: 'greet' }))).ai, true);
+  // към Ollama (спрян) — същият мозък, нов вид
+  h.setSettings(settings('http://127.0.0.1:9'));
+  assert.equal(h.ai.provider, 'ollama');
+  const st = await h.connect();
+  assert.equal(st.connected, false);
+  assert.match(st.reason ?? '', /Ollama не отговаря/);
+  assert.equal((await h.brain.talk(talkReq('kalin', { optionId: 'greet' }))).ai, false);
+  // обратно към Genesis
+  h.setSettings(gsettings(srv.url));
+  assert.equal((await h.connect()).connected, true);
+  h.ai.dispose(); await srv.close();
+});
+
+test('Genesis: https страница → обяснение за Windows версията, без заявка', async () => {
+  const srv = await fakeGenesis((_r, _b, res) => json(res, HEALTH));
+  const g = globalThis as { location?: unknown };
+  const had = 'location' in g;
+  const old = g.location;
+  Object.defineProperty(globalThis, 'location', { value: { protocol: 'https:' }, configurable: true, writable: true });
+  try {
+    const gb = new GenesisBrain(gsettings(srv.url), new ScriptedBrain());
+    const st = await gb.connect();
+    assert.equal(st.connected, false);
+    assert.match(st.reason ?? '', /GitHub Pages/);
+    assert.match(st.reason ?? '', /genesis api/);
+    assert.equal(srv.calls.length, 0);
+    gb.dispose();
+  } finally {
+    if (had) Object.defineProperty(globalThis, 'location', { value: old, configurable: true, writable: true });
+    else delete g.location;
+    await srv.close();
   }
 });

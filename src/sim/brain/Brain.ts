@@ -1,5 +1,5 @@
 // Договор за „мозъка“ на жителите. Две реализации: ScriptedBrain (без ИИ, винаги работи, детерминиран по seed)
-// и OllamaBrain (локален ИИ през Ollama; при грешка/изтичане → ScriptedBrain за тази заявка).
+// и AiBrain (ИИ през Ollama или Genesis; при грешка/изтичане → ScriptedBrain за тази заявка).
 import type { Memory, Relation } from '../types';
 
 export interface BrainStatus {
@@ -109,11 +109,18 @@ export interface SyncBrain {
   reflectNow(req: ReflectRequest): ReflectReply;
 }
 
+/** Откъде мислят жителите: 'ollama' — локален модел на компютъра; 'genesis' — мостът Genesis (`genesis api`) към безплатни облачни модели. */
+export type AiProvider = 'ollama' | 'genesis';
+export const AI_PROVIDERS: readonly AiProvider[] = ['ollama', 'genesis'];
+export const DEFAULT_GENESIS_URL = 'http://127.0.0.1:8770';
+
 export interface AiSettings {
   enabled: boolean;
-  url: string;           // 'http://127.0.0.1:11434'
-  model: string;         // 'qwen3.5:4b'
+  provider: AiProvider;  // 'ollama'
+  url: string;           // адресът на Ollama: 'http://127.0.0.1:11434'
+  model: string;         // моделът в Ollama: 'qwen3.5:4b' (Genesis сам избира модела)
+  genesisUrl: string;    // адресът на Genesis: 'http://127.0.0.1:8770'
   timeoutMs: number;     // 20000
 }
-export const DEFAULT_AI: AiSettings = { enabled: true, url: 'http://127.0.0.1:11434', model: 'qwen3.5:4b', timeoutMs: 20000 };
+export const DEFAULT_AI: AiSettings = { enabled: true, provider: 'ollama', url: 'http://127.0.0.1:11434', model: 'qwen3.5:4b', genesisUrl: DEFAULT_GENESIS_URL, timeoutMs: 20000 };
 export const MODEL_CHOICES = ['qwen3.5:4b', 'gemma4:e2b', 'qwen3:4b', 'gemma3:4b', 'llama3.2:3b'];

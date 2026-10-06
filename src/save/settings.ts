@@ -1,5 +1,5 @@
 // Настройки на играча (localStorage). Зареждането търпи боклук и стари версии — сливане със стойностите по подразбиране.
-import { DEFAULT_AI, type AiSettings } from '../sim/brain/Brain';
+import { AI_PROVIDERS, DEFAULT_AI, type AiProvider, type AiSettings } from '../sim/brain/Brain';
 
 export type GraphicsQuality = 'low' | 'medium' | 'high';
 
@@ -40,8 +40,11 @@ export function mergeSettings(raw: unknown): Settings {
   return {
     ai: {
       enabled: bool(ai.enabled, d.ai.enabled),
+      // старите записи нямат „provider“ → остават с Ollama, както досега
+      provider: (AI_PROVIDERS as readonly unknown[]).includes(ai.provider) ? ai.provider as AiProvider : d.ai.provider,
       url: str(ai.url, d.ai.url) || d.ai.url,
       model: str(ai.model, d.ai.model) || d.ai.model,
+      genesisUrl: str(ai.genesisUrl, d.ai.genesisUrl).trim() || d.ai.genesisUrl,
       timeoutMs: num(ai.timeoutMs, d.ai.timeoutMs, 1000, 600000),
     },
     graphics: {

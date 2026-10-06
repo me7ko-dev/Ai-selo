@@ -17,8 +17,9 @@ function serve(port) {
     const srv = http.createServer((req, res) => {
       let p;
       try { p = decodeURIComponent(req.url.split('?')[0]); } catch { res.writeHead(400); return res.end(); }
-      // локалният ИИ (Ollama) — препращане, за да няма CORS проблеми
-      if (p.startsWith('/__ollama/')) return proxyOllama(req, res, req.url.slice('/__ollama'.length));
+      // локалният ИИ (Ollama) и мостът Genesis — препращане, за да няма CORS проблеми
+      if (p.startsWith('/__ollama/')) return proxyLocal(req, res, 11434, req.url.slice('/__ollama'.length));
+      if (p.startsWith('/__genesis/')) return proxyLocal(req, res, 8770, req.url.slice('/__genesis'.length));
       if (p === '/' || p === '') p = '/index.html';
       const file = path.join(ROOT, path.normalize(p));
       if (!file.startsWith(ROOT)) { res.writeHead(403); return res.end(); }
@@ -33,8 +34,10 @@ function serve(port) {
   });
 }
 
-function proxyOllama(req, res, rest) {
-  const up = http.request({ host: '127.0.0.1', port: 11434, path: rest || '/', method: req.method,
+// Препраща заявката към програма на същия компютър (Ollama: 11434, Genesis: 8770). Праща се само Content-Type —
+// без Origin, а Host е 127.0.0.1:<порт> (Genesis приема само такива заявки).
+function proxyLocal(req, res, port, rest) {
+  const up = http.request({ host: '127.0.0.1', port, path: rest || '/', method: req.method,
     headers: { 'content-type': req.headers['content-type'] || 'application/json' } }, (r) => {
     res.writeHead(r.statusCode || 502, { 'Content-Type': r.headers['content-type'] || 'application/json' });
     r.pipe(res);

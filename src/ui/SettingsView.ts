@@ -1,5 +1,6 @@
 // Меню / настройки (Esc): Игра, ИИ, Графика, Звук, Управление, Лайв.
-import { MODEL_CHOICES, DEFAULT_AI, type AiSettings } from '../sim/brain/Brain';
+import { MODEL_CHOICES, DEFAULT_AI, DEFAULT_GENESIS_URL, type AiProvider, type AiSettings } from '../sim/brain/Brain';
+import { GENESIS_LIMITS } from '../sim/brain/genesisApi';
 import { h, esc, isolateInput } from './dom';
 import { ModalView, cornersHtml } from './view';
 import './css/settings.css';
@@ -151,21 +152,40 @@ export class SettingsView extends ModalView {
         B.append(h(`div.set-status${a?.connected ? '.ok' : ''}`, null, h(`span.dot${a?.connected ? '.on' : a?.testing ? '.busy' : ''}`), h('span', { text: a?.testing ? 'Проверявам връзката…' : (a?.label ?? 'ИИ: няма връзка — жителите говорят по сценарий') })));
         if (a?.reason) B.append(h('p.set-p.warn', { text: a.reason }));
         row('Жители с ИИ', toggle(this.s.ai.enabled, (v) => { this.s.ai.enabled = v; this.changed(); }), 'изключено = винаги по сценарий');
-        row('Адрес на Ollama', text(this.s.ai.url, DEFAULT_AI.url, (v) => { this.s.ai.url = v || DEFAULT_AI.url; this.changed(); }));
-        const custom = !MODEL_CHOICES.includes(this.s.ai.model);
-        const sel = h('select', null, ...MODEL_CHOICES.map((m) => h('option', { value: m, text: m, selected: m === this.s.ai.model })), h('option', { value: '__custom', text: 'Друг модел…', selected: custom })) as HTMLSelectElement;
-        const cust = text(custom ? this.s.ai.model : '', 'напр. qwen3:1.7b', (v) => { if (v) { this.s.ai.model = v; this.changed(); } });
-        cust.classList.toggle('hidden', !custom);
-        sel.addEventListener('change', () => { if (sel.value === '__custom') { cust.classList.remove('hidden'); cust.focus(); } else { cust.classList.add('hidden'); this.s.ai.model = sel.value; this.changed(); } });
-        row('Модел', h('div.set-model', null, sel, cust), 'малък модел за видеокарта 4 GB');
+        const genesis = this.s.ai.provider === 'genesis';
+        row('Кой ИИ', seg<AiProvider>(this.s.ai.provider, [['ollama', 'Ollama'], ['genesis', 'Genesis']], (v) => {
+          if (v === this.s.ai.provider) return;
+          this.s.ai.provider = v; this.changed(); this.render();
+        }), genesis ? 'мост към безплатни модели в интернет' : 'модел на твоя компютър');
+        if (genesis) {
+          row('Адрес на Genesis', text(this.s.ai.genesisUrl, DEFAULT_GENESIS_URL, (v) => { this.s.ai.genesisUrl = v || DEFAULT_GENESIS_URL; this.changed(); }));
+        } else {
+          row('Адрес на Ollama', text(this.s.ai.url, DEFAULT_AI.url, (v) => { this.s.ai.url = v || DEFAULT_AI.url; this.changed(); }));
+          const custom = !MODEL_CHOICES.includes(this.s.ai.model);
+          const sel = h('select', null, ...MODEL_CHOICES.map((m) => h('option', { value: m, text: m, selected: m === this.s.ai.model })), h('option', { value: '__custom', text: 'Друг модел…', selected: custom })) as HTMLSelectElement;
+          const cust = text(custom ? this.s.ai.model : '', 'напр. qwen3:1.7b', (v) => { if (v) { this.s.ai.model = v; this.changed(); } });
+          cust.classList.toggle('hidden', !custom);
+          sel.addEventListener('change', () => { if (sel.value === '__custom') { cust.classList.remove('hidden'); cust.focus(); } else { cust.classList.add('hidden'); this.s.ai.model = sel.value; this.changed(); } });
+          row('Модел', h('div.set-model', null, sel, cust), 'малък модел за видеокарта 4 GB');
+        }
         row('Изчакване', slider(this.s.ai.timeoutMs / 1000, 5, 60, 1, (v) => `${v} с`, (v) => { this.s.ai.timeoutMs = v * 1000; this.changed(); }), 'после — по сценарий');
         B.append(h('div.set-game', null, btn('Провери връзката', 'gold', () => this.onTestAi())));
         sec('Как работи');
-        B.append(h('div.set-p', { html: `
-          <p>Жителите могат да мислят с <b>локален ИИ</b> — програмата <b>Ollama</b> на твоя компютър. Нищо не се праща в интернет. Без ИИ играта работи напълно: жителите говорят по сценарий.</p>
-          ${this.st.browser !== false ? '<p class="warn">Версията в браузъра (от сайта на играта) <b>не може</b> да се свърже с Ollama — браузърът не позволява на сайт от интернет да говори с програма на компютъра ти. За жители с ИИ свали <b>версията за Windows</b>.</p>' : ''}
-          <p>Как да сложиш модел:</p>
-          <ol><li>Инсталирай Ollama (ollama.com).</li><li>Отвори „Команден ред“ и напиши:<br><code>ollama pull ${esc(MODEL_CHOICES[0])}</code></li><li>Пусни играта за Windows и натисни „Провери връзката“.</li></ol>` }));
+        if (genesis) {
+          const gap = Math.round(GENESIS_LIMITS.chatGapMs / 1000);
+          B.append(h('div.set-p', { html: `
+            <p>С <b>Genesis</b> жителите мислят с <b>безплатен ИИ модел в интернет</b>. Genesis върви на твоя компютър, сам избира модел и минава на друг, когато безплатните заявки на първия свършат. Репликите, спомените и характерите на жителите се пращат на този модел. Без ИИ играта работи напълно: жителите говорят по сценарий.</p>
+            ${this.st.browser !== false ? '<p class="warn">Версията в браузъра (от сайта на играта) <b>не може</b> да се свърже с Genesis — браузърът не позволява на сайт от интернет да говори с програма на компютъра ти. За жители с ИИ свали <b>версията за Windows</b>.</p>' : ''}
+            <p>Как да го пуснеш:</p>
+            <ol><li>Отвори терминал („Команден ред“) и напиши:<br><code>genesis api</code></li><li>Остави прозореца отворен, докато играеш.</li><li>Пусни играта за Windows, избери „Genesis“ и натисни „Провери връзката“.</li></ol>
+            <p class="set-hint">За да пести безплатните заявки: разговорите с теб са винаги с ИИ, а жителите помежду си — само близо до теб и най-много веднъж на ${gap} секунди.</p>` }));
+        } else {
+          B.append(h('div.set-p', { html: `
+            <p>Жителите могат да мислят с <b>локален ИИ</b> — програмата <b>Ollama</b> на твоя компютър. Нищо не се праща в интернет. Без ИИ играта работи напълно: жителите говорят по сценарий.</p>
+            ${this.st.browser !== false ? '<p class="warn">Версията в браузъра (от сайта на играта) <b>не може</b> да се свърже с Ollama — браузърът не позволява на сайт от интернет да говори с програма на компютъра ти. За жители с ИИ свали <b>версията за Windows</b>.</p>' : ''}
+            <p>Как да сложиш модел:</p>
+            <ol><li>Инсталирай Ollama (ollama.com).</li><li>Отвори „Команден ред“ и напиши:<br><code>ollama pull ${esc(MODEL_CHOICES[0])}</code></li><li>Пусни играта за Windows и натисни „Провери връзката“.</li></ol>` }));
+        }
         break;
       }
       case 'graphics': {

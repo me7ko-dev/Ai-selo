@@ -1,4 +1,4 @@
-// Подкани (prompts) към локалния ИИ — на български, кратки (num_ctx 4096).
+// Подкани (prompts) към ИИ (Ollama / Genesis) — на български, кратки (num_ctx 4096).
 import { dayOf, formatClock } from '../../core/time';
 import type { Memory, Relation } from '../types';
 import type { ChatRequest, Partner, Persona, PlanRequest, ReactRequest, ReflectRequest, RetellRequest, TalkRequest } from './Brain';
@@ -232,4 +232,33 @@ export function retellPrompt(req: RetellRequest): Prompt {
     `Преразкажи всяка случка поотделно, в същия ред. Върни JSON: {"texts": [${Array.from({ length: n }, (_, i) => `"разказ за случка ${i + 1}"`).join(', ')}]}`,
   ].join('\n');
   return { system, user, format: retellSchema(n) };
+}
+
+/**
+ * Пример за формата на отговора, изведен от JSON схемата (за модели, които не приемат схема — напр. облачните през Genesis).
+ * {type:'object', properties:{say:{type:'string'}}} → {"say":"…"}; enum → "a|b"; масив → [пример]; число → 0.
+ */
+export function jsonShape(schema: unknown): unknown {
+  const s = (schema && typeof schema === 'object' ? schema : {}) as Record<string, unknown>;
+  switch (s.type) {
+    case 'object': {
+      const props = (s.properties && typeof s.properties === 'object' ? s.properties : {}) as Record<string, unknown>;
+      const out: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(props)) out[k] = jsonShape(v);
+      return out;
+    }
+    case 'array': {
+      const n = Math.max(1, Math.min(6, typeof s.minItems === 'number' ? s.minItems : 1));
+      return Array.from({ length: n }, () => jsonShape(s.items));
+    }
+    case 'integer': case 'number': return 0;
+    case 'boolean': return false;
+    default: return Array.isArray(s.enum) ? s.enum.join('|') : '…';
+  }
+}
+
+/** Същата подкана, но с изрично указание за JSON във system (когато сървърът не приема JSON схема). */
+export function withJsonShape(p: Prompt): Prompt {
+  const rule = `Отговори САМО с един JSON обект, без друг текст и без \`\`\`. Ключовете са на английски точно както тук, а текстовете — на български:\n${JSON.stringify(jsonShape(p.format))}`;
+  return { ...p, system: `${p.system}\n${rule}` };
 }
