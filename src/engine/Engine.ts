@@ -26,6 +26,8 @@ export class Engine {
   pixelRatioCap = 1.5;
   /** таван от качеството (ниско/средно/високо) */
   private qualityPixelCap = 1.5;
+  /** множител на резолюцията от качеството: „Средно“ рисува ~0,64 от пикселите (SMAA изглажда увеличението) */
+  private qualityScale = 1;
   fps = 60;
   /** желана експонация (светът я подава според часа); стига се плавно */
   exposureTarget = 1;
@@ -65,12 +67,13 @@ export class Engine {
   /** Качеството на картината: пост-обработка и таван на резолюцията. */
   setQuality(q: PostQuality): void {
     this.qualityPixelCap = q === 'low' ? 1 : q === 'medium' ? 1.25 : 1.5;
+    this.qualityScale = q === 'medium' ? 0.8 : 1;
     this.post.setQuality(q);
     this.applyPixelRatio();
   }
 
   private applyPixelRatio(): void {
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.pixelRatioCap, this.qualityPixelCap));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.pixelRatioCap, this.qualityPixelCap) * this.qualityScale);
     this.resize();
   }
 
@@ -80,6 +83,37 @@ export class Engine {
     this.post?.setSize(w, h);
     this.camera.aspect = w / Math.max(1, h);
     this.camera.updateProjectionMatrix();
+  }
+
+  /**
+   * Шейдърите на всичко в сцената — още при зареждането: и на скритото (жители, които спят вкъщи, сборът, бурята),
+   * и на сенките им, и на extra (напр. чудовищата, които се появяват по-късно). Иначе всеки нов вид неща на екрана
+   * (първият жител в кадъра, първият таласъм) спира играта за 0,5–2 s, докато ANGLE компилира шейдърите.
+   */
+  async warmup(extra: THREE.Object3D[] = []): Promise<void> {
+    const r = this.renderer, scene = this.scene;
+    const tmp = new THREE.Group();
+    for (const o of extra) tmp.add(o);
+    tmp.position.copy(this.camera.position);
+    scene.add(tmp);
+    const saved: [THREE.Object3D, boolean, boolean][] = [];
+    scene.traverse((o) => {
+      saved.push([o, o.visible, o.frustumCulled]);
+      o.visible = true; o.frustumCulled = false;
+      const sh = (o as THREE.DirectionalLight).shadow;
+      if (sh) sh.needsUpdate = true;
+    });
+    try {
+      await r.compileAsync(scene, this.camera);
+      // един кадър в малък буфер — компилира и вариантите за сенките
+      const rt = new THREE.WebGLRenderTarget(64, 64, { type: THREE.HalfFloatType });
+      r.setRenderTarget(rt);
+      r.render(scene, this.camera);
+      r.setRenderTarget(null);
+      rt.dispose();
+    } catch (e) { console.warn('warmup', e); }
+    for (const [o, v, f] of saved) { o.visible = v; o.frustumCulled = f; }
+    scene.remove(tmp);
   }
 
   /** Вика се всеки кадър преди рендера (dt в секунди, ≤ 0.1). Връща функция за махане. */

@@ -10,6 +10,8 @@ import * as THREE from 'three';
 export interface VegUniforms {
   uCamPos: { value: THREE.Vector3 }; uFocus: { value: THREE.Vector3 }; uFadeOn: { value: number };
   uTime: { value: number }; uWind: { value: number };
+  /** „прозорец“ към героя на екрана: xy — героят в NDC, z — дълбочината му (м), w — радиус (NDC по y); 0 — изключен */
+  uCut: { value: THREE.Vector4 }; uCutAspect: { value: number };
 }
 
 export interface VegMatOpts {
@@ -23,6 +25,14 @@ export interface VegMatOpts {
   leaf?: boolean;
   /** да се разтваря ли пред камерата */
   camFade?: boolean;
+  /** само „прозорецът“ към героя (без цялото дърво) — за храстите */
+  cut?: boolean;
+}
+
+/** #define-ите на разтварянето според настройките. */
+function fadeDefs(o: VegMatOpts): string {
+  const fade = o.camFade !== false;
+  return (fade ? '#define VEG_CAMFADE\n' : '') + (fade || o.cut ? '#define VEG_CUT\n' : '');
 }
 
 // 4×4 Bayer — праг за решетката
@@ -40,11 +50,17 @@ uniform float uTime; uniform float uWind;
 uniform vec4 uLod; uniform float uCrownR; uniform float uTreeTop; uniform float uBend;
 attribute vec2 aWind;
 varying float vFade; varying vec2 vLodF;
+#ifdef VEG_CUT
+uniform vec4 uCut; varying vec3 vCutClip; varying float vCutZ;
+#endif
 `;
 
 /** Вятър + LOD + разтваряне. Работи върху `transformed` (локално), за да важи и за сенките. */
 const VERT_MAIN = `
   vFade = 0.0; vLodF = vec2(1.0);
+  #ifdef VEG_CUT
+  vCutZ = uCut.z - 0.4;
+  #endif
   #ifdef USE_INSTANCING
   {
     vec3 ip = instanceMatrix[3].xyz;
@@ -63,6 +79,14 @@ const VERT_MAIN = `
     transformed += (transpose(im3) * wOff) / (isc * isc) + normal * fl;
     float d = distance(uCamPos, ip);
     vLodF = vec2(smoothstep(uLod.x, uLod.y, d), 1.0 - smoothstep(uLod.z, uLod.w, d));
+    #ifdef VEG_CUT
+    {
+      // героят е в самата корона (млад смърч с клони до земята) → и клоните зад него в кръга се разтварят
+      float R = uCrownR * isc;
+      float heroIn = 1.0 - smoothstep(R * 1.2, R * 1.6, distance(uFocus.xz, ip.xz));
+      vCutZ = mix(uCut.z - 0.4, uCut.z + R * 1.6, heroIn);
+    }
+    #endif
     #ifdef VEG_CAMFADE
     {
       float R = uCrownR * isc;
@@ -70,10 +94,10 @@ const VERT_MAIN = `
       vec2 ab = h - c; float l2 = max(dot(ab, ab), 1e-4);
       float u = clamp(dot(t - c, ab) / l2, 0.0, 1.0);
       float dLine = length(c + ab * u - t);
-      // между камерата и героя (без самия герой — дърво до него не изчезва)
-      float fLine = (1.0 - smoothstep(R * 0.6, R * 1.2, dLine)) * (1.0 - smoothstep(0.75, 0.95, u)) * 0.88;
-      // съвсем до камерата
-      float fNear = 1.0 - smoothstep(R + 1.2, R + 4.2, length(t - c));
+      // между камерата и героя (без самия герой — дърво до него не изчезва; около героя е „прозорецът“ VEG_CUT)
+      float fLine = (1.0 - smoothstep(R * 0.6, R * 1.2, dLine)) * (1.0 - smoothstep(0.75, 0.95, u));
+      // съвсем до камерата (камерата в короната) — изчезва напълно, без „мрежа“
+      float fNear = 1.0 - smoothstep(R + 1.0, R + 3.5, length(t - c));
       // само ако камерата е под върха (отгоре — нищо не се крие)
       float below = 1.0 - smoothstep(ip.y + uTreeTop * isc - 2.0, ip.y + uTreeTop * isc + 1.0, uCamPos.y);
       vFade = max(fLine, fNear) * below * uFadeOn;
@@ -83,12 +107,30 @@ const VERT_MAIN = `
   #endif
 `;
 
-const FRAG_PARS = `varying float vFade; varying vec2 vLodF;\n${BAYER}\n`;
+const FRAG_PARS = `varying float vFade; varying vec2 vLodF;
+#ifdef VEG_CUT
+uniform vec4 uCut; uniform float uCutAspect; uniform float uFadeOn; varying vec3 vCutClip; varying float vCutZ;
+#endif
+${BAYER}\n`;
 const FRAG_DISCARD = `
   {
     float bth = vegBayer();
     if (vFade > bth) discard;
     if (vLodF.x <= 1.0 - bth || vLodF.y <= bth) discard;
+    #ifdef VEG_CUT
+    {
+      // „прозорец“ към героя: всичко пред него (по-близо до камерата) в кръга около него на екрана се разтваря —
+      // героят и враговете до него винаги се виждат, каквото и да е между тях и камерата (стволи, клони, листа)
+      vec2 nd = vCutClip.xy / vCutClip.z - uCut.xy;
+      nd.x *= uCutAspect;
+      float rr = length(nd) / max(uCut.w, 1e-4);
+      float on = step(1e-4, uCut.w) * uFadeOn;
+      float cut = (1.0 - smoothstep(0.6, 1.0, rr)) * (1.0 - smoothstep(vCutZ - 1.0, vCutZ, vCutClip.z));
+      // клонки, опрели в самата камера (< ~2 м) — също
+      cut = max(cut, 1.0 - smoothstep(1.0, 2.4, vCutClip.z));
+      if (cut * on > bth) discard;
+    }
+    #endif
   }
 `;
 
@@ -99,8 +141,9 @@ function uniformsFor(u: VegUniforms, o: VegMatOpts): Record<string, { value: unk
 function inject(sh: THREE.WebGLProgramParametersWithUniforms, uniforms: Record<string, { value: unknown }>, defs: string, leaf: boolean, depth: boolean): void {
   Object.assign(sh.uniforms, uniforms);
   // invariant: предварителният проход (само дълбочина) и основният дават точно една и съща дълбочина
-  sh.vertexShader = 'invariant gl_Position;\n' + defs + VERT_PARS + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n' + VERT_MAIN);
-  let fs = FRAG_PARS + sh.fragmentShader.replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n' + FRAG_DISCARD);
+  sh.vertexShader = 'invariant gl_Position;\n' + defs + VERT_PARS + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n' + VERT_MAIN)
+    .replace('#include <project_vertex>', '#include <project_vertex>\n#ifdef VEG_CUT\nvCutClip = gl_Position.xyw;\n#endif');
+  let fs = defs + FRAG_PARS + sh.fragmentShader.replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n' + FRAG_DISCARD);
   if (!depth && leaf) {
     // нормалите на листата са „закръглени“ навън от короната — не ги обръщаме за задната страна
     fs = fs.replace('#include <normal_fragment_begin>', THREE.ShaderChunk.normal_fragment_begin.replace('normal *= faceDirection;', ''));
@@ -117,7 +160,7 @@ function inject(sh: THREE.WebGLProgramParametersWithUniforms, uniforms: Record<s
 export function barkMaterial(u: VegUniforms, o: VegMatOpts, params: THREE.MeshStandardMaterialParameters): THREE.MeshStandardMaterial {
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, ...params });
   const uni = uniformsFor(u, o);
-  const defs = o.camFade !== false ? '#define VEG_CAMFADE\n' : '';
+  const defs = fadeDefs(o);
   mat.onBeforeCompile = (sh) => inject(sh, uni, defs, false, false);
   mat.customProgramCacheKey = () => 'vegBark' + defs;
   (mat.userData as { veg: unknown }).veg = uni;
@@ -132,7 +175,7 @@ export function leafMaterial(u: VegUniforms, o: VegMatOpts, params: THREE.MeshSt
   // с предварителен проход прагът трябва да е същият (0.5) и без alpha-to-coverage — иначе по ръбовете остават дупки
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, alphaTest: prepass ? 0.5 : 0.42, alphaToCoverage: !prepass, roughness: 0.82, metalness: 0, depthWrite: !prepass, ...params });
   const uni = uniformsFor(u, o);
-  const defs = o.camFade !== false ? '#define VEG_CAMFADE\n' : '';
+  const defs = fadeDefs(o);
   mat.onBeforeCompile = (sh) => inject(sh, uni, defs, true, false);
   mat.customProgramCacheKey = () => 'vegLeaf' + defs;
   (mat.userData as { veg: unknown }).veg = uni;
@@ -159,7 +202,7 @@ export function depthMaterial(u: VegUniforms, o: VegMatOpts, solid = false): THR
 export function prepassMaterial(u: VegUniforms, o: VegMatOpts, leaf: THREE.MeshStandardMaterial): THREE.MeshDepthMaterial {
   const mat = new THREE.MeshDepthMaterial({ map: leaf.map, alphaMap: leaf.alphaMap, alphaTest: 0.5, side: THREE.DoubleSide, colorWrite: false });
   const uni = uniformsFor(u, o);
-  const defs = o.camFade !== false ? '#define VEG_CAMFADE\n' : '';
+  const defs = fadeDefs(o);
   mat.onBeforeCompile = (sh) => inject(sh, uni, defs, false, true);
   mat.customProgramCacheKey = () => 'vegPre' + defs;
   return mat;
@@ -167,5 +210,5 @@ export function prepassMaterial(u: VegUniforms, o: VegMatOpts, leaf: THREE.MeshS
 
 /** Обикновен материал за дребните неща (камъни, папрат, гъби…) — само вятър/разтваряне не им трябва; LOD по разстояние. */
 export function lodOnlyMaterial(u: VegUniforms, o: VegMatOpts, params: THREE.MeshStandardMaterialParameters, leaf = false): THREE.MeshStandardMaterial {
-  return leaf ? leafMaterial(u, { ...o, camFade: false }, params) : barkMaterial(u, { ...o, camFade: false }, params);
+  return leaf ? leafMaterial(u, { ...o, camFade: false, cut: false }, params) : barkMaterial(u, { ...o, camFade: false, cut: false }, params);
 }

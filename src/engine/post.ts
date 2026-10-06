@@ -67,6 +67,8 @@ export class PostFX {
   night = 0;
   /** сила на блясъка (за светкавица и т.н.) */
   bloomBoost = 0;
+  /** оттенък на цялата картина преди AgX (напр. по-хладно утро) */
+  get tint(): THREE.Vector3 { return this.grade.u('uTint').value as THREE.Vector3; }
 
   constructor(private renderer: THREE.WebGLRenderer, private scene: THREE.Scene, private camera: THREE.PerspectiveCamera) {
     this.composer = new EffectComposer(renderer, { frameBufferType: THREE.HalfFloatType, multisampling: 0, stencilBuffer: false, depthBuffer: true });
@@ -114,6 +116,7 @@ export class PostFX {
       ? new FXAAEffect()
       // SMAA MEDIUM: HIGH почти не се различава, а е по-скъп на GTX 1650
       : new SMAAEffect({ preset: SMAAPreset.MEDIUM, edgeDetectionMode: EdgeDetectionMode.COLOR });
+    if (this.aa instanceof SMAAEffect) uniformEdgeThreshold(this.aa);
     const effects: Effect[] = q === 'low' ? [this.grade, this.aa] : [this.aa];
     if (q !== 'low') { if (this.bloom) effects.push(this.bloom); effects.push(this.grade); }
     const main = new EffectPass(this.camera, ...effects);
@@ -133,7 +136,25 @@ export class PostFX {
       this.bloom.luminanceMaterial.threshold = 1.15 / Math.max(0.1, this.exposure);
       this.bloom.intensity = 0.5 + this.bloomBoost;
     }
-    if (this.aa instanceof SMAAEffect) this.aa.edgeDetectionMaterial.edgeDetectionThreshold = 0.07 / Math.max(0.3, this.exposure);
+    if (this.aa instanceof SMAAEffect) {
+      const u = this.aa.edgeDetectionMaterial.uniforms.uEdgeThreshold;
+      if (u) u.value = 0.07 / Math.max(0.3, this.exposure);
+    }
     this.composer.render(dt);
   }
+}
+
+/**
+ * Прагът на SMAA е #define в postprocessing — всяка промяна (а той следи експонацията всеки кадър) прекомпилира
+ * шейдъра: по нов шейдър на кадър, докато окото „свиква“ (залез, гората, влизане в нощта) — секунди насечени кадри.
+ * Тук прагът става uniform (един шейдър завинаги).
+ */
+function uniformEdgeThreshold(aa: SMAAEffect): void {
+  const m = aa.edgeDetectionMaterial;
+  m.uniforms.uEdgeThreshold = new THREE.Uniform(0.07);
+  const fs = m.fragmentShader;
+  const patched = fs.replace('const vec2 threshold=vec2(EDGE_THRESHOLD);', 'vec2 threshold=vec2(uEdgeThreshold);');
+  if (patched === fs) return; // друга версия на библиотеката — остава с #define
+  m.fragmentShader = 'uniform float uEdgeThreshold;\n' + patched;
+  m.needsUpdate = true;
 }

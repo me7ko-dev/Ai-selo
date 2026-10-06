@@ -210,6 +210,26 @@ export function paintGround(plan: WorldPlan): GroundData {
       }
     }
   }
+  // под камъните и падналите дънери няма трева (иначе стръковете минават през тях); клетката е ~1.17 м,
+  // а тревата чете маската с плавно смесване — затова кръгът е с половин клетка по-широк
+  const clearDisc = (x: number, z: number, r: number) => {
+    const [ci, cj] = worldToPx(x, z, N);
+    const rr = Math.ceil(r / cell) + 1;
+    for (let j = Math.floor(cj - rr); j <= cj + rr; j++) for (let i = Math.floor(ci - rr); i <= ci + rr; i++) {
+      if (i < 0 || j < 0 || i >= N || j >= N) continue;
+      const d = Math.hypot(-WORLD_HALF + (i + 0.5) * cell - x, -WORLD_HALF + (j + 0.5) * cell - z);
+      const k = Math.min(1, Math.max(0, (d - r) / (cell * 0.6)));
+      if (k >= 1) continue;
+      const q = j * N + i;
+      grassParams[q * 4] = macro[q * 4 + 3] = Math.round(grassParams[q * 4] * k);
+      grassParams[q * 4 + 3] = Math.round(grassParams[q * 4 + 3] * k);
+    }
+  };
+  for (const r of plan.rocks) if (r.s >= 0.45 && r.tint < 2) clearDisc(r.x, r.z, r.s * 0.7);
+  for (const l of plan.logs) {
+    const L = 4.2 * l.s, ax = Math.cos(l.rot), az = -Math.sin(l.rot);
+    for (let u = -L / 2; u <= L / 2 + 1e-3; u += 0.8) clearDisc(l.x + ax * u, l.z + az * u, 0.32 * l.s);
+  }
   bctx.putImageData(img, 0, 0);
 
   const lines = paintLines(plan, dl);
