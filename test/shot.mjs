@@ -7,7 +7,8 @@
 //
 // Сам НЕ сглобява играта: пуска `vite preview` на порт 4180 върху готовия dist/ (или ползва SHOT_URL=http://…).
 // Други настройки: CHROME_PATH (Chromium), SHOT_OUT (папка), SHOT_W/SHOT_H (1920×1080), SHOT_TIMEOUT (ms, 90000), HEADED=1,
-// SHOT_GPU=1 (истинската видеокарта + кадри/с за всяка сцена).
+// SHOT_GPU=1 (истинската видеокарта + кадри/с за всяка сцена), SHOT_QUALITY=low|medium|high (качество на графиката;
+// иначе играта го избира по видеокартата — софтуерният рендер получава „Ниско“).
 //
 // Договор с играта:
 //   window.__ready = true          — играта е заредена (менюто/светът се вижда);
@@ -200,6 +201,11 @@ try {
       const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
       const errors = [];
       attachLogs(page, errors);
+      if (process.env.SHOT_QUALITY) {
+        await page.addInitScript((q) => {
+          try { localStorage.setItem('balkanski-legendi:settings', JSON.stringify({ graphics: { quality: q } })); } catch { /* */ }
+        }, process.env.SHOT_QUALITY);
+      }
       let status = 'ok';
       let saved = false;
       try {

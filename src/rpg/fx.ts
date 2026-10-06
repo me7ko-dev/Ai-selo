@@ -1,6 +1,8 @@
 // Прости ефекти: кръгове-предупреждения на земята, огън (частици), горяща земя, падащи камъни, стрели.
 import * as THREE from 'three';
 import type { WorldQuery } from '../core/world-query';
+import { stoneGeometry, addTriplanar } from '../world/trees/rocks';
+import { loadTex } from '../world/tex';
 
 /** Кръг на земята (предупреждение къде ще удари). */
 export class GroundRing {
@@ -95,12 +97,25 @@ export interface Rock { x: number; z: number; t: number; ring: GroundRing; mesh:
 
 export class Rockfall {
   list: Rock[] = [];
-  private geo = new THREE.DodecahedronGeometry(0.9, 0);
-  private mat = new THREE.MeshStandardMaterial({ color: 0x8a8174, flatShading: true });
+  // три различни камъка от шум (като скалите в света), текстура на скала отвсякъде (без UV)
+  private geos = [11, 23, 37].map((seed) => stoneGeometry(seed, 0.85, 3));
+  private mat = Rockfall.material();
+  private n = 0;
   constructor(private scene: THREE.Scene) {}
+  private static material(): THREE.MeshStandardMaterial {
+    const m = new THREE.MeshStandardMaterial({ color: 0xb4aca0, roughness: 0.9, metalness: 0 });
+    addTriplanar(m, {
+      map: loadTex('tex/rock_boulder_dry/rock_boulder_dry_diff_1k.jpg', { srgb: true }),
+      nor: loadTex('tex/rock_boulder_dry/rock_boulder_dry_nor_gl_1k.jpg'),
+      moss: loadTex('tex/mossy_rock/mossy_rock_diff_1k.jpg', { srgb: true }),
+      scale: 0.5, moss01: 0.15,
+    });
+    return m;
+  }
   add(x: number, z: number, delay: number, world: WorldQuery): void {
     const ring = new GroundRing(this.scene, 2, 0xffaa44); ring.place(x, z, world);
-    const mesh = new THREE.Mesh(this.geo, this.mat); mesh.castShadow = true;
+    const mesh = new THREE.Mesh(this.geos[this.n++ % this.geos.length], this.mat); mesh.castShadow = true;
+    mesh.rotation.set(Math.random() * 6, Math.random() * 6, 0);
     mesh.position.set(x, world.heightAt(x, z) + 30, z);
     this.scene.add(mesh);
     this.list.push({ x, z, t: delay, ring, mesh, landed: false });
@@ -122,7 +137,7 @@ export class Rockfall {
     return landed;
   }
   clear(): void { for (const r of this.list) { r.mesh.removeFromParent(); if (!r.landed) r.ring.dispose(); } this.list = []; }
-  dispose(): void { this.clear(); this.geo.dispose(); this.mat.dispose(); }
+  dispose(): void { this.clear(); for (const g of this.geos) g.dispose(); this.mat.dispose(); }
 }
 
 /** Стрели от лъка на Калин. */

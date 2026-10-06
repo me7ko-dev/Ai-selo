@@ -24,8 +24,9 @@ function fbm3(x: number, y: number, z: number, oct = 4): number {
   return s;
 }
 
-/** Камък с радиус ~1, основа около y = 0 (малко вкопана). detail — гъстота на мрежата. */
-export function rockGeometry(seed: number, detail: number, shape: [number, number, number]): THREE.BufferGeometry {
+/** Камък с радиус ~1, основа около y = 0 (малко вкопана). detail — гъстота на мрежата.
+ *  bury = false — цял камък с център в (0,0,0), без сплескана основа (скали, които се трупат една върху друга). */
+export function rockGeometry(seed: number, detail: number, shape: [number, number, number], bury = true): THREE.BufferGeometry {
   const rnd = new Rand(seed);
   let g: THREE.BufferGeometry = new THREE.IcosahedronGeometry(1, detail);
   g.deleteAttribute('uv'); g.deleteAttribute('normal');
@@ -48,9 +49,11 @@ export function rockGeometry(seed: number, detail: number, shape: [number, numbe
       if (k > 0) v.addScaledVector(pl.n, -k * 0.85);
     }
     v.set(v.x * shape[0], v.y * shape[1], v.z * shape[2]);
-    // основата е заровена: всичко под -0.15 се сплесква
-    if (v.y < -0.15) v.y = -0.15 + (v.y + 0.15) * 0.25;
-    v.y += 0.12;
+    if (bury) {
+      // основата е заровена: всичко под -0.15 се сплесква
+      if (v.y < -0.15) v.y = -0.15 + (v.y + 0.15) * 0.25;
+      v.y += 0.12;
+    }
     p.setXYZ(i, v.x, v.y, v.z);
   }
   g.computeVertexNormals();
@@ -60,6 +63,15 @@ export function rockGeometry(seed: number, detail: number, shape: [number, numbe
   g.setAttribute('color', new THREE.BufferAttribute(col, 3));
   g.setAttribute('aWind', new THREE.BufferAttribute(new Float32Array(p.count * 2), 2));
   g.computeBoundingSphere();
+  return g;
+}
+
+/** Камък за строителя на сгради (скали, руини, извор): радиус r, център в (0,0,0), гладки нормали. */
+export function stoneGeometry(seed: number, r: number, detail = 3): THREE.BufferGeometry {
+  const g = rockGeometry(seed, detail, [1, 1, 1], false);
+  g.deleteAttribute('color'); g.deleteAttribute('aWind');
+  g.scale(r, r, r);
+  g.computeVertexNormals();
   return g;
 }
 

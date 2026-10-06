@@ -6,6 +6,7 @@ import { heightAt } from './height';
 import type { FenceRun, WorldPlan } from './plan';
 import { Rng } from '../core/rng';
 import { lumpy } from './geom';
+import { stoneGeometry } from './trees/rocks';
 
 const WOOD = '#9a7c66', PLANK = '#d2c4b4';
 
@@ -28,7 +29,7 @@ export function buildFences(k: Kit, fences: FenceRun[]): void {
           const t = (j + 0.5) / n, x = ax + (bx - ax) * t, z = az + (bz - az) * t;
           k.box('rock', 0.5 + rng.next() * 0.35, 0.1 + rng.next() * 0.06, len / n + 0.12, x, ym + f.h - 0.08 + rng.next() * 0.04, z, { ry: ang + (rng.next() - 0.5) * 0.25, rz: (rng.next() - 0.5) * 0.12, tint: '#d4cec4', bevel: 0.03, jitter: 0.12 });
         }
-        if (rng.next() < 0.5) k.geo('rock', lumpy(new THREE.DodecahedronGeometry(0.22, 0), 0.4, i + 3), mx + Math.cos(ang) * 0.38, ym + f.h * 0.35, mz - Math.sin(ang) * 0.38, { tint: '#c8c0b4', sy: 0.7, flat: true });
+        if (rng.next() < 0.5) k.geo('rock', stoneGeometry(i + 3, 0.22, 1), mx + Math.cos(ang) * 0.38, ym + f.h * 0.35, mz - Math.sin(ang) * 0.38, { tint: '#c8c0b4', sy: 0.7 });
       } else {
         // дъсчена ограда: стълбове, две напречни летви, наковани дъски
         const lean = (rng.next() - 0.5) * 0.06;
@@ -91,7 +92,7 @@ export function buildRuins(k: Kit, ruins: WorldPlan['ruins']): void {
       k.box('masonry', 1.5, hh + 0.6, len / n + 0.05, x, y + hh / 2 - 0.3, z, { ry: ang, tint: '#ece6dc', grain: 1, cell: 0.8, stain: 0.35, jitter: 0.05 });
       // изронен връх: по-малки блокове отгоре
       if (rng.next() < 0.6) k.box('masonry', 0.9 + rng.next() * 0.4, 0.3 + rng.next() * 0.4, len / n * (0.4 + rng.next() * 0.5), x + (rng.next() - 0.5) * 0.3, y + hh + 0.1, z, { ry: ang + (rng.next() - 0.5) * 0.2, tint: '#e2dcd2', bevel: 0.05 });
-      if (rng.next() < 0.35) k.geo('rock', lumpy(new THREE.DodecahedronGeometry(0.35 + rng.next() * 0.25, 0), 0.4, j + 11), x + Math.cos(ang) * (1.1 + rng.next()), y + 0.1, z - Math.sin(ang) * (1.1 + rng.next()), { tint: '#cfc8bc', sy: 0.6, flat: true, ry: rng.next() * 6 });
+      if (rng.next() < 0.35) k.geo('rock', stoneGeometry(j + 11, 0.35 + rng.next() * 0.25, 2), x + Math.cos(ang) * (1.1 + rng.next()), y + 0.1, z - Math.sin(ang) * (1.1 + rng.next()), { tint: '#cfc8bc', sy: 0.6, ry: rng.next() * 6 });
     }
   }
 }

@@ -6,6 +6,7 @@ import { Kit, type V3, type PartOpts } from './arch/kit';
 import { roofOver, lantern } from './arch/house';
 import { heightAt, BRIDGE, bridgeDeckHeight, terrainHeight } from './height';
 import { lumpy } from './geom';
+import { stoneGeometry } from './trees/rocks';
 import type { Prop } from './plan';
 import { Rng } from '../core/rng';
 
@@ -273,13 +274,13 @@ export function buildProp(k: Kit, p: Prop): void {
       }
       // бойници
       for (let i = 0; i < 4; i++) { const a = rng.next() * 6.28; k.box('plain', 0.22, 0.9, 0.3, Math.sin(a) * 3.2, 2.6 + i * 1.6, Math.cos(a) * 3.2, { ry: a, tint: '#0e0c0a', jitter: 0 }); }
-      for (let i = 0; i < 6; i++) { const a = rng.next() * 6.28, r = 3.6 + rng.next() * 1.8; k.geo('rock', lumpy(new THREE.DodecahedronGeometry(0.3 + rng.next() * 0.45, 0), 0.35, i + 3), Math.sin(a) * r, 0.1, Math.cos(a) * r, { tint: '#c8c0b4', sy: 0.6, flat: true }); }
+      for (let i = 0; i < 6; i++) { const a = rng.next() * 6.28, r = 3.6 + rng.next() * 1.8; k.geo('rock', stoneGeometry(i + 3, 0.3 + rng.next() * 0.45, 3), Math.sin(a) * r, 0.1, Math.cos(a) * r, { tint: '#c8c0b4', sy: 0.6 }); }
       break;
     }
     case 'rubble': {
       for (let i = 0; i < 4; i++) {
         const s = p.s * (0.35 + rng.next() * 0.45);
-        k.geo(i ? 'rock' : 'masonry', lumpy(new THREE.DodecahedronGeometry(0.8, 0), 0.4, rng.int(1, 99)), (rng.next() - 0.5) * p.s, 0.15 * s, (rng.next() - 0.5) * p.s, { sx: s * 1.3, sy: s * 0.6, sz: s, tint: '#d0c8bc', flat: true, ry: rng.next() * 6 });
+        k.geo(i ? 'rock' : 'masonry', stoneGeometry(rng.int(1, 99), 0.8, 3), (rng.next() - 0.5) * p.s, 0.15 * s, (rng.next() - 0.5) * p.s, { sx: s * 1.3, sy: s * 0.6, sz: s, tint: '#d0c8bc', ry: rng.next() * 6 });
       }
       break;
     }
@@ -291,14 +292,14 @@ export function buildProp(k: Kit, p: Prop): void {
         // „рамене“ между колоните и прага — да не изглежда, че прагът виси
         [-4.4, 5.4, -1.8, 2.3, 0.9], [4.5, 5.2, -1.9, 2.4, 0.9],
       ];
-      rocks.forEach(([x, yy, z, r, sy], i) => k.geo('rock', lumpy(new THREE.DodecahedronGeometry(r, 1), 0.28, i + 7), x, yy - 1.2, z, { ry: i * 1.3, sy, tint: i % 3 === 1 ? '#6e675e' : i % 3 === 2 ? '#857d72' : '#9a9286', flat: true, tile: [4, 4] }));
+      rocks.forEach(([x, yy, z, r, sy], i) => k.geo('rock', stoneGeometry(i + 7, r, 5), x, yy - 1.2, z, { ry: i * 1.3, sy, tint: i % 3 === 1 ? '#6e675e' : i % 3 === 2 ? '#857d72' : '#9a9286', tile: [4, 4] }));
       // самият отвор: черна арка (лицето към +z), тъмен праг и под
       // (лицето е пред склона — иначе теренът зад пещерата я скрива)
       k.geo('plain', new THREE.CircleGeometry(3.4, 20, 0, Math.PI), 0, -0.6, 0.6, { sy: 1.25, tint: '#040303', jitter: 0 });
       k.geo('plain', new THREE.CylinderGeometry(3.4, 3.4, 1.2, 20, 1, true, -Math.PI / 2, Math.PI), 0, -0.6, 1.2, { rx: Math.PI / 2, sz: 1.25, tint: '#100c0a', jitter: 0 });
       k.box('plain', 6.8, 0.25, 5.0, 0, -0.05, -2.4, { tint: '#120f0d', jitter: 0 });
       // опушено около входа
-      for (let i = 0; i < 7; i++) k.geo('rock', lumpy(new THREE.DodecahedronGeometry(0.8, 0), 0.4, i + 30), (i - 3) * 1.4, 0.05, 0.8 + rng.next() * 1.4, { ry: i, sy: 0.45, tint: '#3a3430', flat: true });
+      for (let i = 0; i < 7; i++) k.geo('rock', stoneGeometry(i + 30, 0.8, 3), (i - 3) * 1.4, 0.05, 0.8 + rng.next() * 1.4, { ry: i, sy: 0.45, tint: '#3a3430' });
       break;
     }
     case 'bones': {
@@ -323,7 +324,7 @@ export function buildProp(k: Kit, p: Prop): void {
       slab(k, 3.4, 0.14, 0.95, 0, 1.45, -1.4, { tint: '#c8c0b4' });
       slab(k, 0.7, 0.5, 0.06, 0, 1.0, -0.98, { tint: '#b0a89c' });
       rod(k, 'iron', [0, 0.95, -0.98], [0, 0.88, -0.55], 0.045, 0.04, 8, { tint: '#4a4038' });
-      for (let i = 0; i < 9; i++) { const a = (i / 9) * Math.PI * 2; k.geo('rock', lumpy(new THREE.DodecahedronGeometry(0.45, 0), 0.4, i + 50), Math.sin(a) * 1.9, 0.1, Math.cos(a) * 1.6, { ry: i, sy: 0.6, tint: '#b8b0a4', flat: true }); }
+      for (let i = 0; i < 9; i++) { const a = (i / 9) * Math.PI * 2; k.geo('rock', stoneGeometry(i + 50, 0.45, 3), Math.sin(a) * 1.9, 0.1, Math.cos(a) * 1.6, { ry: i, sy: 0.6, tint: '#b8b0a4' }); }
       k.cyl('rock', 1.8, 1.8, 0.05, 16, 0, 0.02, 0, { tint: '#8a7a62', stain: 0.3 });
       break;
     }
