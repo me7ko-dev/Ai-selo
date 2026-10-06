@@ -57,7 +57,7 @@ test('бюджет на триъгълниците', () => {
   assert.ok(countTris(k.root) <= 3000, `Караконджул: ${countTris(k.root)}`);
   assert.ok(k.height > 2.5);
   const l = countTris(createLamiaModel().root);
-  assert.ok(l <= 12000, `Ламята: ${l}`);
+  assert.ok(l <= 20000, `Ламята: ${l}`); // гладки форми за PBR люспите (един бос — евтино)
 });
 
 test('стъпалата са на земята, лицето гледа към +Z', () => {

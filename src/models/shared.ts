@@ -52,6 +52,10 @@ export function flashMat(orig: THREE.Material, color: number): THREE.Material {
       const f = orig.clone();
       f.emissive.copy(c); f.emissiveIntensity = 0.65;
       m = f;
+    } else if (orig instanceof THREE.MeshStandardMaterial) {
+      const f = orig.clone();
+      f.emissive.copy(c); f.emissiveIntensity = 0.35;
+      m = f;
     } else if (orig instanceof THREE.MeshBasicMaterial) {
       const f = orig.clone();
       f.color.lerp(c, 0.5);

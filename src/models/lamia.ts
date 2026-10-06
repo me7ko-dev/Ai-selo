@@ -3,7 +3,8 @@
 import * as THREE from 'three';
 import type { AnimName, LamiaModel } from './types';
 import { RigModel } from './rig';
-import { mat, part, cylGeo, sphGeo, lowSph, coneGeo, boxGeo, joint, glow, scaleTex, haloSprite, cachedGeo } from './shared';
+import { part, cylGeo, sphGeo, lowSph, coneGeo, boxGeo, joint, glow, haloSprite, cachedGeo } from './shared';
+import { skinMat, pmat } from './skin';
 
 const NS = 6;            // прешлени на шията
 const SEG = 0.66;        // дължина на прешлен
@@ -24,19 +25,11 @@ const sm = (x: number) => { x = x < 0 ? 0 : x > 1 ? 1 : x; return x * x * (3 - 2
 type HeadMode = 'idle' | 'windup' | 'strike' | 'hold' | 'recover';
 interface HeadState { mode: HeadMode; t: number; kind: 'bite' | 'fire'; alive: boolean; deadW: number; wb: number; ws: number; jaw: number; fire: number; }
 
-const texCache = new Map<string, THREE.Texture | null>();
-function scales(rx: number, ry: number, belly = false): THREE.Texture | null {
-  const key = `${rx}|${ry}|${belly}`;
-  if (texCache.has(key)) return texCache.get(key)!;
-  const base = scaleTex(belly);
-  let t: THREE.Texture | null = null;
-  if (base) { t = base.clone(); t.repeat.set(rx, ry); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.needsUpdate = true; }
-  texCache.set(key, t);
-  return t;
-}
-function scaleMat(rx: number, ry: number, belly = false): THREE.Material {
-  const t = scales(rx, ry, belly);
-  return t ? mat('#ffffff', { map: t }) : mat(belly ? '#cfc27a' : '#6f8a36');
+// люспи: тъмни маслинени в процепите → бронзово-зелени по ръбовете; коремът — светли рогови плочи
+const SCALE_DARK = '#0c1008', SCALE_LIGHT = '#556030';
+function scaleMat(rx: number, ry: number, belly = false, dead = false): THREE.Material {
+  if (belly) return skinMat('belly', '#5a5232', '#cbbd86', { repeat: [rx, ry], roughness: 1, tint: dead ? '#8a8a80' : undefined });
+  return skinMat('scales', SCALE_DARK, SCALE_LIGHT, { repeat: [rx, ry], roughness: 1, normal: 1.1, tint: dead ? '#7a7a70' : undefined });
 }
 
 export class Lamia extends RigModel implements LamiaModel {
@@ -60,14 +53,14 @@ export class Lamia extends RigModel implements LamiaModel {
     const chest = joint(body, 0, 0.2, 1.3, 'chest');
     this.iBody = this.addJoint(body);
     this.iChest = this.addJoint(chest);
-    const skin = scaleMat(6, 3), skinS = scaleMat(3, 1), belly = scaleMat(1, 6, true);
-    const dark = mat('#2e3f1e'), spikeM = mat('#c9b46a'), claw = mat('#e8dfc0'), horn = mat('#d9cba0');
+    const skin = scaleMat(6, 3), skinS = scaleMat(3, 1), belly = scaleMat(1, 4, true);
+    const dark = pmat('#23281a', 0.75), spikeM = pmat('#a8955e', 0.45), claw = pmat('#ddd2b2', 0.35), horn = pmat('#c4b48a', 0.5);
     // тяло
-    part(body, sphGeo(2), skin, 1.45, 1.3, 2.1, 0, 0, -0.2);
-    part(body, sphGeo(1), belly, 1.2, 0.8, 1.9, 0, -0.6, -0.2, 0, 0, 0, false);
-    part(chest, sphGeo(1), skin, 1.25, 1.2, 1.3, 0, 0.1, 0.2);
-    part(chest, sphGeo(1), belly, 1.0, 0.75, 1.1, 0, -0.42, 0.35, 0, 0, 0, false);
-    part(body, sphGeo(1), skin, 1.15, 1.05, 1.3, 0, -0.05, -1.9);
+    part(body, sphGeo(4), skin, 1.45, 1.3, 2.1, 0, 0, -0.2);
+    part(body, sphGeo(3), belly, 1.2, 0.8, 1.9, 0, -0.6, -0.2, 0, 0, 0, false);
+    part(chest, sphGeo(3), skin, 1.25, 1.2, 1.3, 0, 0.1, 0.2);
+    part(chest, sphGeo(3), belly, 1.0, 0.75, 1.1, 0, -0.42, 0.35, 0, 0, 0, false);
+    part(body, sphGeo(3), skin, 1.15, 1.05, 1.3, 0, -0.05, -1.9);
     // бодли по гърба
     for (let i = 0; i < 8; i++) {
       const z = 1.7 - i * 0.55, hgt = 0.45 + 0.25 * Math.sin((i / 7) * Math.PI);
@@ -82,7 +75,7 @@ export class Lamia extends RigModel implements LamiaModel {
       tj.rotation.x = i === 0 ? -1.87 : 0.1;
       this.addJoint(tj);
       const r0 = 0.8 * (1 - i / TS) + 0.08, r1 = 0.8 * (1 - (i + 1) / TS) + 0.06;
-      part(tj, cylGeo(Math.round((r1 / r0) * 20) / 20, 8), skinS, r0, 0.9, r0 * 0.9);
+      part(tj, cylGeo(Math.round((r1 / r0) * 20) / 20, 16), skinS, r0, 0.9, r0 * 0.9);
       part(tj, coneGeo(4), spikeM, 0.08 + r0 * 0.12, 0.25 + r0 * 0.35, 0.18, 0, 0.45, r0 * 0.85, 0.5, 0, 0, false);
       prev = tj;
     }
@@ -96,11 +89,11 @@ export class Lamia extends RigModel implements LamiaModel {
       const l = joint(u, 0, -0.9, 0);
       l.rotation.z = -Math.sign(x) * 0.45;
       this.addJoint(u); this.addJoint(l);
-      part(u, sphGeo(1), skinS, 0.55, 0.55, 0.6, 0, 0, 0);
-      part(u, cylGeo(0.65, 7), skinS, 0.5, 0.95, 0.52, 0, 0, 0, Math.PI, 0, 0);
-      part(l, sphGeo(0), skinS, 0.34, 0.3, 0.36, 0, 0, 0, 0, 0, 0, false);
-      part(l, cylGeo(0.8, 6), skinS, 0.32, 0.85, 0.34, 0, 0, 0, Math.PI, 0, 0);
-      part(l, sphGeo(0), dark, 0.36, 0.16, 0.46, 0, -0.85, 0.12, 0, 0, 0, false);
+      part(u, sphGeo(3), skinS, 0.55, 0.55, 0.6, 0, 0, 0);
+      part(u, cylGeo(0.65, 14), skinS, 0.5, 0.95, 0.52, 0, 0, 0, Math.PI, 0, 0);
+      part(l, sphGeo(2), skinS, 0.34, 0.3, 0.36, 0, 0, 0, 0, 0, 0, false);
+      part(l, cylGeo(0.8, 12), skinS, 0.32, 0.85, 0.34, 0, 0, 0, Math.PI, 0, 0);
+      part(l, sphGeo(2), dark, 0.36, 0.16, 0.46, 0, -0.85, 0.12, 0, 0, 0, false);
       for (let k = -1; k <= 1; k++) part(l, coneGeo(4), claw, 0.06, 0.28, 0.06, k * 0.14, -0.9, 0.45, Math.PI / 2 + 0.3, 0, 0, false);
     }
     // криле (малки)
@@ -110,7 +103,7 @@ export class Lamia extends RigModel implements LamiaModel {
       sh.moveTo(0, 0); sh.lineTo(1.6, 0.9); sh.lineTo(1.9, 0.2); sh.lineTo(1.4, -0.1); sh.lineTo(1.1, -0.6); sh.lineTo(0.6, -0.4); sh.lineTo(0, -0.3); sh.closePath();
       return new THREE.ShapeGeometry(sh);
     });
-    const wingM = mat('#8a5a36', { side: THREE.DoubleSide });
+    const wingM = skinMat('hide', '#3a2418', '#7a5236', { repeat: [2, 2], roughness: 1, side: THREE.DoubleSide });
     for (const sx of [1, -1]) {
       const w = joint(body, sx * 0.9, 1.0, 0.7);
       w.rotation.set(0, sx > 0 ? 1.15 : Math.PI - 1.15, 0.35);
@@ -128,8 +121,8 @@ export class Lamia extends RigModel implements LamiaModel {
         if (k === 0) { nj.rotation.z = -xs[h] * 0.45; nj.rotation.y = 0; }
         idx.push(this.addJoint(nj));
         const r0 = 0.5 - k * 0.045, r1 = 0.5 - (k + 1) * 0.045;
-        part(nj, cylGeo(Math.round((r1 / r0) * 20) / 20, 8), skinS, r0, SEG + 0.04, r0 * 0.9);
-        part(nj, lowSph(8, 5), skinS, r0 * 1.02, r0 * 0.6, r0 * 0.92, 0, 0, 0, 0, 0, 0, false);
+        part(nj, cylGeo(Math.round((r1 / r0) * 20) / 20, 16), skinS, r0, SEG + 0.04, r0 * 0.9);
+        part(nj, lowSph(16, 10), skinS, r0 * 1.02, r0 * 0.6, r0 * 0.92, 0, 0, 0, 0, 0, 0, false);
         part(nj, coneGeo(4), spikeM, 0.06, 0.22, 0.12, 0, SEG * 0.5, -r0 * 0.88, -Math.PI / 2 - 0.4, 0, 0, false);
         p = nj;
       }
@@ -140,8 +133,8 @@ export class Lamia extends RigModel implements LamiaModel {
       this.heads.push(head);
       const hm: THREE.Mesh[] = [];
       // череп и муцуна (+Y напред по шията, -Z е темето, +Z е долната челюст)
-      hm.push(part(head, sphGeo(1), skin, 0.36, 0.5, 0.32, 0, 0.25, -0.05));
-      hm.push(part(head, cylGeo(0.6, 6), skinS, 0.27, 0.65, 0.18, 0, 0.45, -0.07));
+      hm.push(part(head, sphGeo(3), scaleMat(2, 2), 0.36, 0.5, 0.32, 0, 0.25, -0.05));
+      hm.push(part(head, cylGeo(0.6, 12), skinS, 0.27, 0.65, 0.18, 0, 0.45, -0.07));
       part(head, coneGeo(4), dark, 0.05, 0.1, 0.05, 0.1, 1.08, -0.12, 0, 0, 0, false);
       part(head, coneGeo(4), dark, 0.05, 0.1, 0.05, -0.1, 1.08, -0.12, 0, 0, 0, false);
       // рога
@@ -153,7 +146,7 @@ export class Lamia extends RigModel implements LamiaModel {
       for (let k = 0; k < 3; k++) part(head, coneGeo(4), spikeM, 0.05, 0.18, 0.1, 0, 0.1 + k * 0.2, -0.36, -Math.PI / 2 - 0.5, 0, 0, false);
       // очи
       const eyes: THREE.Mesh[] = [];
-      for (const sx of [1, -1]) eyes.push(part(head, sphGeo(0), glow('#ffb52e'), 0.07, 0.1, 0.05, sx * 0.28, 0.45, -0.2, 0, 0, 0, false));
+      for (const sx of [1, -1]) eyes.push(part(head, sphGeo(2), glow('#ffb52e'), 0.07, 0.1, 0.05, sx * 0.28, 0.45, -0.2, 0, 0, 0, false));
       const eh = haloSprite('#ffa030', 0.9, 0.5); eh.position.set(0, 0.45, -0.25); head.add(eh);
       eyes.push(eh as unknown as THREE.Mesh);
       this.eyeMeshes.push(eyes);
@@ -162,10 +155,10 @@ export class Lamia extends RigModel implements LamiaModel {
       // долна челюст
       const jaw = joint(head, 0, 0.3, 0.1, 'jaw' + h);
       this.iJaw.push(this.addJoint(jaw));
-      hm.push(part(jaw, cylGeo(0.55, 6), skinS, 0.24, 0.72, 0.1, 0, 0, 0.04));
+      hm.push(part(jaw, cylGeo(0.55, 12), skinS, 0.24, 0.72, 0.1, 0, 0, 0.04));
       for (let k = 0; k < 3; k++) for (const sx of [1, -1]) part(jaw, coneGeo(3), claw, 0.022, 0.08, 0.022, sx * 0.13, 0.3 + k * 0.12, -0.02, -Math.PI / 2 - 1.2, 0, 0, false);
       // огън в устата
-      const mg = part(head, sphGeo(1), glow('#ff8a2a', 0.9), 0.16, 0.42, 0.12, 0, 0.62, 0.08, 0, 0, 0, false);
+      const mg = part(head, sphGeo(3), glow('#ff8a2a', 0.9), 0.16, 0.42, 0.12, 0, 0.62, 0.08, 0, 0, 0, false);
       mg.visible = false; this.mouthGlow.push(mg);
       const mh = haloSprite('#ff7a1a', 2.2, 0.8); mh.position.set(0, 0.9, 0.1); mh.visible = false; head.add(mh); this.mouthHalo.push(mh);
       const mouth = new THREE.Object3D(); mouth.position.set(0, 1.1, 0.06); head.add(mouth); this.mouths.push(mouth);
@@ -206,12 +199,11 @@ export class Lamia extends RigModel implements LamiaModel {
     h.alive = alive;
     if (!alive) { h.mode = 'idle'; h.fire = 0; }
     const em = this.eyeMeshes[i];
-    for (let k = 0; k < 2; k++) this.setMeshMat(em[k], alive ? glow('#ffb52e') : mat('#1c1c14'));
+    for (let k = 0; k < 2; k++) this.setMeshMat(em[k], alive ? glow('#ffb52e') : pmat('#1c1c14', 0.3));
     em[2].visible = alive;
-    const dm = alive ? null : mat('#5a5a48');
     const hm = this.headMeshes[i];
-    // тъмна, „мъртва“ глава — подмяна на материала на черепа, муцуната и челюстта
-    for (const m of hm) this.setMeshMat(m, dm ?? (m === hm[0] ? scaleMat(6, 3) : scaleMat(3, 1)));
+    // посивяла, „мъртва“ глава — подмяна на материала на черепа, муцуната и челюстта
+    for (const m of hm) this.setMeshMat(m, m === hm[0] ? scaleMat(2, 2, false, !alive) : scaleMat(3, 1, false, !alive));
   }
 
   /** Атака с глава: замах назад (~0.6 с), после удар ниско пред Ламята. Ударът каца в ~0.85 с. */
