@@ -1,8 +1,8 @@
-// Животни: овца, коза (със звънче), куче, котка, лисица-таласъм (четириноги) и кокошка.
+// Животни: овца, коза (със звънче), куче, котка, конче (с черга на гърба), лисица-таласъм (четириноги) и кокошка.
 import * as THREE from 'three';
 import type { AnimName, AnimalKind } from './types';
 import { RigModel } from './rig';
-import { mat, part, cylGeo, sphGeo, lowSph, coneGeo, boxGeo, joint, glow, haloSprite, cachedGeo } from './shared';
+import { mat, part, cylGeo, sphGeo, lowSph, coneGeo, boxGeo, capGeo, joint, glow, haloSprite, cachedGeo, shevicaTex } from './shared';
 import { furFrom } from './skin';
 import { charactersReady } from './gltf/assets';
 
@@ -16,6 +16,7 @@ const GALLOP = [0, 0.35, 2.4, 2.8], TROT = [0, Math.PI, Math.PI, 0];
 const LEG_IDS = [FLU, FLL, FRU, FRL, BLU, BLL, BRU, BRL];
 
 export type QuadKind = AnimalKind | 'fox_talasam';
+const MANE = '#211813';
 
 interface QuadSpec {
   len: number; r: number; leg: number; legR: number; neck: number; neckTilt: number; head: number;
@@ -26,6 +27,8 @@ const SPECS: Record<Exclude<QuadKind, 'chicken'>, QuadSpec> = {
   goat: { len: 0.66, r: 0.17, leg: 0.44, legR: 0.026, neck: 0.22, neckTilt: -0.45, head: 0.11, body: '#a58a6c', legC: '#6a5440', face: '#e8e0d0', tail: 0.1, tailUp: -0.6, stepLen: 0.8 },
   dog: { len: 0.6, r: 0.15, leg: 0.36, legR: 0.03, neck: 0.15, neckTilt: -0.6, head: 0.11, body: '#4a3524', legC: '#e6d9c4', face: '#4a3524', tail: 0.28, tailUp: -1.1, stepLen: 0.9 },
   cat: { len: 0.36, r: 0.085, leg: 0.2, legR: 0.018, neck: 0.06, neckTilt: -0.7, head: 0.075, body: '#77767c', legC: '#77767c', face: '#8a898f', tail: 0.32, tailUp: -0.35, stepLen: 0.45 },
+  // доресто балканско конче (~1,35 м до холката): тъмна грива, опашка и долни части на краката
+  horse: { len: 1.3, r: 0.36, leg: 0.8, legR: 0.05, neck: 0.6, neckTilt: -0.95, head: 0.2, body: '#7a5034', legC: '#241a14', face: '#7a5034', tail: 0.8, tailUp: -2.75, stepLen: 1.5 },
   fox_talasam: { len: 0.62, r: 0.13, leg: 0.26, legR: 0.024, neck: 0.14, neckTilt: -0.7, head: 0.1, body: '#c0622a', legC: '#3a2418', face: '#c0622a', tail: 0.5, tailUp: 1.9, stepLen: 0.85 },
 };
 
@@ -46,7 +49,7 @@ export class Quadruped extends RigModel {
     const neck = joint(body, 0, S.r * 0.35, S.len * 0.45, 'neck');
     neck.rotation.x = -S.neckTilt;
     const head = joint(neck, 0, S.neck, 0, 'head');
-    head.rotation.x = S.neckTilt;
+    head.rotation.x = S.neckTilt + (kind === 'horse' ? 1.3 : 0); // конят държи муцуната надолу
     const tail = joint(body, 0, S.r * 0.4, -S.len * 0.5, 'tail');
     tail.rotation.x = S.tailUp;
     const tail2 = joint(tail, 0, S.tail * 0.5, 0, 'tail2');
@@ -79,12 +82,15 @@ export class Quadruped extends RigModel {
     }
     if (kind === 'dog' || fox || kind === 'goat') part(body, sphGeo(0), mat(kind === 'goat' ? '#e8e0d0' : '#ece2d0'), S.r * 0.6, S.r * 0.7, S.r * 0.5, 0, -S.r * 0.15, S.len * 0.45, 0, 0, 0, false);
     // шия и глава
-    part(neck, cylGeo(0.8, 6), kind === 'sheep' ? bm : foxM, S.r * 0.42, S.neck + S.head * 0.3, S.r * 0.42, 0, -S.r * 0.1, 0);
+    if (kind === 'horse') {
+      // дълбока, плоска отстрани шия, по-дебела при гърдите
+      part(neck, cylGeo(0.62, 8), bm, S.r * 0.4, S.neck + S.head * 0.35, S.r * 0.78, 0, -S.r * 0.3, -S.r * 0.05);
+    } else part(neck, cylGeo(0.8, 6), kind === 'sheep' ? bm : foxM, S.r * 0.42, S.neck + S.head * 0.3, S.r * 0.42, 0, -S.r * 0.1, 0);
     const hg = part(head, sphGeo(1), kind === 'sheep' ? fm : foxM, S.head * 0.8, S.head * 0.85, S.head, 0, 0, S.head * 0.2);
     void hg;
     // муцуна
-    const snoutLen = kind === 'fox_talasam' ? 1.3 : kind === 'dog' ? 1.0 : kind === 'goat' ? 0.9 : kind === 'cat' ? 0.35 : 0.7;
-    part(head, cylGeo(0.55, 6), kind === 'sheep' ? fm : (kind === 'dog' || kind === 'goat') ? mat(kind === 'goat' ? '#d8cfbd' : '#e6d9c4') : fox ? foxM : fm, S.head * 0.5, S.head * snoutLen, S.head * 0.45, 0, -S.head * 0.2, S.head * 0.7, Math.PI / 2 - 0.15, 0, 0);
+    const snoutLen = kind === 'horse' ? 2.1 : kind === 'fox_talasam' ? 1.3 : kind === 'dog' ? 1.0 : kind === 'goat' ? 0.9 : kind === 'cat' ? 0.35 : 0.7;
+    part(head, cylGeo(kind === 'horse' ? 0.9 : 0.55, 6), kind === 'sheep' ? fm : (kind === 'dog' || kind === 'goat') ? mat(kind === 'goat' ? '#d8cfbd' : '#e6d9c4') : fox ? foxM : fm, S.head * (kind === 'horse' ? 0.62 : 0.5), S.head * snoutLen, S.head * (kind === 'horse' ? 0.62 : 0.45), 0, -S.head * 0.2, S.head * 0.7, Math.PI / 2 - 0.15, 0, 0);
     part(head, sphGeo(0), mat('#1a1414'), S.head * 0.14, S.head * 0.12, S.head * 0.12, 0, -S.head * 0.12, S.head * (0.75 + snoutLen), 0, 0, 0, false);
     // очи
     for (const x of [1, -1]) {
@@ -93,7 +99,8 @@ export class Quadruped extends RigModel {
     }
     // уши
     for (const x of [1, -1]) {
-      if (kind === 'cat' || fox) part(head, coneGeo(4), fox ? foxM : bm, S.head * 0.3, S.head * (fox ? 0.9 : 0.7), S.head * 0.15, x * S.head * 0.45, S.head * 0.6, S.head * 0.05, 0, 0, -x * 0.25);
+      if (kind === 'horse') part(head, coneGeo(5), bm, S.head * 0.17, S.head * 0.65, S.head * 0.1, x * S.head * 0.38, S.head * 0.65, -S.head * 0.15, -0.25, 0, -x * 0.2);
+      else if (kind === 'cat' || fox) part(head, coneGeo(4), fox ? foxM : bm, S.head * 0.3, S.head * (fox ? 0.9 : 0.7), S.head * 0.15, x * S.head * 0.45, S.head * 0.6, S.head * 0.05, 0, 0, -x * 0.25);
       else if (kind === 'dog') part(head, boxGeo(), mat('#3a281a'), S.head * 0.3, S.head * 0.6, S.head * 0.1, x * S.head * 0.75, S.head * 0.15, 0, 0, 0, x * 0.35);
       else part(head, sphGeo(0), kind === 'sheep' ? fm : bm, S.head * 0.45, S.head * 0.15, S.head * 0.22, x * S.head * 0.9, S.head * 0.3, -S.head * 0.05, 0, 0, -x * 0.4);
     }
@@ -107,6 +114,23 @@ export class Quadruped extends RigModel {
       part(neck, cylGeo(1, 6, true), mat('#8a3a2a', { side: THREE.DoubleSide }), S.r * 0.46, 0.02, S.r * 0.46, 0, 0.07, 0, 0, 0, 0, false);
     }
     if (kind === 'dog') part(neck, cylGeo(1, 6, true), mat('#b3262b', { side: THREE.DoubleSide }), S.r * 0.44, 0.025, S.r * 0.44, 0, 0.04, 0, 0, 0, 0, false);
+    if (kind === 'horse') {
+      const maneM = mat(MANE);
+      // грива по тила (на кичури) + перчем между ушите
+      for (let i = 0; i < 6; i++) {
+        const f = i / 5;
+        part(neck, boxGeo(), maneM, S.r * 0.09, S.neck * 0.22, S.r * (0.42 - f * 0.12), (i % 2 ? 0.012 : -0.012), S.neck * (0.1 + f * 0.85), -S.r * (0.42 - f * 0.06), 0.25, 0, (i % 2 ? 0.08 : -0.08));
+      }
+      part(head, coneGeo(5), maneM, S.head * 0.22, S.head * 0.55, S.head * 0.12, 0, S.head * 0.55, S.head * 0.25, 1.9, 0, 0, false);
+      // бяла звезда на челото
+      part(head, sphGeo(0), mat('#efe9df'), S.head * 0.22, S.head * 0.3, S.head * 0.08, 0, S.head * 0.45, S.head * 0.82, -0.3, 0, 0, false);
+      // по-плътни гърди и задница
+      part(body, sphGeo(1), bm, S.r * 1.02, S.r * 1.0, S.r * 1.15, 0, -S.r * 0.02, -S.len * 0.33);
+      // черга с шевици (червено-черна) на гърба
+      const st = shevicaTex('#a8282a');
+      const bl = st ? mat('#ffffff', { map: st, side: THREE.DoubleSide, flat: false }) : mat('#a8282a', { side: THREE.DoubleSide });
+      part(body, capGeo(14, 6, Math.PI * 0.5), bl, S.r * 1.07, S.r * 1.03, S.len * 0.38, 0, 0, S.len * 0.04, 0, 0, 0, false);
+    }
     // опашка
     if (fox) {
       const tm = mat('#d98a4a', { emissive: '#4ab0ff', emissiveIntensity: 0.9 });
@@ -115,6 +139,10 @@ export class Quadruped extends RigModel {
       part(tail2, sphGeo(0), glow('#bfeeff'), S.r * 0.35, S.tail * 0.18, S.r * 0.35, 0, S.tail * 0.55, 0, 0, 0, 0, false);
       const h = haloSprite('#6ac8ff', 0.55, 0.55); h.position.y = S.tail * 0.4; tail2.add(h);
       const eh = haloSprite('#8fe8ff', 0.3, 0.5); eh.position.set(0, S.head * 0.2, S.head * 0.85); head.add(eh);
+    } else if (kind === 'horse') {
+      // опашка от косми: разширява се надолу
+      part(tail, cylGeo(1.8, 7), mat(MANE), 0.05, S.tail * 0.52, 0.04, 0, 0, 0);
+      part(tail2, cylGeo(1.2, 7), mat(MANE), 0.09, S.tail * 0.58, 0.07, 0, 0, 0);
     } else if (kind === 'sheep' || kind === 'goat') {
       part(tail, sphGeo(0), kind === 'sheep' ? bm : bm, S.r * 0.25, S.tail, S.r * 0.2, 0, S.tail * 0.3, 0, 0, 0, 0, false);
     } else {
@@ -125,7 +153,7 @@ export class Quadruped extends RigModel {
     for (let i = 0; i < 4; i++) {
       const u = legJ[i * 2], l = legJ[i * 2 + 1];
       const upLen = -l.position.y;
-      part(u, cylGeo(0.75, 5), kind === 'sheep' ? bm : (kind === 'dog' ? bm : fox ? foxM : lm), S.legR * (kind === 'sheep' ? 2.4 : 1.6), upLen, S.legR * (kind === 'sheep' ? 2.4 : 1.6), 0, 0, 0, Math.PI, 0, 0);
+      part(u, cylGeo(0.75, 5), kind === 'sheep' || kind === 'horse' ? bm : (kind === 'dog' ? bm : fox ? foxM : lm), S.legR * (kind === 'sheep' ? 2.4 : kind === 'horse' ? 2.6 : 1.6), upLen, S.legR * (kind === 'sheep' ? 2.4 : 1.6), 0, 0, 0, Math.PI, 0, 0);
       part(l, cylGeo(0.8, 5), lm, S.legR, L2, S.legR, 0, 0, 0, Math.PI, 0, 0);
       part(l, boxGeo(), mat(kind === 'sheep' || kind === 'goat' ? '#2a2420' : S.legC), S.legR * 2.2, S.legR * 1.4, S.legR * 2.8, 0, -L2 + S.legR * 0.7, S.legR * 0.5, 0, 0, 0, false);
     }
@@ -138,9 +166,9 @@ export class Quadruped extends RigModel {
   /** Козината/вълната по цвета на частта (тялото, краката, муцуната, белите петна, опашката на лисицата). */
   protected skinFor(m: THREE.MeshLambertMaterial): THREE.Material | undefined {
     const hex = '#' + m.color.getHexString(), S = this.sp, sheep = this.kind === 'sheep';
-    if (hex === S.body) return furFrom(sheep ? 'wool' : 'fur', hex, m, sheep ? [3, 3] : [2, 2]);
+    if (hex === S.body) return furFrom(sheep ? 'wool' : 'fur', hex, m, sheep ? [3, 3] : this.kind === 'horse' ? [4, 4] : [2, 2]);
     if (hex === S.legC || hex === S.face) return furFrom(sheep ? 'hide' : 'fur', hex, m);
-    if (['#e8e0d0', '#ece2d0', '#d8cfbd', '#e6d9c4', '#d98a4a', '#3a281a'].includes(hex)) return furFrom('fur', hex, m);
+    if (['#e8e0d0', '#ece2d0', '#d8cfbd', '#e6d9c4', '#d98a4a', '#3a281a', MANE, '#efe9df'].includes(hex)) return furFrom('fur', hex, m);
     return undefined;
   }
 
@@ -148,7 +176,7 @@ export class Quadruped extends RigModel {
     switch (a) {
       case 'talk': case 'cast': case 'wave': case 'block': case 'dance': return 'idle';
       case 'attack2': return 'attack';
-      case 'work': return this.kind === 'sheep' || this.kind === 'goat' ? 'work' : 'idle';
+      case 'work': return this.kind === 'sheep' || this.kind === 'goat' || this.kind === 'horse' ? 'work' : 'idle';
       case 'sit': return this.kind === 'dog' || this.kind === 'cat' ? 'sit' : 'sleep';
       default: return a;
     }
@@ -157,7 +185,8 @@ export class Quadruped extends RigModel {
 
   protected pose(a: AnimName, t: number, o: Float32Array): void {
     const T = this.time, S = this.sp;
-    const graze = this.kind === 'sheep' || this.kind === 'goat';
+    const graze = this.kind === 'sheep' || this.kind === 'goat' || this.kind === 'horse';
+    const horse = this.kind === 'horse';
     switch (a) {
       case 'idle': case 'work': {
         o[QP + 1] = 0.006 * s(T * 2.4);
@@ -167,7 +196,8 @@ export class Quadruped extends RigModel {
         if (graze) {
           const u = (T % 7) / 7;
           const down = a === 'work' ? 1 : u < 0.45 ? sm(u / 0.08) * sm((0.45 - u) / 0.08) : 0;
-          o[NECK * 3] = 1.1 * down; o[HEAD * 3] = 0.3 * down + 0.08 * down * s(T * 9);
+          // конят е висок — шията слиза почти до земята
+          o[NECK * 3] = (horse ? 1.55 : 1.1) * down; o[HEAD * 3] = (horse ? 0.55 : 0.3) * down + 0.08 * down * s(T * 9);
           o[HEAD * 3 + 1] *= 1 - down;
         }
         if (this.kind === 'cat') o[TAIL * 3 + 2] = 0.3 * s(T * 1.1);

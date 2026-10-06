@@ -35,5 +35,5 @@ export interface LamiaModel extends CharacterModel {
   headAttack(i: number, kind?: 'bite' | 'fire'): void;
 }
 
-export type AnimalKind = 'sheep' | 'goat' | 'chicken' | 'dog' | 'cat';
+export type AnimalKind = 'sheep' | 'goat' | 'chicken' | 'dog' | 'cat' | 'horse';
 export type MonsterKind = 'talasam' | 'fox_talasam' | 'karakondzhul';

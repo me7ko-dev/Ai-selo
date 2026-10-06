@@ -49,7 +49,7 @@ if (set === 'all' || set === 'monsters') {
   { const m = createMonsterModel('karakondzhul'); add('karakondzhul', m, m.root, 2.6); }
   for (let i = 0; i < 3; i++) { const m = createSamodivaModel(i); add('самодива ' + i, m, m.root, 1.3); }
 }
-if (set === 'all' || set === 'animals') for (const k of ['sheep', 'goat', 'chicken', 'dog', 'cat'] as const) { const m = createAnimalModel(k); add(k, m, m.root, 1.2); }
+if (set === 'all' || set === 'animals') for (const k of ['sheep', 'goat', 'chicken', 'dog', 'cat', 'horse'] as const) { const m = createAnimalModel(k); add(k, m, m.root, 1.2); }
 if (set === 'all' || set === 'props') for (const k of ['rosen', 'chest', 'saber', 'ivan_saber', 'bow', 'potion', 'feather', 'egg'] as PropKind[]) { const o = createPropModel(k); add(k, undefined, o, 1.3); }
 let lamia: LamiaModel | undefined;
 if (set === 'all' || set === 'lamia') { lamia = createLamiaModel(); add('Ламята', lamia, lamia.root, 12); (window as any).lamia = lamia; }

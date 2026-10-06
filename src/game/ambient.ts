@@ -21,6 +21,9 @@ interface Critter {
 let seed = 12345;
 const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
 
+/** Ливадата на кончето (извън селото, на запад от входа). */
+const HORSE_MEADOW: Vec2 = { x: -34, z: 108 };
+
 export class Ambient {
   private critters: Critter[] = [];
   private samodivi: CharacterModel[] = [];
@@ -62,6 +65,8 @@ export class Ambient {
     add('chicken', 6, () => PLACES.coop.pos, 4, 0.7);
     add('dog', 1, flockHome, 6, 1.6);
     add('cat', 1, () => ({ x: PLACES.inn.pos.x - 6, z: PLACES.inn.pos.z + 2 }), 4, 0.8);
+    // кончето пасе на ливадата между селото и кошарата
+    add('horse', 1, () => HORSE_MEADOW, 10, 1.3);
     for (let i = 0; i < 5; i++) {
       const s = createSamodivaModel(i);
       this.samodivi.push(s);
