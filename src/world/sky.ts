@@ -607,11 +607,11 @@ export class SkySystem {
     this.dome.position.copy(camera.position);
     this.placeCascade(this.sun, focus, this.shadowExtent, 260);
     if (this.sunFar.castShadow) {
-      // далечната каскада се прерисува рядко: при преместване (> 2 м), смяна на посоката или на всеки 8-и кадър
+      // далечната каскада се прерисува рядко: при преместване (> 8 м), смяна на посоката или веднъж в секунда (~90 кадъра) — всяко прерисуване е засичане от десетки ms на GTX 1650
       // (в гората е най-скъпото нещо — хиляди дървета)
       this.sunFar.shadow.autoUpdate = false;
-      const moved = this.farFocus.distanceToSquared(focus) > 4 || !this.farDir.equals(this.lightDir);
-      if (moved || this.frame - this.farFrame >= 8) {
+      const moved = this.farFocus.distanceToSquared(focus) > 64 || !this.farDir.equals(this.lightDir);
+      if (moved || this.frame - this.farFrame >= 90) {
         this.placeCascade(this.sunFar, focus, this.farExtent, 320);
         this.sunFar.shadow.needsUpdate = true;
         this.farFocus.copy(focus); this.farDir.copy(this.lightDir); this.farFrame = this.frame;
