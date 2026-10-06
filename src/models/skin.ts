@@ -235,3 +235,20 @@ export function pmat(color: string, roughness = 0.6, o: { side?: THREE.Side; emi
   }
   return m;
 }
+
+/** Цвят „#rrggbb“ × k (в sRGB, с отрязване) — по-тъмен/по-светъл вариант за двата края на кожата. */
+export function shadeHex(hex: string, k: number): string {
+  const c = (i: number) => Math.max(0, Math.min(255, Math.round(parseInt(hex.slice(i, i + 2), 16) * k)));
+  return '#' + [1, 3, 5].map((i) => c(i).toString(16).padStart(2, '0')).join('');
+}
+
+/** Козина/вълна/пера/кожа от един основен цвят (с емисия от плоския материал, ако има). */
+export function furFrom(kind: SkinKind, hex: string, src?: THREE.MeshLambertMaterial, repeat: [number, number] = [2, 2]): THREE.MeshStandardMaterial {
+  const hasEm = !!src && src.emissive.r + src.emissive.g + src.emissive.b > 0;
+  const lo = kind === 'wool' ? 0.55 : kind === 'hide' ? 0.7 : 0.5, hi = kind === 'wool' ? 1.04 : 1.18;
+  return skinMat(kind, shadeHex(hex, lo), shadeHex(hex, hi), {
+    repeat, roughness: 1, normal: kind === 'fur' ? 0.7 : kind === 'feathers' ? 0.6 : 1,
+    emissive: hasEm ? '#' + src!.emissive.getHexString() : undefined,
+    emissiveIntensity: hasEm ? src!.emissiveIntensity : undefined,
+  });
+}

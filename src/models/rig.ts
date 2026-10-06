@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import type { AnimName, CharacterModel } from './types';
 import { flashMat, bakeGeometry, mergeList } from './shared';
+import { realify } from './realify';
 
 /** Еднократни анимации — след края се връщат към предишната повтаряща се. 'die' остава. */
 export const ONE_SHOT: ReadonlySet<AnimName> = new Set<AnimName>(['attack', 'attack2', 'hit', 'die', 'jump', 'cast', 'wave']);
@@ -77,8 +78,14 @@ export abstract class RigModel implements CharacterModel {
   /** Регистрира става и връща индекса ѝ. */
   protected addJoint(o: THREE.Object3D): number { this.joints.push(o); return this.joints.length - 1; }
 
+  /** Гладки форми и PBR материали (козина, вълна…) вместо плоския low-poly вид — виж realify.ts. */
+  protected realistic = false;
+  /** Материал за даден плосък цвят на модела (козина, вълна…); undefined → обикновен гладък PBR. */
+  protected skinFor(_m: THREE.MeshLambertMaterial): THREE.Material | undefined { return undefined; }
+
   /** Вика се накрая на конструктора — запомня покоя и мешовете. */
   protected finish(): void {
+    if (this.realistic) realify(this.root, (m) => this.skinFor(m));
     this.nJ = this.joints.length;
     const n = this.nJ * 3 + 3;
     this.restRot = new Float32Array(n);

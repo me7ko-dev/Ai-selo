@@ -3,6 +3,8 @@ import * as THREE from 'three';
 import type { AnimName, AnimalKind } from './types';
 import { RigModel } from './rig';
 import { mat, part, cylGeo, sphGeo, lowSph, coneGeo, boxGeo, joint, glow, haloSprite, cachedGeo } from './shared';
+import { furFrom } from './skin';
+import { charactersReady } from './gltf/assets';
 
 const s = Math.sin, c = Math.cos, max = Math.max;
 const sm = (x: number) => { x = x < 0 ? 0 : x > 1 ? 1 : x; return x * x * (3 - 2 * x); };
@@ -36,6 +38,7 @@ export class Quadruped extends RigModel {
   constructor(kind: Exclude<QuadKind, 'chicken'>) {
     super();
     this.kind = kind;
+    this.realistic = charactersReady();
     const S = this.sp = SPECS[kind];
     const r = this.root;
     const bodyY = this.bodyY = S.leg + S.r * 0.55;
@@ -131,6 +134,15 @@ export class Quadruped extends RigModel {
   }
 
   protected stride(run: boolean): number { return this.sp.stepLen * (run ? 2.2 : 1); }
+
+  /** Козината/вълната по цвета на частта (тялото, краката, муцуната, белите петна, опашката на лисицата). */
+  protected skinFor(m: THREE.MeshLambertMaterial): THREE.Material | undefined {
+    const hex = '#' + m.color.getHexString(), S = this.sp, sheep = this.kind === 'sheep';
+    if (hex === S.body) return furFrom(sheep ? 'wool' : 'fur', hex, m, sheep ? [3, 3] : [2, 2]);
+    if (hex === S.legC || hex === S.face) return furFrom(sheep ? 'hide' : 'fur', hex, m);
+    if (['#e8e0d0', '#ece2d0', '#d8cfbd', '#e6d9c4', '#d98a4a', '#3a281a'].includes(hex)) return furFrom('fur', hex, m);
+    return undefined;
+  }
 
   protected mapAnim(a: AnimName): AnimName {
     switch (a) {
@@ -243,6 +255,7 @@ export class Chicken extends RigModel {
     const tail = joint(body, 0, 0.04, -0.1);
     tail.rotation.x = -0.6;
     for (const j of [body, neck, head, ll, rl, lw, rw, tail]) this.addJoint(j);
+    this.realistic = charactersReady();
     const white = mat('#f2ece0'), red = mat('#c8322a'), yel = mat('#e8a030');
     part(body, sphGeo(1), white, 0.085, 0.08, 0.11, 0, 0, 0);
     part(neck, cylGeo(0.7, 5), white, 0.04, 0.1, 0.035, 0, -0.01, 0);
@@ -258,6 +271,10 @@ export class Chicken extends RigModel {
     for (const [w, x] of [[lw, 1], [rw, -1]] as [THREE.Group, number][]) part(w, sphGeo(0), mat('#e2d8c6'), 0.02, 0.055, 0.085, x * 0.005, -0.02, -0.01, 0.2, 0, 0);
     part(tail, coneGeo(4), mat('#e2d8c6'), 0.05, 0.1, 0.025, 0, 0, 0, 0, 0, 0);
     this.finish();
+  }
+  protected skinFor(m: THREE.MeshLambertMaterial): THREE.Material | undefined {
+    const hex = '#' + m.color.getHexString();
+    return hex === '#f2ece0' || hex === '#e2d8c6' ? furFrom('feathers', hex, m, [3, 3]) : undefined;
   }
   protected stride(run: boolean): number { return run ? 0.5 : 0.25; }
   protected mapAnim(a: AnimName): AnimName {

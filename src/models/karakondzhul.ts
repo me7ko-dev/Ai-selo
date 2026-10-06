@@ -6,6 +6,8 @@ import { HumanoidModel, humanDims, NJ, HIPS, SPINE, CHEST, NECK, HEAD, LUA, LFA,
 import { makePose } from './rig';
 import { buildBody } from './body';
 import { mat, part, cylGeo, sphGeo, coneGeo, boxGeo, joint, glow, haloSprite } from './shared';
+import { furFrom } from './skin';
+import { charactersReady } from './gltf/assets';
 
 const FUR = '#3a2e25', FUR2 = '#4d3d2f', FUR3 = '#241c16';
 
@@ -14,6 +16,7 @@ export class Karakondzhul extends HumanoidModel {
     const d = humanDims(3.1, 'stout', 1.4);
     super(d, { kind: 'karakondzhul' }, 2.75);
     const H = d.H, J = this.j;
+    this.realistic = charactersReady();
     this.bias = makePose(NJ, {
       [SPINE]: [0.4, 0, 0], [CHEST]: [0.35, 0, 0], [NECK]: [-0.3, 0, 0], [HEAD]: [-0.4, 0, 0],
       [LTH]: [-0.4, 0, 0.08], [RTH]: [-0.4, 0, -0.08], [LSH]: [0.75, 0, 0], [RSH]: [0.75, 0, 0], [LFT]: [-0.35, 0, 0], [RFT]: [-0.35, 0, 0],
@@ -92,6 +95,14 @@ export class Karakondzhul extends HumanoidModel {
     for (let i = 0; i < 6; i++) part(hd, coneGeo(4), tufts[i % 3], R * 0.3, R * (1.1 + (i % 3) * 0.3), R * 0.15, (i % 2 ? 1 : -1) * R * 0.15 * (i % 3), R * (1.6 - i * 0.3), -R * 0.9, -2.6, 0, 0, i % 2 === 0);
     tuft(J[NECK], 6, 0.05 * H, 0.05 * H, 0, d.neck, 0.08 * H, 0.03 * H, 8);
     this.done();
+  }
+
+  /** Сплъстена козина по тялото, груба тъмна кожа по главата и ръцете. */
+  protected skinFor(m: THREE.MeshLambertMaterial): THREE.Material | undefined {
+    const hex = '#' + m.color.getHexString();
+    if (hex === FUR || hex === FUR2 || hex === FUR3) return furFrom('fur', hex, m, [3, 3]);
+    if (hex === '#3a3028' || hex === '#4a3e34' || hex === '#2e2620' || hex === '#241e19') return furFrom('hide', hex, m);
+    return undefined;
   }
 
   protected stride(run: boolean): number { return run ? 3.8 : 2.3; }

@@ -69,7 +69,7 @@ export function flashMat(orig: THREE.Material, color: number): THREE.Material {
 const geoCache = new Map<string, THREE.BufferGeometry>();
 export function cachedGeo(key: string, make: () => THREE.BufferGeometry): THREE.BufferGeometry {
   let g = geoCache.get(key);
-  if (!g) { g = make(); geoCache.set(key, g); }
+  if (!g) { g = make(); g.userData.geoKey = key; geoCache.set(key, g); }
   return g;
 }
 
