@@ -4,7 +4,7 @@
 // Изгледът не знае за играта: подава „виртуални“ клавиши/бутони към приемник (Input).
 import { h } from './dom';
 import { icon } from './icons';
-import { STICK_RADIUS, RUN_AT, LOOK_GAIN, stickVector } from './touchStick';
+import { STICK_RADIUS, RUN_AT, LOOK_GAIN, stickVector, pinchZoom } from './touchStick';
 import './css/touch.css';
 
 /** Какво приема натисканията (в играта — Input). */
@@ -14,6 +14,8 @@ export interface TouchSink {
   virtualButton(button: number, down: boolean): void;
   addLook(dx: number, dy: number): void;
   setStick(fwd: number, right: number): void;
+  /** Приближаване/отдалечаване на камерата (като колелцето на мишката: + — по-далеч). */
+  addZoom?(d: number): void;
 }
 
 /** Телефон или таблет (основното посочване е с пръст). */
@@ -48,6 +50,8 @@ export class TouchControls {
   private useBtn: HTMLElement; private useTxt: HTMLElement; private promptTxt: string | null = '';
   private stickId: number | null = null; private stickOrigin = { x: 0, y: 0 }; private running = false;
   private lookId: number | null = null; private lookLast = { x: 0, y: 0 };
+  /** Втори пръст в зоната за камерата — щипване (два пръста) приближава/отдалечава. */
+  private pinchId: number | null = null; private pinchLast = { x: 0, y: 0 }; private pinchDist = 0;
   /** Задържани бутони: pointerId → пускане. */
   private held = new Map<number, () => void>();
 
@@ -202,19 +206,35 @@ export class TouchControls {
       } else if (!leftSide && this.lookId === null) {
         this.lookId = e.pointerId;
         this.lookLast = { x: e.clientX, y: e.clientY };
+      } else if (!leftSide && this.pinchId === null) {
+        this.pinchId = e.pointerId;
+        this.pinchLast = { x: e.clientX, y: e.clientY };
+        this.pinchDist = Math.hypot(this.pinchLast.x - this.lookLast.x, this.pinchLast.y - this.lookLast.y);
       } else return;
       try { z.setPointerCapture(e.pointerId); } catch { /* стар браузър */ }
     });
     z.addEventListener('pointermove', (e) => {
       if (e.pointerId === this.stickId) this.moveStick(e.clientX, e.clientY);
-      else if (e.pointerId === this.lookId) {
-        this.sink?.addLook((e.clientX - this.lookLast.x) * LOOK_GAIN, (e.clientY - this.lookLast.y) * LOOK_GAIN);
-        this.lookLast = { x: e.clientX, y: e.clientY };
+      else if (e.pointerId === this.lookId || e.pointerId === this.pinchId) {
+        const pinching = this.pinchId !== null;
+        if (e.pointerId === this.lookId) {
+          if (!pinching) this.sink?.addLook((e.clientX - this.lookLast.x) * LOOK_GAIN, (e.clientY - this.lookLast.y) * LOOK_GAIN);
+          this.lookLast = { x: e.clientX, y: e.clientY };
+        } else this.pinchLast = { x: e.clientX, y: e.clientY };
+        if (pinching) {
+          const d = Math.hypot(this.pinchLast.x - this.lookLast.x, this.pinchLast.y - this.lookLast.y);
+          this.sink?.addZoom?.(pinchZoom(this.pinchDist, d));
+          this.pinchDist = d;
+        }
       }
     });
     const end = (e: PointerEvent) => {
       if (e.pointerId === this.stickId) this.endStick();
-      else if (e.pointerId === this.lookId) this.lookId = null;
+      else if (e.pointerId === this.pinchId) this.pinchId = null;
+      else if (e.pointerId === this.lookId) {
+        // първият пръст се вдига — вторият продължава да върти камерата
+        if (this.pinchId !== null) { this.lookId = this.pinchId; this.lookLast = this.pinchLast; this.pinchId = null; } else this.lookId = null;
+      }
     };
     z.addEventListener('pointerup', end);
     z.addEventListener('pointercancel', end);

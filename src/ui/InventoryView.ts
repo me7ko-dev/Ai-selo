@@ -55,6 +55,12 @@ export class InventoryView extends ModalView {
   private data: InventoryData | null = null;
   private statsEl: HTMLElement; private eqEl: HTMLElement; private bagEl: HTMLElement; private hotEl: HTMLElement; private tip: HTMLElement;
   private drag: Ref | null = null;
+  /** Клетка → мястото ѝ (за пускане при местене с пръст). */
+  private refs = new WeakMap<HTMLElement, Ref>();
+  /** Пръст върху предмет: задържане → описание, плъзгане → местене (HTML drag&drop не работи с пръсти). */
+  private touch: { id: number; ref: Ref; it: ItemView; cell: HTMLElement; x: number; y: number; timer: number; ghost: HTMLElement | null; long: boolean; over: HTMLElement | null } | null = null;
+  /** Следващият click е от задържане/плъзгане с пръст — пропуска се. */
+  private eatClick = false;
 
   constructor(root: HTMLElement) {
     super(root, 'inv-back');
@@ -136,9 +142,11 @@ export class InventoryView extends ModalView {
       c.addEventListener('mouseenter', (e) => this.showTip(it, e));
       c.addEventListener('mousemove', (e) => this.moveTip(e));
       c.addEventListener('mouseleave', () => this.tip.classList.add('hidden'));
-      c.addEventListener('click', () => this.click(ref, it));
-      c.addEventListener('contextmenu', (e) => { e.preventDefault(); this.rclick(ref); });
+      c.addEventListener('click', () => { if (this.eatClick) { this.eatClick = false; return; } this.click(ref, it); });
+      c.addEventListener('contextmenu', (e) => { e.preventDefault(); if (!this.touch) this.rclick(ref); });
+      c.addEventListener('pointerdown', (e) => this.touchStart(e, ref, it, c));
     }
+    this.refs.set(c, ref);
     c.addEventListener('dragover', (e) => { if (this.drag && this.canDrop(this.drag, ref)) { e.preventDefault(); c.classList.add('over'); } });
     c.addEventListener('dragleave', () => c.classList.remove('over'));
     c.addEventListener('drop', (e) => { e.preventDefault(); c.classList.remove('over'); if (this.drag) this.drop(this.drag, ref); this.drag = null; });
@@ -179,6 +187,83 @@ export class InventoryView extends ModalView {
       const bi = it ? this.data!.slots.findIndex((s) => s?.id === it.id) : -1;
       if (bi >= 0) { this.onAssignHotbar(bi, to.i); this.onAssignHotbar(-1, from.i); }
     }
+  }
+
+  // ───────── пръсти: задържане (~0.45 s) показва описанието; плъзгане мести предмета ─────────
+  private touchStart(e: PointerEvent, ref: Ref, it: ItemView, cell: HTMLElement): void {
+    if (e.pointerType === 'mouse' || this.touch) return;
+    const id = e.pointerId;
+    const timer = window.setTimeout(() => {
+      const t = this.touch;
+      if (!t || t.id !== id || t.ghost) return;
+      t.long = true;
+      this.showTip(it, { clientX: t.x, clientY: t.y - 90 } as MouseEvent);
+      // на бързата лента задържането я освобождава (с мишка — десен клик)
+      if (ref.area === 'hot') this.onAssignHotbar(-1, ref.i);
+    }, 450);
+    this.touch = { id, ref, it, cell, x: e.clientX, y: e.clientY, timer, ghost: null, long: false, over: null };
+    cell.draggable = false; // родното drag&drop на телефона би се сбило с нашето
+    const move = (ev: PointerEvent) => { if (ev.pointerId === id) this.touchMove(ev); };
+    const up = (ev: PointerEvent) => {
+      if (ev.pointerId !== id) return;
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      this.touchEnd(ev.type === 'pointerup');
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+  }
+
+  private touchMove(e: PointerEvent): void {
+    const t = this.touch;
+    if (!t) return;
+    if (!t.ghost) {
+      if (Math.hypot(e.clientX - t.x, e.clientY - t.y) < 12) return;
+      clearTimeout(t.timer);
+      this.tip.classList.add('hidden');
+      const g = t.cell.cloneNode(true) as HTMLElement;
+      g.classList.add('inv-ghostdrag');
+      const r = t.cell.getBoundingClientRect();
+      Object.assign(g.style, { position: 'fixed', left: '0', top: '0', width: r.width + 'px', height: r.height + 'px', pointerEvents: 'none', zIndex: '9999', opacity: '0.85' });
+      document.body.append(g);
+      t.ghost = g;
+      t.cell.classList.add('dragging');
+    }
+    t.x = e.clientX; t.y = e.clientY;
+    t.ghost.style.transform = `translate(${t.x - t.ghost.offsetWidth / 2}px, ${t.y - t.ghost.offsetHeight / 2}px)`;
+    const target = this.cellAt(t.x, t.y);
+    if (target !== t.over) {
+      t.over?.classList.remove('over');
+      const to = target ? this.refs.get(target) : undefined;
+      t.over = target && to && this.canDrop(t.ref, to) ? target : null;
+      t.over?.classList.add('over');
+    }
+  }
+
+  private touchEnd(ok: boolean): void {
+    const t = this.touch;
+    if (!t) return;
+    this.touch = null;
+    clearTimeout(t.timer);
+    t.cell.draggable = true;
+    if (t.long || t.ghost) this.eatClick = true;
+    window.setTimeout(() => { this.eatClick = false; }, 400);
+    if (t.long) window.setTimeout(() => this.tip.classList.add('hidden'), 1800);
+    if (!t.ghost) return;
+    t.ghost.remove();
+    t.cell.classList.remove('dragging');
+    t.over?.classList.remove('over');
+    const to = t.over ? this.refs.get(t.over) : undefined;
+    if (ok && to) this.drop(t.ref, to);
+    else if (ok && t.ref.area === 'hot' && !this.cellAt(t.x, t.y)) this.onAssignHotbar(-1, t.ref.i); // изтеглен извън лентата
+  }
+
+  private cellAt(x: number, y: number): HTMLElement | null {
+    const el = document.elementFromPoint(x, y) as HTMLElement | null;
+    const c = el?.closest('.inv-cell') as HTMLElement | null;
+    return c && this.refs.has(c) ? c : null;
   }
 
   private showTip(it: ItemView, e: MouseEvent): void {

@@ -16,3 +16,6 @@ export function stickVector(dx: number, dy: number, radius = STICK_RADIUS): { fw
   const mag = (raw - DEAD) / (1 - DEAD);
   return { fwd: (-dy / len) * mag, right: (dx / len) * mag, mag };
 }
+
+/** Щипване: раздалечаване на пръстите (d1 > d0) приближава камерата; ~120 px ≈ едно щракване на колелцето. */
+export function pinchZoom(d0: number, d1: number): number { return (d0 - d1) / 120; }

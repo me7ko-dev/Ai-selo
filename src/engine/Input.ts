@@ -63,6 +63,8 @@ export class Input {
   }
   /** Оглеждане с плъзгане (в пиксели, като движение на мишката). */
   addLook(dx: number, dy: number): void { this.mouseDX += dx; this.mouseDY += dy; }
+  /** Щипване с два пръста (като колелцето на мишката). */
+  addZoom(d: number): void { this.wheel += d; }
   /** Аналоговият джойстик (null — пуснат). */
   setStick(fwd: number, right: number): void { this.stick = fwd === 0 && right === 0 ? null : { fwd, right }; }
 

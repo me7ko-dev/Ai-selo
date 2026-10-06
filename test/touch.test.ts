@@ -1,7 +1,7 @@
 // Проби за управлението с пръсти: джойстикът, настройките за телефон, съветите — без DOM.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { stickVector, STICK_RADIUS, RUN_AT, DEAD } from '../src/ui/touchStick';
+import { stickVector, STICK_RADIUS, RUN_AT, DEAD, pinchZoom } from '../src/ui/touchStick';
 import { mergeSettings, mergeSettingsFor, TOUCH_GRAPHICS, DEFAULT_SETTINGS } from '../src/save/settings';
 import { STEP_TEXT, TOUCH_STEP_TEXT } from '../src/game/tutorial';
 
@@ -56,4 +56,10 @@ test('съветите за пръсти: всички стъпки, на бъл
     assert.ok(txt.length > 10, k);
     assert.ok(!/\[(W|A|S|D|Shift|Space|Tab|M|J|T)\]|мишка/.test(txt), `${k}: ${txt}`);
   }
+});
+
+test('щипване: раздалечаване приближава, събиране отдалечава', () => {
+  assert.ok(pinchZoom(100, 220) < 0);
+  assert.ok(pinchZoom(220, 100) > 0);
+  assert.equal(pinchZoom(150, 150), 0);
 });

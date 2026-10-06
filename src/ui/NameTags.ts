@@ -14,7 +14,7 @@ export interface NameTag {
   bubble?: { text: string; ai?: boolean } | null;
 }
 
-interface TagEl { el: HTMLElement; label: HTMLElement; name: HTMLElement; job: HTMLElement; bubble: HTMLElement; btxt: HTMLElement; bai: HTMLElement; text: string; seen: number; shown: boolean }
+interface TagEl { el: HTMLElement; label: HTMLElement; name: HTMLElement; job: HTMLElement; bubble: HTMLElement; btxt: HTMLElement; bai: HTMLElement; text: string; seen: number; shown: boolean; compact: boolean; jobH: number }
 
 export class NameTags {
   readonly el: HTMLElement;
@@ -81,9 +81,14 @@ export class NameTags {
     if (shown.length) this.refreshAvoid();
     // панелите на HUD са „заети места“ — етикетът се отмества встрани/нагоре, а ако не може — се скрива
     const placed: { l: number; r: number; top: number; bot: number }[] = this.avoid.map((a) => ({ l: a.l, r: a.r, top: a.t, bot: a.b }));
+    // тълпа (сборът, хорото): етикетите се смаляват до само името, а твърде отместените се скриват по-рано
+    const crowd = shown.length >= 5;
     for (const it of shown) {
       const { t, e, scale } = it;
-      const lw = e.label.offsetWidth, lh = e.label.offsetHeight;
+      const lw = e.label.offsetWidth;
+      if (!e.compact && e.job.offsetHeight) e.jobH = e.job.offsetHeight;
+      const lhFull = e.label.offsetHeight + (e.compact ? e.jobH : 0), lhSmall = lhFull - e.jobH;
+      let lh = lhFull;
       type Fit = { x: number; y: number; w: number; hgt: number; cost: number };
       const hitAt = (x: number, y: number, w: number, hgt: number) =>
         placed.find((p) => x - w / 2 < p.r - 2 && x + w / 2 > p.l + 2 && y - hgt < p.bot - 1 && y > p.top + 1);
@@ -106,14 +111,21 @@ export class NameTags {
         return best;
       };
       let f = fit(it.bubble);
+      let compact = false;
+      if (crowd && f.cost > 20 && e.jobH) {
+        lh = lhSmall;
+        const fc = fit(it.bubble);
+        if (fc.cost < f.cost) { f = fc; compact = true; } else lh = lhFull;
+      }
       // балонче, което би отлетяло далеч от главата, се скрива (остава само името) — по-близкият говори
       let withBubble = it.bubble;
       if (withBubble && f.cost > 60) { f = fit(false); withBubble = false; }
       e.bubble.classList.toggle('in', withBubble);
+      if (compact !== e.compact) { e.compact = compact; e.label.classList.toggle('compact', compact); }
       // етикет, изместен много далеч от човека, само обърква — скрий го
       const { x, y, w, hgt } = f;
       const box: Box = { l: x - w / 2, t: y - hgt, r: x + w / 2, b: y };
-      const lost = f.cost > 110 || this.avoid.some((a) => rectsOverlap(box, a));
+      const lost = f.cost > (crowd ? 70 : 110) || this.avoid.some((a) => rectsOverlap(box, a));
       if (!lost) placed.push({ l: x - w / 2, r: x + w / 2, top: y - hgt, bot: y });
       const op = lost ? 0 : t.dist > this.maxDist - 8 ? (this.maxDist - t.dist) / 8 : 1;
       e.el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) translate(-50%, -100%) scale(${scale.toFixed(3)})`;
@@ -131,7 +143,7 @@ export class NameTags {
     const el = h('div.nt', null, bubble, label);
     el.style.visibility = 'hidden';
     this.el.append(el);
-    const t: TagEl = { el, label, name, job, bubble, btxt, bai, text: '', seen: 0, shown: false };
+    const t: TagEl = { el, label, name, job, bubble, btxt, bai, text: '', seen: 0, shown: false, compact: false, jobH: 0 };
     this.tags.set(id, t);
     return t;
   }

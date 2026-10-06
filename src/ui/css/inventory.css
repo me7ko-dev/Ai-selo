@@ -56,3 +56,6 @@
 .bl-ui .tip-stat { display: flex; justify-content: space-between; font-size: 0.85em; padding: 0.1em 0; border-top: 1px dashed rgba(232, 194, 122, 0.15); }
 .bl-ui .tip-stat b { color: #a8d898; }
 .bl-ui .tip-act { margin-top: 0.4em; font-size: 0.75em; color: var(--gold); }
+/* пръсти: без превъртане/маркиране/меню при задържане и местене на предмет */
+.bl-ui .inv-cell:not(.empty) { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.inv-ghostdrag { border-radius: 8px; box-shadow: 0 0.4em 1.2em rgba(0, 0, 0, 0.5); }

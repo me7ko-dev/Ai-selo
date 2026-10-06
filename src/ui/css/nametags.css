@@ -13,3 +13,4 @@
 .bl-ui .nt-bubble::after { content: ''; position: absolute; left: 50%; bottom: -0.5em; margin-left: -0.5em; border: 0.5em solid transparent; border-bottom: 0; border-top-color: rgba(248, 240, 222, 0.95); }
 .bl-ui .nt-ai { display: inline-block; margin-right: 0.3em; vertical-align: -0.1em; filter: drop-shadow(0 0 2px rgba(160, 110, 30, 0.8)); }
 .bl-ui .nt-ai .sparkle path:first-child { fill: #c08a2a; }
+.nt-label.compact .nt-job { display: none; }
