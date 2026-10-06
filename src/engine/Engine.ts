@@ -26,6 +26,8 @@ export class Engine {
   pixelRatioCap = 1.5;
   /** таван от качеството (ниско/средно/високо) */
   private qualityPixelCap = 1.5;
+  /** множител на резолюцията от качеството: „Средно“ рисува ~0,64 от пикселите (SMAA изглажда увеличението) */
+  private qualityScale = 1;
   fps = 60;
   /** желана експонация (светът я подава според часа); стига се плавно */
   exposureTarget = 1;
@@ -65,12 +67,13 @@ export class Engine {
   /** Качеството на картината: пост-обработка и таван на резолюцията. */
   setQuality(q: PostQuality): void {
     this.qualityPixelCap = q === 'low' ? 1 : q === 'medium' ? 1.25 : 1.5;
+    this.qualityScale = q === 'medium' ? 0.8 : 1;
     this.post.setQuality(q);
     this.applyPixelRatio();
   }
 
   private applyPixelRatio(): void {
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.pixelRatioCap, this.qualityPixelCap));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.pixelRatioCap, this.qualityPixelCap) * this.qualityScale);
     this.resize();
   }
 
