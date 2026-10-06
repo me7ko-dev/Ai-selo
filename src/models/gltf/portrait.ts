@@ -56,9 +56,9 @@ export async function bakePortraits(list: PortraitSubject[], size = 256): Promis
       // глава и рамене, леко отстрани (три четвърти), очите малко над средата на кадъра
       tgt.set(head.x, head.y + 0.0, head.z + 0.02);
       for (const l of [key, fill, rim, rim2]) l.target.position.copy(tgt);
-      const d = 1.75, yaw = 0.3;
-      cam.position.set(tgt.x + Math.sin(yaw) * d, tgt.y + 0.12, tgt.z + Math.cos(yaw) * d);
-      cam.lookAt(tgt.x, tgt.y + 0.03, tgt.z);
+      const d = 1.4, yaw = 0.3;
+      cam.position.set(tgt.x + Math.sin(yaw) * d, tgt.y + 0.1, tgt.z + Math.cos(yaw) * d);
+      cam.lookAt(tgt.x, tgt.y + 0.05, tgt.z);
       for (const l of [key, fill, rim, rim2]) l.position.add(tgt);
       renderer.render(scene, cam);
       for (const l of [key, fill, rim, rim2]) l.position.sub(tgt);
