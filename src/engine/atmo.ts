@@ -182,6 +182,9 @@ const dirLoopNew = `#if ( UNROLLED_LOOP_INDEX == 0 )
 		directLight.color *= ( directLight.visible && receiveShadow ) ? getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] ) : 1.0;
 		#endif`;
 
+const pointLoopOld = /(getPointLightInfo\( pointLight, geometryPosition, directLight \);[\s\S]*?)(RE_Direct\( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight \);)/;
+const pointLoopNew = '$1if ( directLight.visible ) { $2 }';
+
 // Мокрота: по-тъмно (порестите повърхности попиват вода) и по-гладко (лъщи) — най-вече отгоре.
 const wetCode = (standard: boolean) => /* glsl */`
 	{
@@ -210,6 +213,9 @@ export function installAtmo(): void {
   SC.shadowmap_pars_fragment = SC.shadowmap_pars_fragment + '\n' + cascadeFns;
   if (dirLoopOld.test(SC.lights_fragment_begin)) SC.lights_fragment_begin = SC.lights_fragment_begin.replace(dirLoopOld, dirLoopNew);
   else console.warn('atmo: lights_fragment_begin не е като очакваното — каскадите са изключени');
+  // точковите светлини (огнището, подсветката на героя, огъня на сбора) имат обхват: извън него (почти всички
+  // пиксели на тревата, терена и гората) не смятаме BRDF-а напразно — разклонението е еднакво за съседните пиксели
+  SC.lights_fragment_begin = SC.lights_fragment_begin.replace(pointLoopOld, pointLoopNew);
   // околната (дифузна) светлина идва от сондата за всички материали; envMap дава само отраженията
   SC.lights_fragment_maps = SC.lights_fragment_maps.replace(
     'iblIrradiance += getIBLIrradiance( geometryNormal );',

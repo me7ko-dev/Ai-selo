@@ -32,7 +32,7 @@ import { AutoQuality } from './perf';
 import { buildSpotTable } from './spots';
 import { setSpotTable } from '../sim/schedules';
 import { Tutorial } from './tutorial';
-import { preloadCharacters } from '../models';
+import { preloadCharacters, createMonsterModel } from '../models';
 
 export type Modal = null | 'dialogue' | 'inventory' | 'map' | 'chronicle' | 'time' | 'settings' | 'away' | 'dead' | 'watch' | 'intro';
 
@@ -135,6 +135,10 @@ export class Game {
     this.engine.onUpdate((dt) => this.update(dt));
     this.engine.onLateUpdate((dt) => this.lateUpdate(dt));
     this.brainKit.connect().catch(() => {});
+    // шейдърите на всичко (и на таласъмите/караконджула, които идват по-късно) — сега, а не насред играта
+    progress(0.9, 'Палят се фенерите…');
+    this.world.update(0.016, this.sim.state.time, this.tmpV.set(0, 2, 40)); // небето и отраженията (scene.environment) — преди шейдърите
+    await this.engine.warmup((['talasam', 'fox_talasam', 'karakondzhul'] as const).map((k) => createMonsterModel(k).root));
     progress(1, 'Готово');
     this.engine.start();
     const canContinue = await this.save.hasSave();

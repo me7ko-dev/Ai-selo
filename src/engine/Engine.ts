@@ -82,6 +82,37 @@ export class Engine {
     this.camera.updateProjectionMatrix();
   }
 
+  /**
+   * Шейдърите на всичко в сцената — още при зареждането: и на скритото (жители, които спят вкъщи, сборът, бурята),
+   * и на сенките им, и на extra (напр. чудовищата, които се появяват по-късно). Иначе всеки нов вид неща на екрана
+   * (първият жител в кадъра, първият таласъм) спира играта за 0,5–2 s, докато ANGLE компилира шейдърите.
+   */
+  async warmup(extra: THREE.Object3D[] = []): Promise<void> {
+    const r = this.renderer, scene = this.scene;
+    const tmp = new THREE.Group();
+    for (const o of extra) tmp.add(o);
+    tmp.position.copy(this.camera.position);
+    scene.add(tmp);
+    const saved: [THREE.Object3D, boolean, boolean][] = [];
+    scene.traverse((o) => {
+      saved.push([o, o.visible, o.frustumCulled]);
+      o.visible = true; o.frustumCulled = false;
+      const sh = (o as THREE.DirectionalLight).shadow;
+      if (sh) sh.needsUpdate = true;
+    });
+    try {
+      await r.compileAsync(scene, this.camera);
+      // един кадър в малък буфер — компилира и вариантите за сенките
+      const rt = new THREE.WebGLRenderTarget(64, 64, { type: THREE.HalfFloatType });
+      r.setRenderTarget(rt);
+      r.render(scene, this.camera);
+      r.setRenderTarget(null);
+      rt.dispose();
+    } catch (e) { console.warn('warmup', e); }
+    for (const [o, v, f] of saved) { o.visible = v; o.frustumCulled = f; }
+    scene.remove(tmp);
+  }
+
   /** Вика се всеки кадър преди рендера (dt в секунди, ≤ 0.1). Връща функция за махане. */
   onUpdate(fn: Updater): () => void { this.updaters.push(fn); return () => { this.updaters = this.updaters.filter(f => f !== fn); }; }
   /** Вика се след всички onUpdate (напр. камера, етикети над главите). */
