@@ -478,6 +478,13 @@ export class SkySystem {
     if (!useMoon) {
       const m = Math.max(sunR, sunG, sunB, 1e-6);
       this.sun.color.setRGB(sunR / m, sunG / m, sunB / m);
+      // утрото е по-хладно от залеза (по-чист въздух): ниското слънце сутрин — по-малко оранжево
+      const morn = (h < 12 ? 1 : 0) * (1 - sstep(0.1, 0.45, this.sunDir.y));
+      if (morn > 0) {
+        const c = this.sun.color, l = c.r * 0.3 + c.g * 0.59 + c.b * 0.11;
+        c.lerp(this.tmpC2.setRGB(l * 0.98, l, l * 1.04), 0.35 * morn);
+        c.multiplyScalar(1 / Math.max(c.r, c.g, c.b, 1e-6));
+      }
       this.sun.intensity = m * sunVis;
     } else {
       this.sun.color.copy(MOON_COLOR);

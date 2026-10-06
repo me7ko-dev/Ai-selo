@@ -67,6 +67,8 @@ export class PostFX {
   night = 0;
   /** сила на блясъка (за светкавица и т.н.) */
   bloomBoost = 0;
+  /** оттенък на цялата картина преди AgX (напр. по-хладно утро) */
+  get tint(): THREE.Vector3 { return this.grade.u('uTint').value as THREE.Vector3; }
 
   constructor(private renderer: THREE.WebGLRenderer, private scene: THREE.Scene, private camera: THREE.PerspectiveCamera) {
     this.composer = new EffectComposer(renderer, { frameBufferType: THREE.HalfFloatType, multisampling: 0, stencilBuffer: false, depthBuffer: true });

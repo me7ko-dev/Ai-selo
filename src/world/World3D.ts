@@ -201,6 +201,9 @@ export class World3D implements WorldQuery {
     this.sky.update(totalGameMinutes, this.engine.camera, focus, t, dt);
     this.engine.exposureTarget = this.sky.exposure;
     this.engine.post.night = this.sky.nightLook;
+    // изгревът (≈05:00–08:00) — малко по-хладен: мараната и светлината не са оранжеви като на залез
+    const morn = THREE.MathUtils.smoothstep(hr, 4.6, 5.6) * (1 - THREE.MathUtils.smoothstep(hr, 7.2, 8.6));
+    this.engine.post.tint.set(1 - 0.07 * morn, 1 - 0.015 * morn, 1 + 0.08 * morn);
     this.engine.post.bloomBoost = fl * 0.6;
     this.sky.hemi.color.set('#c8d4ff'); this.sky.hemi.groundColor.set('#3a4050');
     this.sky.hemi.intensity = fl * 5;
