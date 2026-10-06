@@ -9,6 +9,21 @@ import { chooseClip, locomotionClip, ONE_SHOTS, type AnimContext, type ClipChoic
 import { buildSaber, buildScabbard, buildBow, buildTool } from '../items';
 import { mergeStatic, cachedGeo, mat, part, sphGeo, haloSprite } from '../shared';
 
+/** Призрачно сияние по контура (ръбовете към камерата) — таласъмът се вижда в нощната гора, без да свети целият. */
+function addRim(m: THREE.MeshStandardMaterial, color: string, strength: number): void {
+  const prev = m.onBeforeCompile;
+  const uRim = { value: new THREE.Color(color).multiplyScalar(strength) };
+  m.onBeforeCompile = (sh, r) => {
+    prev.call(m, sh, r);
+    sh.uniforms.uRim = uRim;
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform vec3 uRim;')
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += uRim * pow( 1.0 - saturate( dot( normal, normalize( vViewPosition ) ) ), 3.0 );');
+  };
+  const key = m.customProgramCacheKey();
+  m.customProgramCacheKey = () => key + '|rim';
+}
+
 let clawMat: THREE.MeshStandardMaterial | null = null;
 function pmatClaw(): THREE.MeshStandardMaterial { return clawMat ??= new THREE.MeshStandardMaterial({ color: '#cfc4a2', roughness: 0.35, metalness: 0 }); }
 
@@ -237,8 +252,9 @@ export class GltfCharacter implements HeroModel {
     return s;
   }
 
-  /** Таласъм: светещи очи (+ ореол), островърхи уши, дълги нокти. */
+  /** Таласъм: светещи очи (+ ореол), островърхи уши, дълги нокти, сияние по контура. */
   private attachTalasam(): void {
+    for (const m of this.ownMats) addRim(m, '#5f9a52', 0.45);
     const eyes: THREE.SkinnedMesh[] = [];
     this.armature.traverse((o) => { if ((o as THREE.SkinnedMesh).isSkinnedMesh && o.name.endsWith('_eyes')) eyes.push(o as THREE.SkinnedMesh); });
     const eyeMat = new THREE.MeshStandardMaterial({ color: '#c8e05a', emissive: '#d8ff5a', emissiveIntensity: 2.2, roughness: 0.3 });
@@ -249,6 +265,7 @@ export class GltfCharacter implements HeroModel {
     // цветът на кожата от talasamSpec (#7c8a70), малко по-тъмен — ушите нямат текстура
     const skin = new THREE.MeshStandardMaterial({ color: '#6c785f', roughness: 0.9, metalness: 0 });
     if (this.spec.glow) { skin.emissive.set(this.spec.glow); skin.emissiveIntensity = 0.08; }
+    addRim(skin, '#5f9a52', 0.45);
     this.ownMats.push(skin); this.flashMats.push(skin);
     const ears = this.headPoint(0, 0.065, -0.005);
     if (ears) {
