@@ -66,7 +66,7 @@ export class Vegetation {
 
   constructor(plan: WorldPlan, fade: TreeFadeUniforms, private renderer: THREE.WebGLRenderer | null, scene: THREE.Scene | null, private camera: THREE.Camera | null) {
     this.group.name = 'vegetation';
-    this.u = { ...fade, uTime: { value: 0 }, uWind: { value: 0.5 } };
+    this.u = { ...fade, uTime: { value: 0 }, uWind: { value: 0.5 }, uCut: { value: new THREE.Vector4() }, uCutAspect: { value: 1 } };
     this.build(plan);
     // разпределянето по нива става точно преди рисуването — с крайното положение на камерата за кадъра
     if (scene && camera) {
@@ -82,7 +82,7 @@ export class Vegetation {
   /** Материалите на един модел за всяко ниво (прозорците wins са общи за полето). */
   private treeMats(wins: THREE.Vector4[], model: TreeModel, barkP: THREE.MeshStandardMaterialParameters, bend: number, camFade = true, prepass = true): TreeMats[] {
     return wins.map((w, l) => {
-      const o: VegMatOpts = { lod: w, crownR: Math.max(2.2, model.radius * 0.6), top: model.height, bend, camFade };
+      const o: VegMatOpts = { lod: w, crownR: Math.max(2.2, model.radius * 0.6), top: model.height, bend, camFade, cut: true };
       const bark = barkMaterial(this.u, o, { ...barkP });
       const leaf = model.leaf ? leafMaterial(this.u, o, { map: this.leafTex[model.leaf], color: this.leafCol[model.leaf] }, prepass) : null;
       // сенките на средното ниво — плътни карти (без alpha-test)
@@ -286,7 +286,25 @@ export class Vegetation {
   /** Кои екземпляри на какво ниво — с точната камера за кадъра (вика се от scene.onBeforeRender). */
   cull(cam: THREE.Camera): void {
     this.u.uCamPos.value.copy(cam.position);
+    this.updateCut(cam as THREE.PerspectiveCamera);
     for (const f of this.fields) f.update(cam);
+  }
+
+  /**
+   * „Прозорецът“ към героя: къде е той на екрана и колко е дълбоко (виж VEG_CUT в trees/materials.ts). Кръгът е
+   * ~2 м около гърдите му — стига и за враговете до него. Само при камера от 3-то лице (до ~18 м от героя).
+   */
+  private updateCut(cam: THREE.PerspectiveCamera): void {
+    const cut = this.u.uCut.value, f = this.u.uFocus.value;
+    const p = this.tmp.set(f.x, f.y + 1.0, f.z);
+    const dist = p.distanceTo(cam.position);
+    p.applyMatrix4(cam.matrixWorldInverse);
+    const depth = -p.z;
+    if (!cam.isPerspectiveCamera || depth < 1 || dist > 18) { cut.set(0, 0, 0, 0); return; }
+    p.applyMatrix4(cam.projectionMatrix);
+    const tanH = Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2) / cam.zoom;
+    cut.set(p.x, p.y, depth, 2.1 / (tanH * depth));
+    this.u.uCutAspect.value = cam.aspect;
   }
 
   private bake(): void {
