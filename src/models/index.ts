@@ -20,6 +20,7 @@ import { charactersReady } from './gltf/assets';
 import { GltfCharacter } from './gltf/character';
 import { villagerSpec, heroSpec, samodivaSpec, talasamSpec } from './gltf/looks';
 export { preloadCharacters, charactersReady } from './gltf/assets';
+export { bakePortraits, type PortraitSubject } from './gltf/portrait';
 
 /** Реалистичен модел, ако хората са заредени; при грешка — null (тогава процедурният). */
 function gltfOr<T>(make: () => T): T | null {

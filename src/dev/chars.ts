@@ -4,7 +4,9 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
-import { preloadCharacters, createVillagerModel, createHeroModel, createSamodivaModel, type AnimName, type CharacterModel } from '../models';
+import { preloadCharacters, createVillagerModel, createHeroModel, createSamodivaModel, bakePortraits, type AnimName, type CharacterModel } from '../models';
+import { setPortraitImages } from '../ui/portrait3d';
+import { portrait } from '../ui/icons';
 import { VILLAGERS, type VillagerId } from '../data/villagers';
 
 const qs = new URLSearchParams(location.search);
@@ -158,7 +160,22 @@ async function gpuPerf(what: string): Promise<Record<string, unknown>> {
   return { what, toggles: toggles.length, on: med(out[0]), off: med(out[1]), onLo: lo(out[0]), offLo: lo(out[1]), n: [out[0].length, out[1].length] };
 }
 
+/** Портретите за диалога (?portraits=1): истинските (3D) и рисуваните едни до други. */
+async function portraits(): Promise<void> {
+  await preloadCharacters({ quality: 'high' });
+  const ids = ['gena', 'peyu', 'petko', 'ivan', 'maria', 'radka', 'kalin', 'hero'];
+  const drawn = ids.map((id) => portrait(id, 120));
+  setPortraitImages(await bakePortraits(ids.map((id) => ({ id, look: id === 'hero' ? undefined : VILLAGERS[id as VillagerId].look }))));
+  renderer.domElement.style.display = 'none';
+  const box = document.createElement('div');
+  box.style.cssText = 'position:fixed;inset:0;background:#2a2018;display:grid;grid-template-columns:repeat(8,1fr);gap:8px;padding:30px;align-content:start';
+  box.innerHTML = ids.map((id) => `<div>${portrait(id, 220)}</div>`).join('') + drawn.map((d) => `<div>${d}</div>`).join('');
+  document.body.appendChild(box);
+  (window as any).__ready = true;
+}
+
 async function main(): Promise<void> {
+  if (qs.get('portraits')) return portraits();
   if (qs.get('who')) return people(qs.get('who')!.split(','));
   if (qs.get('strip')) return strip(qs.get('strip')!.split(','), +(qs.get('n') ?? 6), qs.get('stripwho') ?? 'sh_male');
   const anims = animName ? (await loader.loadAsync('/test/tmp/raw/UAL1_Standard.glb')).animations : [];

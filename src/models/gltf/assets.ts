@@ -19,6 +19,8 @@ export interface BodyTemplate {
   /** Посока „напред-встрани“ в покой: световните завъртания на костите (в пространството на тялото). */
   bindWorld: Map<string, THREE.Quaternion>;
   bindPos: Map<string, THREE.Vector3>;
+  /** Лицето: меш → оси на тялото с начало костта Head (за бръчките в шейдъра на кожата) и средата на очите в тях. */
+  face: { matrix: THREE.Matrix4; eye: THREE.Vector3 } | null;
 }
 
 export interface CharAssets {
@@ -152,11 +154,117 @@ function skinMaterial(m: THREE.MeshStandardMaterial): THREE.MeshPhysicalMaterial
  * Добавя „обвиващата“ светлина на кожата към материала (вика се и от копията с onBeforeCompile).
  * old > 0 — бръчки (чело, около очите, бузите) като фини гънки в нормалата (в пространството на тялото в покой).
  */
-export function skinShader(sh: THREE.WebGLProgramParametersWithUniforms): void {
-  const chunk = THREE.ShaderChunk.lights_physical_pars_fragment;
-  if (chunk.includes(LAMBERT_LINE)) {
-    sh.fragmentShader = sh.fragmentShader.replace('#include <lights_physical_pars_fragment>', chunk.replace(LAMBERT_LINE, SKIN_WRAP));
+export function skinShader(face: BodyTemplate['face'], old: boolean): (sh: THREE.WebGLProgramParametersWithUniforms) => void {
+  return (sh) => {
+    const chunk = THREE.ShaderChunk.lights_physical_pars_fragment;
+    if (chunk.includes(LAMBERT_LINE)) {
+      sh.fragmentShader = sh.fragmentShader.replace('#include <lights_physical_pars_fragment>', chunk.replace(LAMBERT_LINE, SKIN_WRAP));
+    }
+    if (!old || !face) return;
+    sh.uniforms.uFace = { value: face.matrix };
+    sh.uniforms.uEye = { value: face.eye };
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nuniform mat4 uFace;\nvarying vec3 vFace;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvFace = ( uFace * vec4( position, 1.0 ) ).xyz;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform vec3 uEye;\nvarying vec3 vFace;\n' + WRINKLES)
+      .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + WRINKLE_APPLY);
+  };
+}
+
+// Бръчки на старите (баба Гена, дядо Пею): чело, „пачи крак“ край очите, гънки от носа към устата.
+// Височина h(p) в осите на главата (м, спрямо средата на очите) → нормалата се накланя (bump по производните),
+// а в гънките кожата е малко по-тъмна и по-матова.
+const WRINKLES = /* glsl */`
+float ageWrinkles( vec3 p ) {
+  float ax = abs( p.x ), fy = p.y - uEye.y, h = 0.0;
+  float front = smoothstep( uEye.z - 0.045, uEye.z - 0.02, p.z );
+  float fore = smoothstep( 0.022, 0.032, fy ) * ( 1.0 - smoothstep( 0.058, 0.072, fy ) ) * ( 1.0 - smoothstep( 0.03, 0.05, ax ) );
+  h += fore * front * pow( 0.5 + 0.5 * cos( fy * 6.2832 / 0.0105 + sin( p.x * 90.0 ) * 0.6 ), 3.0 );
+  vec2 q = vec2( ax - ( uEye.x + 0.017 ), fy + 0.002 );
+  float r = length( q );
+  float crow = ( 1.0 - smoothstep( 0.006, 0.02, r ) ) * smoothstep( -0.004, 0.002, q.x ) * smoothstep( 0.002, 0.006, r );
+  h += crow * pow( 0.5 + 0.5 * cos( atan( q.y, q.x ) * 9.0 ), 4.0 );
+  vec2 a = vec2( 0.017, -0.036 ), b = vec2( 0.029, -0.07 );
+  vec2 pa = vec2( ax, fy ) - a, ba = b - a;
+  float t = clamp( dot( pa, ba ) / dot( ba, ba ), 0.0, 1.0 );
+  float dn = length( pa - ba * t );
+  h += exp( - dn * dn / ( 0.0022 * 0.0022 ) ) * 0.9 * front;
+  return h;
+}
+`;
+const WRINKLE_APPLY = /* glsl */`
+	{
+		float ah = ageWrinkles( vFace );
+		vec3 dpx = dFdx( - vViewPosition ), dpy = dFdy( - vViewPosition );
+		vec3 r1 = cross( dpy, normal ), r2 = cross( normal, dpx );
+		float det = dot( dpx, r1 );
+		vec3 grad = sign( det ) * ( dFdx( ah ) * r1 + dFdy( ah ) * r2 ) * 0.0012;
+		normal = normalize( abs( det ) * normal - grad );
+		diffuseColor.rgb *= 1.0 - 0.16 * ah;
+		roughnessFactor = min( 1.0, roughnessFactor + 0.08 * ah );
+	}
+`;
+
+/**
+ * Забрадката: UV-тата от инструмента са „около тялото“ (ъгъл × височина) и на темето се събират в звезда.
+ * Тук — сферично развиване около главата с полюс отзад-долу (на тила, под възела), така че темето и челото
+ * са в средата на шарката, без събиране.
+ */
+function remapScarf(armature: THREE.Object3D, face: NonNullable<BodyTemplate['face']>): void {
+  armature.traverse((o) => {
+    const m = o as THREE.SkinnedMesh;
+    if (!m.isSkinnedMesh || !m.name.endsWith('_folk')) return;
+    const g = m.geometry, gar = g.getAttribute('_garment'), uv = g.getAttribute('uv'), pos = g.getAttribute('position');
+    if (!gar || !uv || !pos) return;
+    const c = new THREE.Vector3(0, face.eye.y + 0.03, face.eye.z - 0.085);
+    const P = new THREE.Vector3(0, -0.3, -1).normalize();           // полюсът: тилът; срещуположният е на челото (под ръба)
+    const X = new THREE.Vector3(1, 0, 0), Yb = new THREE.Vector3().crossVectors(P, X).normalize();
+    const Xb = new THREE.Vector3().crossVectors(Yb, P).normalize();
+    const v = new THREE.Vector3();
+    const out = new Float32Array(uv.count * 2);
+    for (let i = 0; i < uv.count; i++) { out[i * 2] = uv.getX(i); out[i * 2 + 1] = uv.getY(i); }
+    let n = 0;
+    for (let i = 0; i < pos.count; i++) {
+      if (Math.round(gar.getX(i)) !== G_SCARF) continue;
+      v.fromBufferAttribute(pos, i).applyMatrix4(face.matrix).sub(c).normalize();
+      const theta = Math.acos(THREE.MathUtils.clamp(v.dot(P), -1, 1));   // 0 на тила → π отпред-горе
+      const phi = Math.atan2(v.dot(Yb), v.dot(Xb));                      // шевът (±π) е надолу към врата
+      // правоъгълникът на басмата в атласа: [0, 0.5] × [0.5, 1]
+      out[i * 2] = 0.25 + (phi / (2 * Math.PI)) * 0.5 * 0.98;
+      out[i * 2 + 1] = 0.5 + (theta / Math.PI) * 0.5 * 0.98;
+      n++;
+    }
+    if (n) g.setAttribute('uv', new THREE.BufferAttribute(out, 2));
+  });
+}
+const G_SCARF = 9;
+
+/** Лицето на тялото: матрица меш → оси на тялото около костта Head и средата на очите (от меша на очите). */
+function faceFrame(armature: THREE.Object3D, bindWorld: Map<string, THREE.Quaternion>): BodyTemplate['face'] {
+  let skin: THREE.SkinnedMesh | null = null, eyes: THREE.SkinnedMesh | null = null;
+  armature.traverse((o) => {
+    const m = o as THREE.SkinnedMesh;
+    if (!m.isSkinnedMesh) return;
+    if (m.name.endsWith('_skin')) skin = m;
+    else if (m.name.endsWith('_eyes')) eyes = m;
+  });
+  const sk = (skin as THREE.SkinnedMesh | null)?.skeleton;
+  const hq = bindWorld.get('Head');
+  if (!sk || !hq) return null;
+  const hi = sk.bones.findIndex((b) => b.name === 'Head');
+  if (hi < 0) return null;
+  const matrix = new THREE.Matrix4().makeRotationFromQuaternion(hq).multiply(sk.boneInverses[hi]);
+  const eye = new THREE.Vector3(0.032, 0.09, 0.08);
+  const e = eyes as THREE.SkinnedMesh | null;
+  if (e && e.skeleton === sk) {
+    const pos = e.geometry.getAttribute('position');
+    const v = new THREE.Vector3();
+    let ax = 0, y = 0, zmax = -9;
+    for (let i = 0; i < pos.count; i++) { v.fromBufferAttribute(pos, i).applyMatrix4(matrix); ax += Math.abs(v.x); y += v.y; zmax = Math.max(zmax, v.z); }
+    if (pos.count) eye.set(ax / pos.count, y / pos.count, zmax);
   }
+  return { matrix, eye };
 }
 
 /**
@@ -281,7 +389,9 @@ export function initCharacterAssets(people: LoadedGltf, anims: LoadedGltf, quali
     const clips = new Map<string, THREE.AnimationClip>();
     for (const c of anims.animations) clips.set(c.name, retarget(c, boneNames, ph / animPelvis));
     const bp = bindPose(armature);
-    bodies[kind] = { kind, armature, pelvisHeight: ph, clips, bindWorld: bp.rot, bindPos: bp.pos };
+    const face = faceFrame(armature, bp.rot);
+    if (face) remapScarf(armature, face);
+    bodies[kind] = { kind, armature, pelvisHeight: ph, clips, bindWorld: bp.rot, bindPos: bp.pos, face };
   }
   const hair = scene.getObjectByName('HAIR') as THREE.Mesh;
   if (!hair) throw new Error('липсва косата');

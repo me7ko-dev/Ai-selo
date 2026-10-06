@@ -23,7 +23,7 @@ import { TimeMachine } from './timeMachine';
 import { cloneJson, type GameState } from './state';
 import { GAME_MINUTES_PER_REAL_SECOND, dayOf, dayPhase, formatDayClock, minuteOfDay } from '../core/time';
 import { PLACES } from '../data/layout';
-import { VILLAGERS, type VillagerId } from '../data/villagers';
+import { VILLAGERS, VILLAGER_IDS, type VillagerId } from '../data/villagers';
 import { heightAt } from '../world/height';
 import type { IconKey } from '../data/icons';
 import type { EquipSlot } from '../ui/InventoryView';
@@ -32,7 +32,8 @@ import { AutoQuality } from './perf';
 import { buildSpotTable } from './spots';
 import { setSpotTable } from '../sim/schedules';
 import { Tutorial } from './tutorial';
-import { preloadCharacters } from '../models';
+import { preloadCharacters, bakePortraits } from '../models';
+import { setPortraitImages } from '../ui/portrait3d';
 
 export type Modal = null | 'dialogue' | 'inventory' | 'map' | 'chronicle' | 'time' | 'settings' | 'away' | 'dead' | 'watch' | 'intro';
 
@@ -101,7 +102,8 @@ export class Game {
     this.world = new World3D(this.engine, { quality: this.settings.graphics.quality });
     this.world.setShadows(this.settings.graphics.shadows);
     progress(0.55, 'Жителите се обличат…');
-    await people;
+    // истинските портрети за разговорите и HUD (3D лицата, снимани веднъж); на „Ниско“ — рисуваните
+    if (await people) setPortraitImages(await bakePortraits([...VILLAGER_IDS.map((id) => ({ id, look: VILLAGERS[id].look })), { id: 'hero' }]));
     progress(0.62, 'Жителите се събуждат…');
     await tick();
     this.ui = mountUi(uiRoot);

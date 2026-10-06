@@ -242,8 +242,10 @@ export class GltfCharacter implements HeroModel {
       } else if (part === 'skin') {
         mat = (spec.female ? A.materials.skinF : A.materials.skinM).clone();
         mat.color.setRGB(spec.skin[0], spec.skin[1], spec.skin[2], THREE.LinearSRGBColorSpace);
-        mat.onBeforeCompile = skinShader;
-        mat.customProgramCacheKey = () => 'skin-wrap-v1';
+        mat.onBeforeCompile = skinShader(this.body.face, spec.old);
+        mat.customProgramCacheKey = () => 'skin-wrap-v1' + (spec.old && this.body.face ? '-age' : '');
+        // старите — по-релефна кожа; младите жени — по-гладка
+        mat.normalScale.setScalar(spec.old ? 1.25 : spec.female ? 0.5 : 0.75);
         this.ownMats.push(mat);
         this.skinMesh = m;
       } else mat = A.materials.eyes;

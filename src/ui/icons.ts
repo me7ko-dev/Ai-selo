@@ -3,6 +3,7 @@
 import type { IconKey } from '../data/icons';
 import { VILLAGERS, type VillagerId } from '../data/villagers';
 import type { ChronicleType } from '../sim/types';
+import { portraitImage } from './portrait3d';
 
 const O = '#24160c'; // контур
 const S = `stroke="${O}" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"`;
@@ -128,8 +129,13 @@ export function portrait(id: VillagerId | 'hero' | string, size: number | string
   const bg = bgFor[id] ?? '#3a3028';
   parts.push(`<circle cx="32" cy="32" r="31" fill="${bg}"/>`);
   parts.push(`<circle cx="32" cy="32" r="31" fill="url(#${cid}g)"/>`);
+  const photo = portraitImage(id);
 
-  if (id === 'hero') {
+  if (photo) {
+    // истинският портрет (3D), леко по-голям от кръга — раменете излизат до ръба
+    parts.push(`<image href="${photo}" x="-2" y="-1" width="68" height="68" preserveAspectRatio="xMidYMid slice"/>`);
+    parts.push(`<circle cx="32" cy="32" r="31" fill="url(#${cid}v)"/>`);
+  } else if (id === 'hero') {
     const cloak = '#6b4a2f', skin = '#d8ac84';
     parts.push(`<path d="M6 64 C8 46 18 40 32 40 C46 40 56 46 58 64 Z" fill="${cloak}"/>`);
     parts.push(`<path d="M24 44 L32 56 L40 44" fill="${shade(cloak, 0.7)}"/><circle cx="32" cy="47" r="2" fill="#e8c27a"/>`);
@@ -195,7 +201,7 @@ export function portrait(id: VillagerId | 'hero' | string, size: number | string
   // рамка-медальон: шевица по ръба
   parts.push(`<circle cx="32" cy="32" r="30.5" fill="none" stroke="#e8c27a" stroke-width="1.6"/>`);
   parts.push(`<circle cx="32" cy="32" r="28.4" fill="none" stroke="#b3262b" stroke-width="1.4" stroke-dasharray="2.2 2.2" opacity="0.9"/>`);
-  return `<svg class="portrait" viewBox="0 0 64 64" width="${s}" height="${s}" aria-hidden="true"><defs><radialGradient id="${cid}g" cx="50%" cy="35%" r="65%"><stop offset="0" stop-color="#fff" stop-opacity="0.18"/><stop offset="1" stop-color="#000" stop-opacity="0.35"/></radialGradient><clipPath id="${cid}c"><circle cx="32" cy="32" r="30.6"/></clipPath></defs><g clip-path="url(#${cid}c)">${parts.slice(0, -2).join('')}</g>${parts.slice(-2).join('')}</svg>`;
+  return `<svg class="portrait" viewBox="0 0 64 64" width="${s}" height="${s}" aria-hidden="true"><defs><radialGradient id="${cid}g" cx="50%" cy="35%" r="65%"><stop offset="0" stop-color="#fff" stop-opacity="0.18"/><stop offset="1" stop-color="#000" stop-opacity="0.35"/></radialGradient><radialGradient id="${cid}v" cx="50%" cy="45%" r="55%"><stop offset="0.72" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.45"/></radialGradient><clipPath id="${cid}c"><circle cx="32" cy="32" r="30.6"/></clipPath></defs><g clip-path="url(#${cid}c)">${parts.slice(0, -2).join('')}</g>${parts.slice(-2).join('')}</svg>`;
 }
 
 /** Име за показване по id ('player' → „Странникът“). */
